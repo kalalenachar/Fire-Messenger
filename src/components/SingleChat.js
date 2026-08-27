@@ -22,7 +22,18 @@ import { ChatState } from "../Context/ChatProvider";
 import ProfileModal from "./miscellaneous/ProfileModal";
 
 const SingleChat = () => {
-  const { selectedChat, user, messagesMap, sendMessage, toggleReaction, theme } = ChatState();
+  const {
+    selectedChat,
+    user,
+    messagesMap,
+    sendMessage,
+    sendTypingStatus,
+    isTypingMap,
+    toggleReaction,
+    theme,
+    startCall,
+  } = ChatState();
+
   const [textInput, setTextInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -32,17 +43,19 @@ const SingleChat = () => {
   const { isOpen: isImageOpen, onOpen: onImageOpen, onClose: onImageClose } = useDisclosure();
 
   const timerRef = useRef(null);
+  const typingTimerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const fileInputRef = useRef(null);
 
-  const activeMessages = selectedChat ? messagesMap[selectedChat._id] || [] : [];
+  const activeMessages = selectedChat && typeof selectedChat === "object" ? messagesMap[selectedChat._id] || [] : [];
+  const activeTypingText = selectedChat && typeof selectedChat === "object" ? isTypingMap[selectedChat._id] : null;
 
   // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeMessages, selectedChat]);
+  }, [activeMessages.length, selectedChat, activeTypingText]);
 
   // Handle Real Audio Recording Timer & Recorder
   useEffect(() => {
@@ -56,6 +69,20 @@ const SingleChat = () => {
     }
     return () => clearInterval(timerRef.current);
   }, [isRecording]);
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setTextInput(val);
+
+    if (selectedChat) {
+      sendTypingStatus(selectedChat._id, true);
+
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => {
+        sendTypingStatus(selectedChat._id, false);
+      }, 2500);
+    }
+  };
 
   const startVoiceRecording = async () => {
     try {
@@ -73,7 +100,6 @@ const SingleChat = () => {
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err) {
-      // If microphone access is rejected or missing, fallback to audio simulation
       setIsRecording(true);
     }
   };
@@ -89,7 +115,6 @@ const SingleChat = () => {
         };
         reader.readAsDataURL(audioBlob);
 
-        // Stop stream tracks
         mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
       };
       mediaRecorderRef.current.stop();
@@ -126,7 +151,7 @@ const SingleChat = () => {
     e.target.value = "";
   };
 
-  if (!selectedChat) {
+  if (!selectedChat || typeof selectedChat !== "object" || !selectedChat._id) {
     return (
       <Box
         flex="1"
@@ -158,7 +183,7 @@ const SingleChat = () => {
           Fire Messenger Web
         </Text>
         <Text fontSize="sm" color="var(--text-secondary)" maxW="400px">
-          Real-time persistent messaging, live multi-tab sync, registration system, voice notes, and media attachments.
+          Real-time WebSockets messaging, live WebRTC Audio/Video calling, typing status, voice notes, and media attachments.
         </Text>
       </Box>
     );
@@ -169,14 +194,14 @@ const SingleChat = () => {
       return {
         title: selectedChat.chatName,
         avatar: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&auto=format&fit=crop&q=80",
-        status: `${selectedChat.users?.length || 3} members`,
+        status: activeTypingText || `${selectedChat.users?.length || 3} members`,
       };
     }
     const otherUser = selectedChat.users?.find((u) => u._id !== user?._id) || selectedChat.users?.[0];
     return {
       title: otherUser?.name || selectedChat.chatName,
       avatar: otherUser?.pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-      status: otherUser?.status || "Online",
+      status: activeTypingText || otherUser?.status || "Online",
       userObj: otherUser,
     };
   };
@@ -185,6 +210,9 @@ const SingleChat = () => {
 
   const handleSend = () => {
     if (!textInput.trim()) return;
+    if (selectedChat) {
+      sendTypingStatus(selectedChat._id, false);
+    }
     sendMessage(selectedChat._id, textInput, "text");
     setTextInput("");
   };
@@ -223,20 +251,49 @@ const SingleChat = () => {
             <Text fontWeight="600" fontSize="md" color="var(--text-header)" lineHeight="1.2">
               {header.title}
             </Text>
-            <Text fontSize="xs" color={theme === "light" ? "#e0f2fe" : "var(--color-online)"}>
+            <Text
+              fontSize="xs"
+              color={activeTypingText ? "#38bdf8" : theme === "light" ? "#e0f2fe" : "var(--color-online)"}
+              fontWeight={activeTypingText ? "bold" : "normal"}
+            >
               {header.status}
             </Text>
           </Box>
         </Box>
 
         <Box display="flex" gap={2}>
-          <Tooltip label="Voice Call (Simulated)" placement="bottom">
-            <IconButton icon={<PhoneIcon />} size="sm" variant="ghost" color="var(--text-header)" _hover={{ bg: "rgba(255,255,255,0.15)" }} />
-          </Tooltip>
           {header.userObj && (
-            <ProfileModal user={header.userObj}>
-              <IconButton icon={<ViewIcon />} size="sm" variant="ghost" color="var(--text-header)" _hover={{ bg: "rgba(255,255,255,0.15)" }} />
-            </ProfileModal>
+            <>
+              <Tooltip label="Real HD Voice Call" placement="bottom">
+                <IconButton
+                  icon={<PhoneIcon />}
+                  size="sm"
+                  variant="ghost"
+                  color="var(--text-header)"
+                  _hover={{ bg: "rgba(255,255,255,0.15)" }}
+                  onClick={() => startCall(header.userObj, "audio", selectedChat._id)}
+                />
+              </Tooltip>
+              <Tooltip label="Real HD Video Call" placement="bottom">
+                <IconButton
+                  icon={<span style={{ fontSize: "16px" }}>📹</span>}
+                  size="sm"
+                  variant="ghost"
+                  color="var(--text-header)"
+                  _hover={{ bg: "rgba(255,255,255,0.15)" }}
+                  onClick={() => startCall(header.userObj, "video", selectedChat._id)}
+                />
+              </Tooltip>
+              <ProfileModal user={header.userObj}>
+                <IconButton
+                  icon={<ViewIcon />}
+                  size="sm"
+                  variant="ghost"
+                  color="var(--text-header)"
+                  _hover={{ bg: "rgba(255,255,255,0.15)" }}
+                />
+              </ProfileModal>
+            </>
           )}
         </Box>
       </Box>
@@ -284,7 +341,7 @@ const SingleChat = () => {
                   </Text>
                 )}
 
-                {/* Render Text or Audio or Media */}
+                {/* Render Text, Voice, or Image Attachment */}
                 {msg.type === "image" && (msg.fileUrl || msg.content) ? (
                   <Box mb={1}>
                     <Image
@@ -310,7 +367,7 @@ const SingleChat = () => {
                     ) : (
                       <Box display="flex" alignItems="center" gap={2} bg="rgba(0,0,0,0.2)" p={2} borderRadius="md">
                         <span>🔊</span>
-                        <Text fontSize="xs" color="var(--text-primary)">Recorded Voice Audio Note</Text>
+                        <Text fontSize="xs" color="var(--text-primary)">Recorded Voice Note</Text>
                       </Box>
                     )}
                   </Box>
@@ -353,6 +410,17 @@ const SingleChat = () => {
             </Box>
           );
         })}
+
+        {/* Live Typing Animation Indicator */}
+        {activeTypingText && (
+          <Box display="flex" alignItems="center" gap={2} bg="var(--bg-header)" px={3} py={1.5} borderRadius="16px" w="fit-content" my={1}>
+            <Box className="recording-dot" />
+            <Text fontSize="xs" color="#38bdf8" fontWeight="bold">
+              {activeTypingText}
+            </Text>
+          </Box>
+        )}
+
         <div ref={messagesEndRef} />
       </Box>
 
@@ -384,7 +452,7 @@ const SingleChat = () => {
           </PopoverContent>
         </Popover>
 
-        {/* Real File & Media Attachment Button */}
+        {/* File & Media Attachment Button */}
         <input
           type="file"
           ref={fileInputRef}
@@ -426,7 +494,7 @@ const SingleChat = () => {
             flex="1"
             placeholder="Type a message..."
             value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyPress}
             bg="var(--bg-search)"
             border="none"

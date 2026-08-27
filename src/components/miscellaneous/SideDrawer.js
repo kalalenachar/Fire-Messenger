@@ -176,20 +176,34 @@ function SideDrawer() {
             </MenuButton>
             <MenuList color="var(--text-primary)" bg="var(--bg-menu)" borderColor="var(--color-border)" boxShadow="var(--shadow-md)" zIndex="2000">
               {!notification.length && <MenuItem bg="transparent" color="var(--text-secondary)">No New Notifications</MenuItem>}
-              {notification.map((notif, idx) => (
-                <MenuItem
-                  key={idx}
-                  bg="transparent"
-                  _hover={{ bg: "var(--bg-hover)" }}
-                  color="var(--text-primary)"
-                  onClick={() => {
-                    setSelectedChat(notif.chat);
-                    setNotification(notification.filter((n) => n !== notif));
-                  }}
-                >
-                  New message in {notif.chat?.chatName || "Chat"}
-                </MenuItem>
-              ))}
+              {notification.map((notif, idx) => {
+                const targetChat =
+                  typeof notif.chatObj === "object" && notif.chatObj
+                    ? notif.chatObj
+                    : chats.find((c) => c._id === (notif.chat?._id || notif.chat));
+                const title = targetChat
+                  ? targetChat.isGroupChat
+                    ? targetChat.chatName
+                    : targetChat.users?.find((u) => u._id !== user?._id)?.name || targetChat.chatName
+                  : "Chat";
+
+                return (
+                  <MenuItem
+                    key={idx}
+                    bg="transparent"
+                    _hover={{ bg: "var(--bg-hover)" }}
+                    color="var(--text-primary)"
+                    onClick={() => {
+                      if (targetChat) {
+                        setSelectedChat(targetChat);
+                      }
+                      setNotification(notification.filter((n) => n !== notif));
+                    }}
+                  >
+                    New message from {title}
+                  </MenuItem>
+                );
+              })}
             </MenuList>
           </Menu>
 
