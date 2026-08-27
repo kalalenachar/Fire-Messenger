@@ -742,6 +742,20 @@ function saveUserFolders(userId, folders) {
   return db.userFolders[userId];
 }
 
+function saveReport(reportData) {
+  const db = readDb();
+  if (!db.reports) db.reports = [];
+  const report = {
+    _id: `report_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    ...reportData,
+    submittedAt: new Date().toISOString(),
+    status: "PENDING_REVIEW",
+  };
+  db.reports.unshift(report);
+  writeDb(db);
+  return report;
+}
+
 module.exports = {
   readDb,
   loginUser,
@@ -768,6 +782,7 @@ module.exports = {
   stopLiveLocation,
   getUserFolders,
   saveUserFolders,
+  saveReport,
 };
 
 

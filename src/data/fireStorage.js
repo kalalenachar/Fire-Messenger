@@ -471,5 +471,15 @@ export const stopLiveLocationAsync = async (chatId, messageId) => {
   }
 };
 
+export const submitReportAsync = async (reportData) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/reports`, reportData);
+    return data.success ? data.report : reportData;
+  } catch (error) {
+    console.warn("Could not submit report to server:", error);
+    return reportData;
+  }
+};
+
 
 

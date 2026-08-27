@@ -222,6 +222,16 @@ app.put("/api/messages/stop-live-location", (req, res) => {
   }
 });
 
+// Save Report Endpoint
+app.post("/api/reports", (req, res) => {
+  try {
+    const report = db.saveReport(req.body);
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
 // --- GROQ AI BOT ENDPOINT ---
 app.post("/api/bot/chat", async (req, res) => {
   try {
