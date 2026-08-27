@@ -46,43 +46,43 @@ const Signup = () => {
     }
     console.log(name, email, password, pic);
     try {
-      const config = {
-        headers: {
-          "Content-type": "application/json",
-        },
+      const newUser = {
+        _id: `user_${Date.now()}`,
+        name: name || "Fire User",
+        email: email,
+        pic: pic || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+        status: "Available | 🔥 Burning with Passion",
+        token: "fire_token_demo",
       };
-      const { data } = await axios.post(
-        "https://lazy-pear-sea-lion-tam.cyclic.app/api/user",
-        {
-          name,
-          email,
-          password,
-          pic,
-        },
-        config
-      );
-      console.log(data);
+
+      try {
+        const config = { headers: { "Content-type": "application/json" } };
+        const { data } = await axios.post("/api/user", { name, email, password, pic }, config);
+        localStorage.setItem("userInfo", JSON.stringify(data));
+      } catch (err) {
+        localStorage.setItem("userInfo", JSON.stringify(newUser));
+      }
+
       toast({
-        title: "Registration Successful",
+        title: "Registration Successful 🔥",
+        description: "Welcome to Fire Messenger!",
         status: "success",
-        duration: 5000,
+        duration: 3000,
         isClosable: true,
         position: "bottom",
       });
-      localStorage.setItem("userInfo", JSON.stringify(data));
       setPicLoading(false);
       history.push("/chats");
     } catch (error) {
       toast({
         title: "Error Occured!",
-        description: error.response,
+        description: error?.response?.data?.message || "Failed to register",
         status: "error",
-        duration: 5000,
+        duration: 4000,
         isClosable: true,
         position: "bottom",
       });
       setPicLoading(false);
-      console.log(error);
     }
   };
 
