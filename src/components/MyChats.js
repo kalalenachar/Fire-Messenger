@@ -82,7 +82,7 @@ const MyChats = () => {
       </Box>
 
       {/* Category Pills (All, Personal, Groups, Channels, Bots) */}
-      <Box display="flex" gap={1.5} px={3} py={2} overflowX="auto" scrollbarWidth="none">
+      <Box display="flex" gap={1.5} px={3} py={2} overflowX="auto" sx={{ scrollbarWidth: "none" }}>
         {categories.map((cat) => (
           <Box
             key={cat}
