@@ -23,6 +23,7 @@ import {
 import { PhoneIcon, ViewIcon, AttachmentIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
 import ProfileModal from "./miscellaneous/ProfileModal";
+import VoicePlayer from "./VoicePlayer";
 
 const DoubleTickIcon = () => (
   <svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor" style={{ display: "inline-block", verticalAlign: "middle" }}>
@@ -98,7 +99,12 @@ const SingleChat = () => {
 
   const [textInput, setTextInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingState, setRecordingState] = useState("idle"); // "idle" | "recording" | "preview"
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioLevels, setAudioLevels] = useState([15, 25, 10, 35, 20, 30, 12, 40, 22, 18, 28, 15]);
+  const [voicePreviewUrl, setVoicePreviewUrl] = useState(null);
+  const [voicePreviewBase64, setVoicePreviewBase64] = useState(null);
+  const [voicePreviewBlob, setVoicePreviewBlob] = useState(null);
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -120,6 +126,8 @@ const SingleChat = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const fileInputRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const animFrameRef = useRef(null);
 
   const activeMessages = selectedChat && typeof selectedChat === "object" ? messagesMap[selectedChat._id] || [] : [];
   const activeTypingText = selectedChat && typeof selectedChat === "object" ? isTypingMap[selectedChat._id] : null;
@@ -137,10 +145,18 @@ const SingleChat = () => {
       }, 1000);
     } else {
       clearInterval(timerRef.current);
-      setRecordingSeconds(0);
+      if (recordingState === "idle") setRecordingSeconds(0);
     }
     return () => clearInterval(timerRef.current);
-  }, [isRecording]);
+  }, [isRecording, recordingState]);
+
+  const stopAudioAnalyzer = () => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+  };
 
   const handleInputChange = (e) => {
     const val = e.target.value;
@@ -163,6 +179,37 @@ const SingleChat = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
+      // Setup Web Audio API Analyzer for dynamic spectrum visualizer
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          const audioCtx = new AudioContextClass();
+          audioContextRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const analyzeMic = () => {
+            if (analyser) {
+              analyser.getByteFrequencyData(dataArray);
+              const levels = [];
+              const step = Math.floor(dataArray.length / 12);
+              for (let i = 0; i < 12; i++) {
+                const val = dataArray[i * step] || 0;
+                levels.push(Math.max(15, Math.min(100, Math.round((val / 255) * 100))));
+              }
+              setAudioLevels(levels);
+            }
+            animFrameRef.current = requestAnimationFrame(analyzeMic);
+          };
+          analyzeMic();
+        }
+      } catch (e) {
+        console.warn("AudioContext visualizer not supported", e);
+      }
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           audioChunksRef.current.push(e.data);
@@ -171,12 +218,56 @@ const SingleChat = () => {
 
       mediaRecorder.start();
       setIsRecording(true);
+      setRecordingState("recording");
     } catch (err) {
       setIsRecording(true);
+      setRecordingState("recording");
     }
   };
 
+  const pauseAndPreviewVoiceRecording = () => {
+    stopAudioAnalyzer();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const previewUrl = URL.createObjectURL(audioBlob);
+        setVoicePreviewUrl(previewUrl);
+        setVoicePreviewBlob(audioBlob);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setVoicePreviewBase64(reader.result);
+        };
+        reader.readAsDataURL(audioBlob);
+
+        mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
+      };
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setRecordingState("preview");
+  };
+
+  const sendVoicePreview = () => {
+    if (!selectedChat) return;
+
+    const base64Data = voicePreviewBase64;
+    const blobSize = voicePreviewBlob ? voicePreviewBlob.size : 0;
+    const durationSec = recordingSeconds || 1;
+
+    sendMessage(
+      selectedChat._id,
+      `🎤 Voice Note (${durationSec}s)`,
+      "voice",
+      base64Data,
+      { fileName: `voice_note_${Date.now()}.webm`, fileSize: blobSize, fileType: "audio/webm" }
+    );
+
+    cancelVoiceRecording();
+  };
+
   const stopAndSendVoiceRecording = () => {
+    stopAudioAnalyzer();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
@@ -200,14 +291,25 @@ const SingleChat = () => {
       sendMessage(selectedChat._id, `🎤 Voice Note (${recordingSeconds || 3}s)`, "voice", null);
     }
     setIsRecording(false);
+    setRecordingState("idle");
+    setRecordingSeconds(0);
   };
 
   const cancelVoiceRecording = () => {
+    stopAudioAnalyzer();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
     }
+    if (voicePreviewUrl) {
+      URL.revokeObjectURL(voicePreviewUrl);
+    }
     setIsRecording(false);
+    setRecordingState("idle");
+    setRecordingSeconds(0);
+    setVoicePreviewUrl(null);
+    setVoicePreviewBase64(null);
+    setVoicePreviewBlob(null);
   };
 
   // Drag & Drop Handlers
@@ -553,28 +655,13 @@ const SingleChat = () => {
                     )}
                   </Box>
                 ) : msg.type === "voice" ? (
-                  /* --- RENDER VOICE NOTE --- */
+                  /* --- RENDER VOICE NOTE WITH CUSTOM AUDIO PLAYER --- */
                   <Box display="flex" flexDirection="column" gap={1}>
-                    <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)">
-                      {msg.content}
-                    </Text>
-                    {msg.audioUrl || msg.fileUrl ? (
-                      <Box display="flex" alignItems="center" gap={2}>
-                        <audio controls src={msg.audioUrl || msg.fileUrl} style={{ height: "36px", width: "230px" }} />
-                        <a
-                          href={msg.audioUrl || msg.fileUrl}
-                          download={msg.fileName || "voice_note.webm"}
-                          className="file-download-btn"
-                          title="Download Voice Note"
-                        >
-                          <DownloadIcon />
-                        </a>
-                      </Box>
-                    ) : (
-                      <Box display="flex" alignItems="center" gap={2} bg="rgba(0,0,0,0.2)" p={2} borderRadius="md">
-                        <span>🔊</span>
-                        <Text fontSize="xs" color="var(--text-primary)">Recorded Voice Note</Text>
-                      </Box>
+                    <VoicePlayer audioUrl={msg.audioUrl || msg.fileUrl} fileName={msg.fileName} isMe={isMe} />
+                    {msg.content && !msg.content.startsWith("🎤 Voice Note") && (
+                      <Text fontSize="xs" mt={0.5} opacity={0.85} whiteSpace="pre-wrap">
+                        {msg.content}
+                      </Text>
                     )}
                   </Box>
                 ) : msg.type === "file" || msg.fileName ? (
@@ -714,21 +801,53 @@ const SingleChat = () => {
           />
         </Tooltip>
 
-        {/* Main Text Input or Voice Recorder */}
-        {isRecording ? (
+        {/* Main Text Input or Voice Recorder / Audio Preview */}
+        {recordingState === "recording" ? (
           <Box flex="1" bg="var(--bg-search)" borderRadius="20px" px={4} py={2} display="flex" alignItems="center" justifyContent="space-between">
             <Box display="flex" alignItems="center" gap={3}>
               <Box className="recording-dot" />
-              <Text fontSize="sm" color="#f44336" fontWeight="bold">
-                Recording Voice... 00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}s
+              <Text fontSize="xs" color="#f44336" fontWeight="bold" minW="60px">
+                00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}s
               </Text>
+              
+              {/* Dynamic Live Mic Spectrum Visualizer */}
+              <Box display="flex" alignItems="center" gap="3px" h="24px" px={2}>
+                {audioLevels.map((lvl, idx) => (
+                  <span
+                    key={idx}
+                    className="live-mic-bar"
+                    style={{ height: `${lvl}%` }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            <Box display="flex" gap={2} alignItems="center">
+              <Button size="xs" colorScheme="red" variant="ghost" onClick={cancelVoiceRecording}>
+                Discard
+              </Button>
+              <Button size="xs" colorScheme="yellow" variant="solid" onClick={pauseAndPreviewVoiceRecording}>
+                ⏸️ Preview
+              </Button>
+              <Button size="xs" bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={stopAndSendVoiceRecording}>
+                🚀 Send
+              </Button>
+            </Box>
+          </Box>
+        ) : recordingState === "preview" ? (
+          <Box flex="1" bg="var(--bg-search)" borderRadius="20px" px={3} py={1.5} display="flex" alignItems="center" justifyContent="space-between" gap={2}>
+            <Box display="flex" alignItems="center" gap={2} flex="1">
+              <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" whiteSpace="nowrap">
+                Preview ({recordingSeconds}s):
+              </Text>
+              {voicePreviewUrl && <VoicePlayer audioUrl={voicePreviewUrl} isMe={false} />}
             </Box>
             <Box display="flex" gap={2}>
               <Button size="xs" colorScheme="red" variant="ghost" onClick={cancelVoiceRecording}>
-                Cancel
+                Discard
               </Button>
-              <Button size="xs" bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={stopAndSendVoiceRecording}>
-                Send Voice
+              <Button size="xs" bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={sendVoicePreview}>
+                🚀 Send Voice
               </Button>
             </Box>
           </Box>
