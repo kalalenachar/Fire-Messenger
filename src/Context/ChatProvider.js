@@ -31,7 +31,7 @@ import { getBotReplyAsync } from "../data/fireMockData";
 import CallModal from "../components/miscellaneous/CallModal";
 
 const ChatContext = createContext();
-const ENDPOINT = "http://localhost:5000";
+const ENDPOINT = `http://${window.location.hostname}:5000`;
 
 let socket = null;
 
