@@ -19,6 +19,10 @@ import {
   fetchAudienceProfilesAsync,
   saveAudienceProfileAsync,
   deleteAudienceProfileAsync,
+  votePollAsync,
+  addPollOptionAsync,
+  updateLiveLocationAsync,
+  stopLiveLocationAsync,
 } from "../data/fireStorage";
 import { getBotReply } from "../data/fireMockData";
 import CallModal from "../components/miscellaneous/CallModal";
@@ -294,6 +298,42 @@ const ChatProvider = ({ children }) => {
       setIsTypingMap((prev) => ({ ...prev, [room]: null }));
     });
 
+    socket.on("poll_voted", ({ chatId, message }) => {
+      if (!chatId || !message) return;
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        const updated = chatMsgs.map((m) => (m._id === message._id ? message : m));
+        return { ...prev, [chatId]: updated };
+      });
+    });
+
+    socket.on("poll_option_added", ({ chatId, message }) => {
+      if (!chatId || !message) return;
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        const updated = chatMsgs.map((m) => (m._id === message._id ? message : m));
+        return { ...prev, [chatId]: updated };
+      });
+    });
+
+    socket.on("live_location_updated", ({ chatId, message }) => {
+      if (!chatId || !message) return;
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        const updated = chatMsgs.map((m) => (m._id === message._id ? message : m));
+        return { ...prev, [chatId]: updated };
+      });
+    });
+
+    socket.on("live_location_stopped", ({ chatId, message }) => {
+      if (!chatId || !message) return;
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        const updated = chatMsgs.map((m) => (m._id === message._id ? message : m));
+        return { ...prev, [chatId]: updated };
+      });
+    });
+
     // WebRTC Signaling Handlers
     socket.on("incoming-call", ({ caller, signalData, callType, chatId, fromSocketId }) => {
       setCallData({
@@ -385,6 +425,8 @@ const ChatProvider = ({ children }) => {
     const fileName = fileMeta.fileName || (type === "file" ? content : null);
     const fileSize = fileMeta.fileSize || null;
     const fileType = fileMeta.fileType || null;
+    const pollData = type === "poll" ? (fileMeta.pollData || attachmentData) : null;
+    const locationData = (type === "location" || type === "live_location") ? (fileMeta.locationData || attachmentData) : null;
 
     const displayContent =
       type === "voice"
@@ -395,6 +437,12 @@ const ChatProvider = ({ children }) => {
         ? "📷 Photo"
         : type === "file"
         ? `📄 ${fileName || "File"}`
+        : type === "poll"
+        ? `📊 Poll: ${pollData?.question || content}`
+        : type === "location"
+        ? `📍 Location: ${locationData?.name || "Shared Location"}`
+        : type === "live_location"
+        ? `🛰️ Live Location: ${locationData?.name || "Sharing Live Location"}`
         : content;
 
     const newMessage = {
@@ -407,6 +455,8 @@ const ChatProvider = ({ children }) => {
       fileName,
       fileSize,
       fileType,
+      pollData,
+      locationData,
       chat: chatId,
       chatObj: currentChatObj,
       createdAt: new Date().toISOString(),
@@ -481,6 +531,51 @@ const ChatProvider = ({ children }) => {
       }, 700);
     }
   };
+
+  // Poll voting handler
+  const votePoll = (chatId, messageId, optionId) => {
+    if (!user || !chatId || !messageId || !optionId) return;
+
+    votePollAsync(chatId, messageId, optionId, user);
+
+    if (socket) {
+      socket.emit("vote_poll", { chatId, messageId, optionId, user });
+    }
+  };
+
+  // Add Option to Poll handler
+  const addPollOption = (chatId, messageId, optionText) => {
+    if (!user || !chatId || !messageId || !optionText?.trim()) return;
+
+    addPollOptionAsync(chatId, messageId, optionText, user);
+
+    if (socket) {
+      socket.emit("add_poll_option", { chatId, messageId, optionText, user });
+    }
+  };
+
+  // Live Location update handler
+  const updateLiveLocation = (chatId, messageId, lat, lng, accuracy) => {
+    if (!user || !chatId || !messageId) return;
+
+    updateLiveLocationAsync(chatId, messageId, lat, lng, accuracy);
+
+    if (socket) {
+      socket.emit("update_live_location", { chatId, messageId, lat, lng, accuracy });
+    }
+  };
+
+  // Stop Live Location handler
+  const stopLiveLocation = (chatId, messageId) => {
+    if (!user || !chatId || !messageId) return;
+
+    stopLiveLocationAsync(chatId, messageId);
+
+    if (socket) {
+      socket.emit("stop_live_location", { chatId, messageId });
+    }
+  };
+
 
   // Send typing notifications
   const sendTypingStatus = (chatId, isTyping) => {
@@ -778,6 +873,11 @@ const ChatProvider = ({ children }) => {
         saveAudienceProfile,
         removeAudienceProfile,
         loadStatusData,
+        // Interactive Chat Features
+        votePoll,
+        addPollOption,
+        updateLiveLocation,
+        stopLiveLocation,
       }}
     >
       {children}

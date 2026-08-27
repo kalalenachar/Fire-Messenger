@@ -18,12 +18,15 @@ import {
   ModalBody,
   ModalCloseButton,
   Image,
+  Badge,
   useDisclosure,
 } from "@chakra-ui/react";
 import { PhoneIcon, ViewIcon, AttachmentIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
 import ProfileModal from "./miscellaneous/ProfileModal";
 import VoicePlayer from "./VoicePlayer";
+import PollComposerModal from "./miscellaneous/PollComposerModal";
+import LocationShareModal from "./miscellaneous/LocationShareModal";
 
 const DoubleTickIcon = () => (
   <svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor" style={{ display: "inline-block", verticalAlign: "middle" }}>
@@ -95,9 +98,13 @@ const SingleChat = () => {
     toggleReaction,
     theme,
     startCall,
+    votePoll,
+    addPollOption,
+    stopLiveLocation,
   } = ChatState();
 
   const [textInput, setTextInput] = useState("");
+  const [newOptionInputs, setNewOptionInputs] = useState({}); // messageId -> string
   const [isRecording, setIsRecording] = useState(false);
   const [recordingState, setRecordingState] = useState("idle"); // "idle" | "recording" | "preview"
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -108,6 +115,8 @@ const SingleChat = () => {
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isPollModalOpen, setIsPollModalOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
   // Right-Click Context Menu State
   const [contextMenu, setContextMenu] = useState({
@@ -696,6 +705,317 @@ const SingleChat = () => {
                       </Text>
                     )}
                   </Box>
+                ) : msg.type === "poll" && msg.pollData ? (
+                  /* --- RENDER ADVANCED INTERACTIVE POLL CARD --- */
+                  <Box minW="270px" maxW="330px" py={1}>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Text fontSize="md">📊</Text>
+                        <Text fontWeight="bold" fontSize="sm" color="var(--text-primary)">
+                          {msg.pollData.question}
+                        </Text>
+                      </Box>
+                      {msg.pollData.settings?.isQuizMode && (
+                        <Badge colorScheme="purple" fontSize="9px" borderRadius="6px" px={2}>
+                          🎯 QUIZ
+                        </Badge>
+                      )}
+                    </Box>
+
+                    <Box display="flex" flexDirection="column" gap={2}>
+                      {(() => {
+                        const settings = msg.pollData.settings || {};
+                        const totalVotes = msg.pollData.options.reduce(
+                          (acc, opt) => acc + (opt.voters?.length || 0),
+                          0
+                        );
+                        const hasUserVotedInPoll = msg.pollData.options.some((opt) =>
+                          (opt.voters || []).some(
+                            (v) => (typeof v === "object" ? v.userId : v) === user?._id
+                          )
+                        );
+                        const isExpired = settings.expiresAt && new Date(settings.expiresAt) < new Date();
+                        const isResultsHidden = settings.hideResults && !hasUserVotedInPoll && !isExpired;
+                        const isRevotingDisabled = settings.allowRevoting === false && hasUserVotedInPoll;
+
+                        return msg.pollData.options.map((opt) => {
+                          const voteCount = opt.voters?.length || 0;
+                          const percent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+                          const hasVoted = opt.voters?.some(
+                            (v) => (typeof v === "object" ? v.userId : v) === user?._id
+                          );
+                          const isQuizCorrect = settings.isQuizMode && opt.isCorrect;
+                          const isQuizUserChoice = settings.isQuizMode && hasVoted;
+
+                          let bgStyle = hasVoted ? "rgba(249, 115, 22, 0.15)" : "var(--bg-search)";
+                          let borderStyle = hasVoted ? "1px solid var(--color-primary)" : "1px solid var(--color-border)";
+
+                          if (settings.isQuizMode && hasUserVotedInPoll) {
+                            if (isQuizCorrect) {
+                              bgStyle = "rgba(34, 197, 94, 0.2)";
+                              borderStyle = "1px solid #22c55e";
+                            } else if (isQuizUserChoice && !isQuizCorrect) {
+                              bgStyle = "rgba(239, 68, 68, 0.2)";
+                              borderStyle = "1px solid #ef4444";
+                            }
+                          }
+
+                          return (
+                            <Box
+                              key={opt.id}
+                              onClick={() => {
+                                if (isRevotingDisabled && !hasVoted) return;
+                                if (!isExpired) {
+                                  votePoll(selectedChat._id, msg._id, opt.id);
+                                }
+                              }}
+                              p={2.5}
+                              borderRadius="12px"
+                              bg={bgStyle}
+                              border={borderStyle}
+                              cursor={isExpired || isRevotingDisabled ? "default" : "pointer"}
+                              position="relative"
+                              overflow="hidden"
+                              transition="all 0.2s ease"
+                              _hover={!isExpired && !isRevotingDisabled ? { transform: "scale(1.01)" } : {}}
+                            >
+                              {/* Animated Progress Bar */}
+                              {!isResultsHidden && (
+                                <Box
+                                  position="absolute"
+                                  top="0"
+                                  left="0"
+                                  bottom="0"
+                                  w={`${percent}%`}
+                                  bg={
+                                    settings.isQuizMode && isQuizCorrect
+                                      ? "rgba(34, 197, 94, 0.3)"
+                                      : hasVoted
+                                      ? "rgba(249, 115, 22, 0.3)"
+                                      : "rgba(255, 255, 255, 0.08)"
+                                  }
+                                  transition="width 0.4s ease"
+                                  pointerEvents="none"
+                                />
+                              )}
+
+                              <Box
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                position="relative"
+                                zIndex="1"
+                              >
+                                <Box display="flex" alignItems="center" gap={2.5}>
+                                  <Box
+                                    w="16px"
+                                    h="16px"
+                                    borderRadius={settings.allowMultiple ? "4px" : "50%"}
+                                    border={
+                                      hasVoted
+                                        ? "5px solid var(--color-primary)"
+                                        : "2px solid var(--text-secondary)"
+                                    }
+                                    bg={hasVoted ? "white" : "transparent"}
+                                  />
+                                  <Text fontSize="sm" fontWeight={hasVoted ? "bold" : "normal"}>
+                                    {opt.text}
+                                  </Text>
+                                  {settings.isQuizMode && hasUserVotedInPoll && isQuizCorrect && (
+                                    <Text fontSize="xs">🎉 Correct</Text>
+                                  )}
+                                  {settings.isQuizMode && hasUserVotedInPoll && isQuizUserChoice && !isQuizCorrect && (
+                                    <Text fontSize="xs">❌</Text>
+                                  )}
+                                </Box>
+
+                                <Text fontSize="xs" fontWeight="bold" opacity={0.9}>
+                                  {isResultsHidden ? "• • •" : `${percent}% (${voteCount})`}
+                                </Text>
+                              </Box>
+
+                              {/* Show Voter Avatars based on Privacy Settings */}
+                              {(settings.voterPrivacyMode === "public" ||
+                                (settings.voterPrivacyMode === "creator_only" && msg.sender?._id === user?._id)) &&
+                                opt.voters?.length > 0 && (
+                                  <Box display="flex" alignItems="center" gap={1} mt={1.5} pl={6}>
+                                    {opt.voters.slice(0, 4).map((voter, vIdx) => (
+                                      <Avatar
+                                        key={vIdx}
+                                        size="2xs"
+                                        name={typeof voter === "object" ? voter.name : "User"}
+                                        src={typeof voter === "object" ? voter.pic : ""}
+                                      />
+                                    ))}
+                                    {opt.voters.length > 4 && (
+                                      <Text fontSize="10px" color="var(--text-secondary)">
+                                        +{opt.voters.length - 4}
+                                      </Text>
+                                    )}
+                                  </Box>
+                                )}
+                            </Box>
+                          );
+                        });
+                      })()}
+                    </Box>
+
+                    {/* Quiz Explanation Card (revealed after voting) */}
+                    {msg.pollData.settings?.isQuizMode &&
+                      msg.pollData.options.some((o) => (o.voters || []).some((v) => (typeof v === "object" ? v.userId : v) === user?._id)) &&
+                      msg.pollData.settings?.quizExplanation && (
+                        <Box mt={2.5} p={2.5} bg="rgba(59, 130, 246, 0.12)" borderRadius="12px" border="1px solid rgba(59, 130, 246, 0.3)">
+                          <Text fontSize="xs" fontWeight="bold" color="#3b82f6" mb={0.5}>
+                            💡 Explanation:
+                          </Text>
+                          <Text fontSize="xs" color="var(--text-primary)" lineHeight="1.3">
+                            {msg.pollData.settings.quizExplanation}
+                          </Text>
+                        </Box>
+                      )}
+
+                    {/* Inline "+ Add Option" Input if allowAddingOptions is ON */}
+                    {msg.pollData.settings?.allowAddingOptions && (
+                      <Box mt={2.5} display="flex" gap={2}>
+                        <Input
+                          placeholder="Suggest a new option..."
+                          size="xs"
+                          borderRadius="10px"
+                          bg="var(--bg-search)"
+                          border="1px solid var(--color-border)"
+                          value={newOptionInputs[msg._id] || ""}
+                          onChange={(e) =>
+                            setNewOptionInputs((prev) => ({ ...prev, [msg._id]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newOptionInputs[msg._id]?.trim()) {
+                              addPollOption(selectedChat._id, msg._id, newOptionInputs[msg._id]);
+                              setNewOptionInputs((prev) => ({ ...prev, [msg._id]: "" }));
+                            }
+                          }}
+                        />
+                        <Button
+                          size="xs"
+                          colorScheme="orange"
+                          variant="solid"
+                          borderRadius="10px"
+                          onClick={() => {
+                            if (newOptionInputs[msg._id]?.trim()) {
+                              addPollOption(selectedChat._id, msg._id, newOptionInputs[msg._id]);
+                              setNewOptionInputs((prev) => ({ ...prev, [msg._id]: "" }));
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </Box>
+                    )}
+
+                    {/* Poll Card Footer Badges */}
+                    <Box
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      mt={2.5}
+                      pt={1.5}
+                      borderTop="1px solid var(--color-border)"
+                      fontSize="10px"
+                      color="var(--text-muted)"
+                    >
+                      <span>
+                        {msg.pollData.options.reduce((acc, opt) => acc + (opt.voters?.length || 0), 0)} votes
+                        {msg.pollData.settings?.voterPrivacyMode === "anonymous"
+                          ? " • 🔒 Anonymous"
+                          : msg.pollData.settings?.voterPrivacyMode === "creator_only"
+                          ? " • 🔒 Visible to creator"
+                          : ""}
+                        {msg.pollData.settings?.allowMultiple
+                          ? msg.pollData.settings?.maxChoices && msg.pollData.settings?.maxChoices !== "unlimited"
+                            ? ` • Select up to ${msg.pollData.settings.maxChoices}`
+                            : " • Multi-select"
+                          : ""}
+                      </span>
+
+                      {msg.pollData.settings?.expiresAt && (
+                        <Badge
+                          colorScheme={
+                            new Date(msg.pollData.settings.expiresAt) < new Date() ? "gray" : "green"
+                          }
+                          fontSize="9px"
+                          borderRadius="6px"
+                        >
+                          {new Date(msg.pollData.settings.expiresAt) < new Date() ? "Closed" : "Active"}
+                        </Badge>
+                      )}
+                    </Box>
+                  </Box>
+                ) : (msg.type === "location" || msg.type === "live_location") && msg.locationData ? (
+                  /* --- RENDER LOCATION / LIVE LOCATION CARD --- */
+                  <Box minW="260px" maxW="300px" py={1}>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                      <Box display="flex" alignItems="center" gap={1.5}>
+                        <Text fontSize="sm">{msg.type === "live_location" ? "🛰️" : "📍"}</Text>
+                        <Text fontWeight="bold" fontSize="xs" color="var(--color-primary)">
+                          {msg.type === "live_location" ? "Live Location" : "Shared Location"}
+                        </Text>
+                      </Box>
+                      {msg.type === "live_location" && (
+                        <Badge
+                          colorScheme={msg.locationData.isLive ? "green" : "gray"}
+                          borderRadius="6px"
+                          fontSize="9px"
+                          px={1.5}
+                        >
+                          {msg.locationData.isLive ? "LIVE NOW" : "ENDED"}
+                        </Badge>
+                      )}
+                    </Box>
+
+                    {/* Interactive OpenStreetMap Embed Frame */}
+                    <Box w="100%" h="130px" borderRadius="12px" overflow="hidden" position="relative" bg="#1e293b" mb={2}>
+                      <iframe
+                        title="Map View"
+                        width="100%"
+                        height="130"
+                        frameBorder="0"
+                        scrolling="no"
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${msg.locationData.lng - 0.005}%2C${msg.locationData.lat - 0.005}%2C${msg.locationData.lng + 0.005}%2C${msg.locationData.lat + 0.005}&layer=mapnik&marker=${msg.locationData.lat}%2C${msg.locationData.lng}`}
+                        style={{ filter: "brightness(0.9) contrast(1.1)", pointerEvents: "none" }}
+                      />
+                    </Box>
+
+                    <Text fontSize="xs" fontWeight="600" mb={1} whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis">
+                      {msg.locationData.name || `Lat: ${msg.locationData.lat.toFixed(4)}, Lng: ${msg.locationData.lng.toFixed(4)}`}
+                    </Text>
+
+                    <Box display="flex" gap={2} mt={2}>
+                      <Button
+                        as="a"
+                        href={msg.locationData.mapUrl || `https://www.openstreetmap.org/?mlat=${msg.locationData.lat}&mlon=${msg.locationData.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="xs"
+                        variant="solid"
+                        bg="var(--bg-search)"
+                        color="var(--text-primary)"
+                        _hover={{ bg: "var(--bg-hover)" }}
+                        flex="1"
+                      >
+                        🗺️ Open Map
+                      </Button>
+
+                      {msg.type === "live_location" && msg.locationData.isLive && msg.sender?._id === user?._id && (
+                        <Button
+                          size="xs"
+                          colorScheme="red"
+                          variant="outline"
+                          onClick={() => stopLiveLocation(selectedChat._id, msg._id)}
+                        >
+                          ⏹️ Stop
+                        </Button>
+                      )}
+                    </Box>
+                  </Box>
                 ) : msg.type === "file" || msg.fileName ? (
                   /* --- RENDER FILE / PDF / DOCUMENT / ZIP CARD --- */
                   <Box mb={1}>
@@ -804,7 +1124,7 @@ const SingleChat = () => {
           </PopoverContent>
         </Popover>
 
-        {/* File & Media Attachment Button */}
+        {/* File & Media Attachment Button with Expanded Rich Menu */}
         <input
           type="file"
           ref={fileInputRef}
@@ -812,16 +1132,84 @@ const SingleChat = () => {
           onChange={handleFileUpload}
           accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.zip,.rar,.txt,.js,.py"
         />
-        <Tooltip label="Attach Photo, Video, PDF, or Document" placement="top">
-          <IconButton
-            icon={<AttachmentIcon fontSize="19px" />}
-            size="md"
-            variant="ghost"
-            color="var(--text-header)"
-            _hover={{ bg: "rgba(255,255,255,0.15)" }}
-            onClick={() => fileInputRef.current?.click()}
-          />
-        </Tooltip>
+
+        <Popover placement="top-start">
+          <PopoverTrigger>
+            <IconButton
+              icon={<AttachmentIcon fontSize="19px" />}
+              size="md"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+            />
+          </PopoverTrigger>
+          <PopoverContent bg="var(--bg-card)" borderColor="var(--color-border)" w="220px" p={2} borderRadius="16px" boxShadow="var(--shadow-xl)" zIndex="2000">
+            <PopoverBody p={1} display="flex" flexDirection="column" gap={1}>
+              <Box
+                display="flex"
+                alignItems="center"
+                gap={3}
+                p={2.5}
+                borderRadius="12px"
+                cursor="pointer"
+                _hover={{ bg: "var(--bg-search)" }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Text fontSize="18px">📷</Text>
+                <Box>
+                  <Text fontSize="xs" fontWeight="bold" color="var(--text-primary)">
+                    Photo / Video / File
+                  </Text>
+                  <Text fontSize="10px" color="var(--text-secondary)">
+                    Images, PDFs & documents
+                  </Text>
+                </Box>
+              </Box>
+
+              <Box
+                display="flex"
+                alignItems="center"
+                gap={3}
+                p={2.5}
+                borderRadius="12px"
+                cursor="pointer"
+                _hover={{ bg: "var(--bg-search)" }}
+                onClick={() => setIsPollModalOpen(true)}
+              >
+                <Text fontSize="18px">📊</Text>
+                <Box>
+                  <Text fontSize="xs" fontWeight="bold" color="var(--text-primary)">
+                    Create Poll
+                  </Text>
+                  <Text fontSize="10px" color="var(--text-secondary)">
+                    Interactive voting card
+                  </Text>
+                </Box>
+              </Box>
+
+              <Box
+                display="flex"
+                alignItems="center"
+                gap={3}
+                p={2.5}
+                borderRadius="12px"
+                cursor="pointer"
+                _hover={{ bg: "var(--bg-search)" }}
+                onClick={() => setIsLocationModalOpen(true)}
+              >
+                <Text fontSize="18px">📍</Text>
+                <Box>
+                  <Text fontSize="xs" fontWeight="bold" color="var(--text-primary)">
+                    Share Location
+                  </Text>
+                  <Text fontSize="10px" color="var(--text-secondary)">
+                    Static map or Live tracking
+                  </Text>
+                </Box>
+              </Box>
+            </PopoverBody>
+          </PopoverContent>
+        </Popover>
 
         {/* Main Text Input or Voice Recorder / Audio Preview */}
         {recordingState === "recording" ? (
@@ -1052,6 +1440,33 @@ const SingleChat = () => {
           )}
         </Box>
       )}
+
+      {/* Interactive Poll Composer Modal */}
+      <PollComposerModal
+        isOpen={isPollModalOpen}
+        onClose={() => setIsPollModalOpen(false)}
+        onSendPoll={(pollData) => {
+          if (selectedChat) {
+            sendMessage(selectedChat._id, `📊 ${pollData.question}`, "poll", pollData);
+          }
+        }}
+      />
+
+      {/* Interactive Location Share Modal */}
+      <LocationShareModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        onSendLocation={({ type, locationData }) => {
+          if (selectedChat) {
+            sendMessage(
+              selectedChat._id,
+              type === "live_location" ? "🛰️ Live Location" : `📍 ${locationData.name || "Location"}`,
+              type,
+              locationData
+            );
+          }
+        }}
+      />
     </Box>
   );
 };

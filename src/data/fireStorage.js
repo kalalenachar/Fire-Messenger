@@ -380,4 +380,45 @@ export const deleteAudienceProfileAsync = async (userId, profileId) => {
   }
 };
 
+export const votePollAsync = async (chatId, messageId, optionId, user) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/messages/poll-vote`, { chatId, messageId, optionId, user });
+    return data.success ? data.message : null;
+  } catch (error) {
+    console.error("Error voting on poll:", error);
+    return null;
+  }
+};
+
+export const addPollOptionAsync = async (chatId, messageId, optionText, user) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/messages/poll-add-option`, { chatId, messageId, optionText, user });
+    return data.success ? data.message : null;
+  } catch (error) {
+    console.error("Error adding option to poll:", error);
+    return null;
+  }
+};
+
+export const updateLiveLocationAsync = async (chatId, messageId, lat, lng, accuracy) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/messages/live-location`, { chatId, messageId, lat, lng, accuracy });
+    return data.success ? data.message : null;
+  } catch (error) {
+    console.error("Error updating live location:", error);
+    return null;
+  }
+};
+
+export const stopLiveLocationAsync = async (chatId, messageId) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/messages/stop-live-location`, { chatId, messageId });
+    return data.success ? data.message : null;
+  } catch (error) {
+    console.error("Error stopping live location:", error);
+    return null;
+  }
+};
+
+
 

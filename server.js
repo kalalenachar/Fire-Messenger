@@ -130,7 +130,60 @@ app.put("/api/messages/reaction", (req, res) => {
   }
 });
 
+// Vote on Poll
+app.put("/api/messages/poll-vote", (req, res) => {
+  try {
+    const updatedMsg = db.togglePollVote(req.body);
+    if (updatedMsg) {
+      io.in(req.body.chatId).emit("poll_voted", { chatId: req.body.chatId, message: updatedMsg });
+    }
+    res.json({ success: true, message: updatedMsg });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Add Option to Poll
+app.put("/api/messages/poll-add-option", (req, res) => {
+  try {
+    const updatedMsg = db.addPollOption(req.body);
+    if (updatedMsg) {
+      io.in(req.body.chatId).emit("poll_option_added", { chatId: req.body.chatId, message: updatedMsg });
+    }
+    res.json({ success: true, message: updatedMsg });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Update Live Location
+app.put("/api/messages/live-location", (req, res) => {
+  try {
+    const updatedMsg = db.updateLiveLocation(req.body);
+    if (updatedMsg) {
+      io.in(req.body.chatId).emit("live_location_updated", { chatId: req.body.chatId, message: updatedMsg });
+    }
+    res.json({ success: true, message: updatedMsg });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Stop Live Location
+app.put("/api/messages/stop-live-location", (req, res) => {
+  try {
+    const updatedMsg = db.stopLiveLocation(req.body);
+    if (updatedMsg) {
+      io.in(req.body.chatId).emit("live_location_stopped", { chatId: req.body.chatId, message: updatedMsg });
+    }
+    res.json({ success: true, message: updatedMsg });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
 // --- STATUS & AUDIENCE PROFILE REST ENDPOINTS ---
+
 
 // Get Status Feed for User
 app.get("/api/status/feed/:userId", (req, res) => {
@@ -281,6 +334,35 @@ io.on("connection", (socket) => {
       socket.in(chatId).emit("reaction received", { chatId, messageId, emoji, userId });
     }
   });
+
+  socket.on("vote_poll", (data) => {
+    const updatedMsg = db.togglePollVote(data);
+    if (updatedMsg && data.chatId) {
+      io.in(data.chatId).emit("poll_voted", { chatId: data.chatId, message: updatedMsg });
+    }
+  });
+
+  socket.on("add_poll_option", (data) => {
+    const updatedMsg = db.addPollOption(data);
+    if (updatedMsg && data.chatId) {
+      io.in(data.chatId).emit("poll_option_added", { chatId: data.chatId, message: updatedMsg });
+    }
+  });
+
+  socket.on("update_live_location", (data) => {
+    const updatedMsg = db.updateLiveLocation(data);
+    if (updatedMsg && data.chatId) {
+      io.in(data.chatId).emit("live_location_updated", { chatId: data.chatId, message: updatedMsg });
+    }
+  });
+
+  socket.on("stop_live_location", (data) => {
+    const updatedMsg = db.stopLiveLocation(data);
+    if (updatedMsg && data.chatId) {
+      io.in(data.chatId).emit("live_location_stopped", { chatId: data.chatId, message: updatedMsg });
+    }
+  });
+
 
   // WebRTC Audio & Video Call Signaling
   socket.on("call-user", ({ targetUserId, signalData, caller, callType, chatId }) => {

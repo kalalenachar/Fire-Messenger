@@ -572,6 +572,162 @@ function deleteStatusPost(userId, statusId) {
   return true;
 }
 
+function togglePollVote({ chatId, messageId, optionId, user }) {
+  const db = readDb();
+  if (!db.messages || !db.messages[chatId]) return null;
+
+  const msgs = db.messages[chatId];
+  const msgIndex = msgs.findIndex((m) => m._id === messageId);
+  if (msgIndex === -1) return null;
+
+  const msg = msgs[msgIndex];
+  if (msg.type !== "poll" || !msg.pollData) return null;
+
+  const poll = { ...msg.pollData };
+  const settings = poll.settings || {};
+  const userId = user._id || user;
+  const userPic = user.pic || "";
+  const userName = user.name || "User";
+
+  // Expiry check
+  if (settings.expiresAt && new Date(settings.expiresAt) < new Date()) {
+    return null;
+  }
+
+  // Revoting check
+  const hasUserVotedInPoll = poll.options.some((opt) =>
+    (opt.voters || []).some((v) => (typeof v === "object" ? v.userId : v) === userId)
+  );
+
+  if ((settings.allowRevoting === false || settings.revotingMode === "locked") && hasUserVotedInPoll) {
+    return null;
+  }
+
+  if (settings.revotingMode === "5min" && hasUserVotedInPoll) {
+    let earliestVoteTime = null;
+    poll.options.forEach((opt) => {
+      (opt.voters || []).forEach((v) => {
+        if ((typeof v === "object" ? v.userId : v) === userId && v.votedAt) {
+          const t = new Date(v.votedAt).getTime();
+          if (!earliestVoteTime || t < earliestVoteTime) earliestVoteTime = t;
+        }
+      });
+    });
+    if (earliestVoteTime && Date.now() - earliestVoteTime > 5 * 60 * 1000) {
+      return null; // 5-minute revoting window passed
+    }
+  }
+
+  const allowMultiple = settings.allowMultiple ?? poll.allowMultiple ?? false;
+
+  // Max choices limit check
+  if (allowMultiple && settings.maxChoices && settings.maxChoices !== "unlimited") {
+    const maxAllowed = parseInt(settings.maxChoices, 10);
+    const currentlyVotedCount = poll.options.filter((opt) =>
+      (opt.voters || []).some((v) => (typeof v === "object" ? v.userId : v) === userId)
+    ).length;
+
+    const targetOpt = poll.options.find((o) => o.id === optionId);
+    const isTargetVoted = (targetOpt?.voters || []).some((v) => (typeof v === "object" ? v.userId : v) === userId);
+
+    if (!isTargetVoted && currentlyVotedCount >= maxAllowed) {
+      return null;
+    }
+  }
+
+  const options = poll.options.map((opt) => {
+    let voters = opt.voters || [];
+    const isVotedOnThisOption = voters.some((v) => (typeof v === "object" ? v.userId : v) === userId);
+
+    if (opt.id === optionId) {
+      if (isVotedOnThisOption) {
+        voters = voters.filter((v) => (typeof v === "object" ? v.userId : v) !== userId);
+      } else {
+        voters = [...voters, { userId, name: userName, pic: userPic, votedAt: new Date().toISOString() }];
+      }
+    } else if (!allowMultiple && isVotedOnThisOption) {
+      voters = voters.filter((v) => (typeof v === "object" ? v.userId : v) !== userId);
+    }
+
+    return { ...opt, voters };
+  });
+
+  poll.options = options;
+  db.messages[chatId][msgIndex].pollData = poll;
+  writeDb(db);
+  return db.messages[chatId][msgIndex];
+}
+
+function addPollOption({ chatId, messageId, optionText, user }) {
+  const db = readDb();
+  if (!db.messages || !db.messages[chatId]) return null;
+
+  const msgs = db.messages[chatId];
+  const msgIndex = msgs.findIndex((m) => m._id === messageId);
+  if (msgIndex === -1) return null;
+
+  const msg = msgs[msgIndex];
+  if (msg.type !== "poll" || !msg.pollData || !optionText?.trim()) return null;
+
+  const poll = { ...msg.pollData };
+  const settings = poll.settings || {};
+
+  if (!settings.allowAddingOptions) return null;
+
+  const newOption = {
+    id: `opt_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    text: optionText.trim(),
+    voters: [],
+    addedBy: user?.name || "Participant",
+  };
+
+  poll.options.push(newOption);
+  db.messages[chatId][msgIndex].pollData = poll;
+  writeDb(db);
+  return db.messages[chatId][msgIndex];
+}
+
+function updateLiveLocation({ chatId, messageId, lat, lng, accuracy }) {
+  const db = readDb();
+  if (!db.messages || !db.messages[chatId]) return null;
+
+  const msgs = db.messages[chatId];
+  const msgIndex = msgs.findIndex((m) => m._id === messageId);
+  if (msgIndex === -1) return null;
+
+  const msg = msgs[msgIndex];
+  if (msg.type !== "live_location" || !msg.locationData) return null;
+
+  const loc = {
+    ...msg.locationData,
+    lat,
+    lng,
+    accuracy: accuracy || msg.locationData.accuracy,
+    lastUpdated: new Date().toISOString(),
+    mapUrl: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`,
+  };
+
+  db.messages[chatId][msgIndex].locationData = loc;
+  writeDb(db);
+  return db.messages[chatId][msgIndex];
+}
+
+function stopLiveLocation({ chatId, messageId }) {
+  const db = readDb();
+  if (!db.messages || !db.messages[chatId]) return null;
+
+  const msgs = db.messages[chatId];
+  const msgIndex = msgs.findIndex((m) => m._id === messageId);
+  if (msgIndex === -1) return null;
+
+  if (db.messages[chatId][msgIndex].locationData) {
+    db.messages[chatId][msgIndex].locationData.isLive = false;
+    db.messages[chatId][msgIndex].locationData.stoppedAt = new Date().toISOString();
+    writeDb(db);
+  }
+  return db.messages[chatId][msgIndex];
+}
+
 module.exports = {
   readDb,
   loginUser,
@@ -592,5 +748,10 @@ module.exports = {
   getActiveStatusFeed,
   recordStatusView,
   deleteStatusPost,
+  togglePollVote,
+  addPollOption,
+  updateLiveLocation,
+  stopLiveLocation,
 };
+
 
