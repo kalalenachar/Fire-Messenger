@@ -1635,6 +1635,7 @@ const SingleChat = () => {
       <PollComposerModal
         isOpen={isPollModalOpen}
         onClose={() => setIsPollModalOpen(false)}
+        isGroupChat={Boolean(selectedChat?.isGroupChat)}
         onSendPoll={(pollData) => {
           if (selectedChat) {
             sendMessage(selectedChat._id, `📊 ${pollData.question}`, "poll", pollData);

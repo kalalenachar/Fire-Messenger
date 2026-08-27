@@ -25,7 +25,7 @@ import {
 } from "@chakra-ui/react";
 import { AddIcon, DeleteIcon, CheckIcon } from "@chakra-ui/icons";
 
-const PollComposerModal = ({ isOpen, onClose, onSendPoll }) => {
+const PollComposerModal = ({ isOpen, onClose, onSendPoll, isGroupChat = false }) => {
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
   const [correctOptionIdx, setCorrectOptionIdx] = useState(null);
@@ -161,21 +161,21 @@ const PollComposerModal = ({ isOpen, onClose, onSendPoll }) => {
       question: question.trim(),
       options: formattedOptions,
       settings: {
-        showWhoVoted: voterPrivacyMode !== "anonymous",
-        voterPrivacyMode, // "public" | "anonymous" | "creator_only"
+        showWhoVoted: isGroupChat ? voterPrivacyMode !== "anonymous" : true,
+        voterPrivacyMode: isGroupChat ? voterPrivacyMode : "public",
         allowMultiple,
         maxChoices: allowMultiple ? maxChoices : "1",
-        allowAddingOptions,
-        whoCanAddOptions, // "everyone" | "admins"
+        allowAddingOptions: isGroupChat ? allowAddingOptions : false,
+        whoCanAddOptions: isGroupChat ? whoCanAddOptions : "everyone",
         allowRevoting: revotingMode !== "locked",
-        revotingMode, // "unlimited" | "locked" | "5min"
-        shuffleOptions,
+        revotingMode,
+        shuffleOptions: isGroupChat ? shuffleOptions : false,
         isQuizMode,
         quizExplanation: isQuizMode ? quizExplanation.trim() : "",
         limitDuration,
         expiresAt: computedExpiresAt,
-        hideResults,
-        resultsRevealMode: hideResults ? resultsRevealMode : "always_visible",
+        hideResults: isGroupChat ? hideResults : false,
+        resultsRevealMode: (isGroupChat && hideResults) ? resultsRevealMode : "always_visible",
       },
       isClosed: false,
     };
@@ -210,9 +210,14 @@ const PollComposerModal = ({ isOpen, onClose, onSendPoll }) => {
     <Modal isOpen={isOpen} onClose={resetAndClose} isCentered size="md" scrollBehavior="inside">
       <ModalOverlay backdropFilter="blur(6px)" />
       <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="20px" border="1px solid var(--color-border)" maxH="90vh">
-        <ModalHeader borderBottom="1px solid var(--color-border)" fontSize="lg" fontWeight="bold" display="flex" alignItems="center" gap={2}>
-          <span>📊</span>
-          <span>Create Poll & Advanced Settings</span>
+        <ModalHeader borderBottom="1px solid var(--color-border)" fontSize="lg" fontWeight="bold" display="flex" alignItems="center" justifyContent="space-between" pr={10}>
+          <HStack spacing={2}>
+            <span>📊</span>
+            <span>{isGroupChat ? "Create Group Poll" : "Create Poll"}</span>
+          </HStack>
+          <Badge colorScheme={isGroupChat ? "purple" : "teal"} borderRadius="8px" px={2.5} py={0.5} fontSize="11px" fontWeight="600">
+            {isGroupChat ? "Group Chat" : "Direct Message"}
+          </Badge>
         </ModalHeader>
         <ModalCloseButton />
 
@@ -296,61 +301,14 @@ const PollComposerModal = ({ isOpen, onClose, onSendPoll }) => {
               )}
             </FormControl>
 
-            {/* Advanced Detailing Settings Section */}
+            {/* Settings Section */}
             <Box mt={2}>
               <Text fontWeight="bold" fontSize="sm" mb={3} color="var(--text-header)">
-                Advanced Configuration
+                {isGroupChat ? "Advanced Group Configuration" : "Poll Settings"}
               </Text>
 
               <VStack spacing={3} align="stretch">
-                {/* 1. Show Who Voted (Voter Privacy) */}
-                <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
-                  <HStack justify="space-between" align="center">
-                    <HStack spacing={3}>
-                      <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
-                        👁️
-                      </Box>
-                      <Box maxW="220px">
-                        <Text fontWeight="600" fontSize="xs">
-                          Show Who Voted
-                        </Text>
-                        <Text fontSize="11px" color="var(--text-secondary)">
-                          Control voter visibility & privacy.
-                        </Text>
-                      </Box>
-                    </HStack>
-                    <Switch
-                      isChecked={showWhoVoted}
-                      onChange={(e) => {
-                        setShowWhoVoted(e.target.checked);
-                        if (!e.target.checked) setVoterPrivacyMode("anonymous");
-                        else setVoterPrivacyMode("public");
-                      }}
-                      colorScheme="orange"
-                    />
-                  </HStack>
-
-                  <Collapse in={showWhoVoted} animateOpacity>
-                    <Box mt={3} pt={2} borderTop="1px solid var(--color-border)">
-                      <FormLabel fontSize="11px" fontWeight="600" color="var(--text-secondary)" mb={1}>
-                        Privacy Mode
-                      </FormLabel>
-                      <Select
-                        size="xs"
-                        borderRadius="10px"
-                        bg="var(--bg-card)"
-                        value={voterPrivacyMode}
-                        onChange={(e) => setVoterPrivacyMode(e.target.value)}
-                      >
-                        <option value="public">🌐 Public (Everyone can see voters)</option>
-                        <option value="creator_only">🔒 Creator Only (Only you see voter names)</option>
-                        <option value="anonymous">🙈 Anonymous (All votes completely secret)</option>
-                      </Select>
-                    </Box>
-                  </Collapse>
-                </Box>
-
-                {/* 2. Allow Multiple Answers */}
+                {/* 1. Allow Multiple Answers */}
                 <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
                   <HStack justify="space-between" align="center">
                     <HStack spacing={3}>
@@ -394,49 +352,49 @@ const PollComposerModal = ({ isOpen, onClose, onSendPoll }) => {
                   </Collapse>
                 </Box>
 
-                {/* 3. Allow Adding Options */}
+                {/* 2. Set Correct Answer (Quiz Mode) */}
                 <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
                   <HStack justify="space-between" align="center">
                     <HStack spacing={3}>
                       <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
-                        ➕
+                        ✅
                       </Box>
                       <Box maxW="220px">
                         <Text fontWeight="600" fontSize="xs">
-                          Allow Adding Options
+                          Set Correct Answer (Quiz Mode)
                         </Text>
                         <Text fontSize="11px" color="var(--text-secondary)">
-                          Participants can suggest new options.
+                          Mark the right choice & add explanation.
                         </Text>
                       </Box>
                     </HStack>
                     <Switch
-                      isChecked={allowAddingOptions}
-                      onChange={(e) => setAllowAddingOptions(e.target.checked)}
+                      isChecked={isQuizMode}
+                      onChange={(e) => setIsQuizMode(e.target.checked)}
                       colorScheme="orange"
                     />
                   </HStack>
 
-                  <Collapse in={allowAddingOptions} animateOpacity>
+                  <Collapse in={isQuizMode} animateOpacity>
                     <Box mt={3} pt={2} borderTop="1px solid var(--color-border)">
                       <FormLabel fontSize="11px" fontWeight="600" color="var(--text-secondary)" mb={1}>
-                        Who Can Suggest Options?
+                        Optional Answer Explanation
                       </FormLabel>
-                      <Select
+                      <Textarea
+                        placeholder="Add an explanation shown after answering..."
+                        value={quizExplanation}
+                        onChange={(e) => setQuizExplanation(e.target.value)}
                         size="xs"
+                        rows={2}
                         borderRadius="10px"
                         bg="var(--bg-card)"
-                        value={whoCanAddOptions}
-                        onChange={(e) => setWhoCanAddOptions(e.target.value)}
-                      >
-                        <option value="everyone">👥 Everyone in chat</option>
-                        <option value="admins">⭐ Group Admins & Creator only</option>
-                      </Select>
+                        border="none"
+                      />
                     </Box>
                   </Collapse>
                 </Box>
 
-                {/* 4. Allow Revoting */}
+                {/* 3. Allow Revoting */}
                 <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
                   <HStack justify="space-between" align="center">
                     <HStack spacing={3}>
@@ -483,73 +441,7 @@ const PollComposerModal = ({ isOpen, onClose, onSendPoll }) => {
                   </Collapse>
                 </Box>
 
-                {/* 5. Shuffle Options */}
-                <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
-                  <HStack justify="space-between" align="center">
-                    <HStack spacing={3}>
-                      <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
-                        🔀
-                      </Box>
-                      <Box maxW="220px">
-                        <Text fontWeight="600" fontSize="xs">
-                          Shuffle Options
-                        </Text>
-                        <Text fontSize="11px" color="var(--text-secondary)">
-                          Randomize answer order for each voter to prevent bias.
-                        </Text>
-                      </Box>
-                    </HStack>
-                    <Switch
-                      isChecked={shuffleOptions}
-                      onChange={(e) => setShuffleOptions(e.target.checked)}
-                      colorScheme="orange"
-                    />
-                  </HStack>
-                </Box>
-
-                {/* 6. Set Correct Answer (Quiz Mode) */}
-                <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
-                  <HStack justify="space-between" align="center">
-                    <HStack spacing={3}>
-                      <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
-                        ✅
-                      </Box>
-                      <Box maxW="220px">
-                        <Text fontWeight="600" fontSize="xs">
-                          Set Correct Answer (Quiz Mode)
-                        </Text>
-                        <Text fontSize="11px" color="var(--text-secondary)">
-                          Mark the right choice & add explanation.
-                        </Text>
-                      </Box>
-                    </HStack>
-                    <Switch
-                      isChecked={isQuizMode}
-                      onChange={(e) => setIsQuizMode(e.target.checked)}
-                      colorScheme="orange"
-                    />
-                  </HStack>
-
-                  <Collapse in={isQuizMode} animateOpacity>
-                    <Box mt={3} pt={2} borderTop="1px solid var(--color-border)">
-                      <FormLabel fontSize="11px" fontWeight="600" color="var(--text-secondary)" mb={1}>
-                        Optional Answer Explanation
-                      </FormLabel>
-                      <Textarea
-                        placeholder="Add an explanation shown after answering..."
-                        value={quizExplanation}
-                        onChange={(e) => setQuizExplanation(e.target.value)}
-                        size="xs"
-                        rows={2}
-                        borderRadius="10px"
-                        bg="var(--bg-card)"
-                        border="none"
-                      />
-                    </Box>
-                  </Collapse>
-                </Box>
-
-                {/* 7. Limit Duration */}
+                {/* 4. Limit Duration */}
                 <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
                   <HStack justify="space-between" align="center">
                     <HStack spacing={3}>
@@ -606,48 +498,166 @@ const PollComposerModal = ({ isOpen, onClose, onSendPoll }) => {
                   </Collapse>
                 </Box>
 
-                {/* 8. Hide Results */}
-                <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
-                  <HStack justify="space-between" align="center">
-                    <HStack spacing={3}>
-                      <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
-                        🙈
-                      </Box>
-                      <Box maxW="220px">
-                        <Text fontWeight="600" fontSize="xs">
-                          Hide Results
-                        </Text>
-                        <Text fontSize="11px" color="var(--text-secondary)">
-                          Hide percentages until condition is met.
-                        </Text>
-                      </Box>
-                    </HStack>
-                    <Switch
-                      isChecked={hideResults}
-                      onChange={(e) => setHideResults(e.target.checked)}
-                      colorScheme="orange"
-                    />
-                  </HStack>
+                {/* GROUP-ONLY ADVANCED SETTINGS */}
+                {isGroupChat && (
+                  <>
+                    {/* Show Who Voted (Voter Privacy) */}
+                    <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
+                      <HStack justify="space-between" align="center">
+                        <HStack spacing={3}>
+                          <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
+                            👁️
+                          </Box>
+                          <Box maxW="220px">
+                            <Text fontWeight="600" fontSize="xs">
+                              Show Who Voted
+                            </Text>
+                            <Text fontSize="11px" color="var(--text-secondary)">
+                              Control voter visibility & privacy in group.
+                            </Text>
+                          </Box>
+                        </HStack>
+                        <Switch
+                          isChecked={showWhoVoted}
+                          onChange={(e) => {
+                            setShowWhoVoted(e.target.checked);
+                            if (!e.target.checked) setVoterPrivacyMode("anonymous");
+                            else setVoterPrivacyMode("public");
+                          }}
+                          colorScheme="orange"
+                        />
+                      </HStack>
 
-                  <Collapse in={hideResults} animateOpacity>
-                    <Box mt={3} pt={2} borderTop="1px solid var(--color-border)">
-                      <FormLabel fontSize="11px" fontWeight="600" color="var(--text-secondary)" mb={1}>
-                        Reveal Mode
-                      </FormLabel>
-                      <Select
-                        size="xs"
-                        borderRadius="10px"
-                        bg="var(--bg-card)"
-                        value={resultsRevealMode}
-                        onChange={(e) => setResultsRevealMode(e.target.value)}
-                      >
-                        <option value="until_voted">📩 Reveal results after user votes</option>
-                        <option value="until_closed">⏱️ Reveal results ONLY when poll closes</option>
-                        <option value="always_hidden">🔒 Always hidden (Survey Ballot mode)</option>
-                      </Select>
+                      <Collapse in={showWhoVoted} animateOpacity>
+                        <Box mt={3} pt={2} borderTop="1px solid var(--color-border)">
+                          <FormLabel fontSize="11px" fontWeight="600" color="var(--text-secondary)" mb={1}>
+                            Privacy Mode
+                          </FormLabel>
+                          <Select
+                            size="xs"
+                            borderRadius="10px"
+                            bg="var(--bg-card)"
+                            value={voterPrivacyMode}
+                            onChange={(e) => setVoterPrivacyMode(e.target.value)}
+                          >
+                            <option value="public">🌐 Public (Everyone can see voters)</option>
+                            <option value="creator_only">🔒 Creator Only (Only you see voter names)</option>
+                            <option value="anonymous">🙈 Anonymous (All votes completely secret)</option>
+                          </Select>
+                        </Box>
+                      </Collapse>
                     </Box>
-                  </Collapse>
-                </Box>
+
+                    {/* Allow Adding Options */}
+                    <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
+                      <HStack justify="space-between" align="center">
+                        <HStack spacing={3}>
+                          <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
+                            ➕
+                          </Box>
+                          <Box maxW="220px">
+                            <Text fontWeight="600" fontSize="xs">
+                              Allow Adding Options
+                            </Text>
+                            <Text fontSize="11px" color="var(--text-secondary)">
+                              Participants can suggest new options.
+                            </Text>
+                          </Box>
+                        </HStack>
+                        <Switch
+                          isChecked={allowAddingOptions}
+                          onChange={(e) => setAllowAddingOptions(e.target.checked)}
+                          colorScheme="orange"
+                        />
+                      </HStack>
+
+                      <Collapse in={allowAddingOptions} animateOpacity>
+                        <Box mt={3} pt={2} borderTop="1px solid var(--color-border)">
+                          <FormLabel fontSize="11px" fontWeight="600" color="var(--text-secondary)" mb={1}>
+                            Who Can Suggest Options?
+                          </FormLabel>
+                          <Select
+                            size="xs"
+                            borderRadius="10px"
+                            bg="var(--bg-card)"
+                            value={whoCanAddOptions}
+                            onChange={(e) => setWhoCanAddOptions(e.target.value)}
+                          >
+                            <option value="everyone">👥 Everyone in chat</option>
+                            <option value="admins">⭐ Group Admins & Creator only</option>
+                          </Select>
+                        </Box>
+                      </Collapse>
+                    </Box>
+
+                    {/* Shuffle Options */}
+                    <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
+                      <HStack justify="space-between" align="center">
+                        <HStack spacing={3}>
+                          <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
+                            🔀
+                          </Box>
+                          <Box maxW="220px">
+                            <Text fontWeight="600" fontSize="xs">
+                              Shuffle Options
+                            </Text>
+                            <Text fontSize="11px" color="var(--text-secondary)">
+                              Randomize answer order for each voter to prevent bias.
+                            </Text>
+                          </Box>
+                        </HStack>
+                        <Switch
+                          isChecked={shuffleOptions}
+                          onChange={(e) => setShuffleOptions(e.target.checked)}
+                          colorScheme="orange"
+                        />
+                      </HStack>
+                    </Box>
+
+                    {/* Hide Results */}
+                    <Box p={3} borderRadius="14px" bg="var(--bg-search)" border="1px solid var(--color-border)">
+                      <HStack justify="space-between" align="center">
+                        <HStack spacing={3}>
+                          <Box w="34px" h="34px" borderRadius="10px" bg="rgba(249, 115, 22, 0.12)" display="flex" alignItems="center" justifyContent="center" fontSize="16px">
+                            🙈
+                          </Box>
+                          <Box maxW="220px">
+                            <Text fontWeight="600" fontSize="xs">
+                              Hide Results
+                            </Text>
+                            <Text fontSize="11px" color="var(--text-secondary)">
+                              Hide percentages until condition is met.
+                            </Text>
+                          </Box>
+                        </HStack>
+                        <Switch
+                          isChecked={hideResults}
+                          onChange={(e) => setHideResults(e.target.checked)}
+                          colorScheme="orange"
+                        />
+                      </HStack>
+
+                      <Collapse in={hideResults} animateOpacity>
+                        <Box mt={3} pt={2} borderTop="1px solid var(--color-border)">
+                          <FormLabel fontSize="11px" fontWeight="600" color="var(--text-secondary)" mb={1}>
+                            Reveal Mode
+                          </FormLabel>
+                          <Select
+                            size="xs"
+                            borderRadius="10px"
+                            bg="var(--bg-card)"
+                            value={resultsRevealMode}
+                            onChange={(e) => setResultsRevealMode(e.target.value)}
+                          >
+                            <option value="until_voted">📩 Reveal results after user votes</option>
+                            <option value="until_closed">⏱️ Reveal results ONLY when poll closes</option>
+                            <option value="always_hidden">🔒 Always hidden (Survey Ballot mode)</option>
+                          </Select>
+                        </Box>
+                      </Collapse>
+                    </Box>
+                  </>
+                )}
               </VStack>
             </Box>
           </VStack>
