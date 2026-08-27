@@ -1,29 +1,32 @@
+import React, { useState } from "react";
 import { Button } from "@chakra-ui/button";
 import { FormControl, FormLabel } from "@chakra-ui/form-control";
 import { Input, InputGroup, InputRightElement } from "@chakra-ui/input";
-import { VStack } from "@chakra-ui/layout";
-import { useState } from "react";
-import axios from "axios";
+import { VStack, Box, Text, Badge, Wrap, WrapItem } from "@chakra-ui/layout";
 import { useToast } from "@chakra-ui/react";
 import { useHistory } from "react-router-dom";
+import { loginUser, defaultUsersList, setCurrentSessionUser } from "../../data/fireStorage";
+import { ChatState } from "../../Context/ChatProvider";
 
 const Login = () => {
   const [show, setShow] = useState(false);
   const handleClick = () => setShow(!show);
   const toast = useToast();
+  const history = useHistory();
+  const { setUser } = ChatState();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const history = useHistory();
-
-  const submitHandler = async () => {
+  const submitHandler = () => {
     setLoading(true);
     if (!email || !password) {
       toast({
-        title: "Please Fill all the Feilds",
+        title: "Missing Fields",
+        description: "Please fill in both email and password.",
         status: "warning",
-        duration: 5000,
+        duration: 3000,
         isClosable: true,
         position: "bottom",
       });
@@ -31,44 +34,26 @@ const Login = () => {
       return;
     }
 
-    // console.log(email, password);
     try {
-      // Attempt live login endpoint if available, or fall back to demo user
-      const userPayload = {
-        _id: `user_${Date.now()}`,
-        name: email.split("@")[0] || "Fire User",
-        email: email,
-        pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-        status: "Available | 🔥 Burning with Passion",
-        token: "fire_token_demo",
-      };
-
-      if (process.env.REACT_APP_API_URL) {
-        try {
-          const config = { headers: { "Content-type": "application/json" } };
-          const { data } = await axios.post(`${process.env.REACT_APP_API_URL}/api/user/login`, { email, password }, config);
-          localStorage.setItem("userInfo", JSON.stringify(data));
-        } catch (err) {
-          localStorage.setItem("userInfo", JSON.stringify(userPayload));
-        }
-      } else {
-        localStorage.setItem("userInfo", JSON.stringify(userPayload));
-      }
+      const loggedInUser = loginUser(email, password);
+      setCurrentSessionUser(loggedInUser);
+      setUser(loggedInUser); // Update Context state immediately!
 
       toast({
-        title: "Login Successful 🔥",
-        description: "Welcome to Fire Messenger!",
+        title: `Welcome back, ${loggedInUser.name}! 🔥`,
+        description: "Logged in successfully.",
         status: "success",
         duration: 3000,
         isClosable: true,
         position: "bottom",
       });
+
       setLoading(false);
       history.push("/chats");
     } catch (error) {
       toast({
-        title: "Error Occured!",
-        description: error?.response?.data?.message || "Failed to log in",
+        title: "Login Failed",
+        description: error.message || "Invalid credentials",
         status: "error",
         duration: 4000,
         isClosable: true,
@@ -78,55 +63,93 @@ const Login = () => {
     }
   };
 
+  const fillQuickUser = (userEmail, userPassword) => {
+    setEmail(userEmail);
+    setPassword(userPassword);
+  };
+
   return (
-    <VStack spacing="10px">
-      <FormControl id="email" isRequired>
-        <FormLabel>Email Address</FormLabel>
+    <VStack spacing="12px" align="stretch">
+      <FormControl id="login-email" isRequired>
+        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
+          Email Address
+        </FormLabel>
         <Input
           value={email}
           type="email"
-          placeholder="Enter Your Email Address"
+          placeholder="e.g. alex@firemessenger.io"
           onChange={(e) => setEmail(e.target.value)}
-          borderColor="black"
+          bg="var(--bg-search)"
+          color="var(--text-primary)"
+          borderColor="var(--color-border)"
+          _focus={{ borderColor: "var(--color-primary)", boxShadow: "0 0 0 1px var(--color-primary)" }}
         />
       </FormControl>
-      <FormControl id="password" isRequired>
-        <FormLabel>Password</FormLabel>
+
+      <FormControl id="login-password" isRequired>
+        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
+          Password
+        </FormLabel>
         <InputGroup size="md">
           <Input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type={show ? "text" : "password"}
             placeholder="Enter password"
-            borderColor="black"
+            bg="var(--bg-search)"
+            color="var(--text-primary)"
+            borderColor="var(--color-border)"
+            _focus={{ borderColor: "var(--color-primary)", boxShadow: "0 0 0 1px var(--color-primary)" }}
           />
           <InputRightElement width="4.5rem">
-            <Button h="1.75rem" size="sm" onClick={handleClick}>
+            <Button h="1.75rem" size="sm" onClick={handleClick} variant="ghost" color="var(--text-secondary)">
               {show ? "Hide" : "Show"}
             </Button>
           </InputRightElement>
         </InputGroup>
       </FormControl>
+
       <Button
-        colorScheme="green"
+        bg="var(--color-primary)"
+        color="white"
+        _hover={{ bg: "var(--color-primary-hover)" }}
         width="100%"
-        style={{ marginTop: 15 }}
+        mt={2}
         onClick={submitHandler}
         isLoading={loading}
+        size="lg"
+        fontSize="md"
+        fontWeight="bold"
+        borderRadius="lg"
       >
-        Login
+        Sign In 🔥
       </Button>
-      <Button
-        variant="solid"
-        colorScheme="red"
-        width="100%"
-        onClick={() => {
-          setEmail("guest@example.com");
-          setPassword("123456");
-        }}
-      >
-        Get Guest User Credentials
-      </Button>
+
+      {/* Quick Test Login Accounts */}
+      <Box pt={3} borderTop="1px border var(--color-border)">
+        <Text fontSize="xs" color="var(--text-muted)" fontWeight="bold" mb={2}>
+          QUICK ONE-CLICK TEST ACCOUNTS (Password: 123):
+        </Text>
+        <Wrap spacing={2}>
+          {defaultUsersList.map((u) => (
+            <WrapItem key={u._id}>
+              <Badge
+                px={2.5}
+                py={1}
+                borderRadius="full"
+                cursor="pointer"
+                bg="var(--bg-search)"
+                color="var(--text-primary)"
+                border="1px solid var(--color-border)"
+                _hover={{ bg: "var(--color-primary)", color: "white" }}
+                onClick={() => fillQuickUser(u.email, u.password)}
+              >
+                👤 {u.name.split(" ")[0]}
+              </Badge>
+            </WrapItem>
+          ))}
+        </Wrap>
+      </Box>
     </VStack>
   );
 };

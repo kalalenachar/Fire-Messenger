@@ -1,17 +1,41 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Box, Text } from "@chakra-ui/layout";
-import { Avatar, IconButton, Input, Button, Tooltip, Popover, PopoverTrigger, PopoverContent, PopoverBody } from "@chakra-ui/react";
+import {
+  Avatar,
+  IconButton,
+  Input,
+  Button,
+  Tooltip,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalBody,
+  Image,
+  useDisclosure,
+} from "@chakra-ui/react";
 import { PhoneIcon, ViewIcon, AttachmentIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
+import ProfileModal from "./miscellaneous/ProfileModal";
 
 const SingleChat = () => {
-  const { selectedChat, user, messagesMap, sendMessage, toggleReaction } = ChatState();
+  const { selectedChat, user, messagesMap, sendMessage, toggleReaction, theme } = ChatState();
   const [textInput, setTextInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
+
+  const { isOpen: isImageOpen, onOpen: onImageOpen, onClose: onImageClose } = useDisclosure();
+
   const timerRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const fileInputRef = useRef(null);
 
   const activeMessages = selectedChat ? messagesMap[selectedChat._id] || [] : [];
 
@@ -20,7 +44,7 @@ const SingleChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeMessages, selectedChat]);
 
-  // Voice Recording Simulator Timer
+  // Handle Real Audio Recording Timer & Recorder
   useEffect(() => {
     if (isRecording) {
       timerRef.current = setInterval(() => {
@@ -32,6 +56,75 @@ const SingleChat = () => {
     }
     return () => clearInterval(timerRef.current);
   }, [isRecording]);
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      // If microphone access is rejected or missing, fallback to audio simulation
+      setIsRecording(true);
+    }
+  };
+
+  const stopAndSendVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const audioBase64 = reader.result;
+          sendMessage(selectedChat._id, `🎤 Voice Note (${recordingSeconds}s)`, "voice", audioBase64);
+        };
+        reader.readAsDataURL(audioBlob);
+
+        // Stop stream tracks
+        mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
+      };
+      mediaRecorderRef.current.stop();
+    } else {
+      sendMessage(selectedChat._id, `🎤 Voice Note (${recordingSeconds || 3}s)`, "voice", null);
+    }
+    setIsRecording(false);
+  };
+
+  const cancelVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
+    }
+    setIsRecording(false);
+  };
+
+  // Attachment Upload Handler
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const fileData = reader.result;
+      if (isImage) {
+        sendMessage(selectedChat._id, `📷 Photo (${file.name})`, "image", fileData);
+      } else {
+        sendMessage(selectedChat._id, `📄 File: ${file.name}`, "file", fileData);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   if (!selectedChat) {
     return (
@@ -65,7 +158,7 @@ const SingleChat = () => {
           Fire Messenger Web
         </Text>
         <Text fontSize="sm" color="var(--text-secondary)" maxW="400px">
-          Send and receive real-time messages with WhatsApp emerald styling, emoji reactions, voice notes, and AI bot assistance.
+          Real-time persistent messaging, live multi-tab sync, registration system, voice notes, and media attachments.
         </Text>
       </Box>
     );
@@ -79,11 +172,12 @@ const SingleChat = () => {
         status: `${selectedChat.users?.length || 3} members`,
       };
     }
-    const otherUser = selectedChat.users?.find((u) => u._id !== user?._id);
+    const otherUser = selectedChat.users?.find((u) => u._id !== user?._id) || selectedChat.users?.[0];
     return {
       title: otherUser?.name || selectedChat.chatName,
       avatar: otherUser?.pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
       status: otherUser?.status || "Online",
+      userObj: otherUser,
     };
   };
 
@@ -100,11 +194,6 @@ const SingleChat = () => {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleSendVoiceNote = () => {
-    setIsRecording(false);
-    sendMessage(selectedChat._id, `🎤 Voice Note (${recordingSeconds}s)`, "voice");
   };
 
   const insertEmoji = (emoji) => {
@@ -124,27 +213,31 @@ const SingleChat = () => {
         display="flex"
         alignItems="center"
         justifyContent="space-between"
-        zIndex="5"
+        position="relative"
+        zIndex="2"
+        boxShadow="var(--shadow-sm)"
       >
         <Box display="flex" alignItems="center" gap={3}>
-          <Avatar size="md" name={header.title} src={header.avatar} />
+          <Avatar size="md" name={header.title} src={header.avatar} border="2px solid var(--text-header)" />
           <Box>
-            <Text fontWeight="600" fontSize="md" color="var(--text-primary)" lineHeight="1.2">
+            <Text fontWeight="600" fontSize="md" color="var(--text-header)" lineHeight="1.2">
               {header.title}
             </Text>
-            <Text fontSize="xs" color="var(--color-online)">
+            <Text fontSize="xs" color={theme === "light" ? "#e0f2fe" : "var(--color-online)"}>
               {header.status}
             </Text>
           </Box>
         </Box>
 
         <Box display="flex" gap={2}>
-          <Tooltip label="Start Voice Call" placement="bottom">
-            <IconButton icon={<PhoneIcon />} size="sm" variant="ghost" color="var(--text-secondary)" _hover={{ bg: "var(--bg-hover)", color: "var(--color-primary)" }} />
+          <Tooltip label="Voice Call (Simulated)" placement="bottom">
+            <IconButton icon={<PhoneIcon />} size="sm" variant="ghost" color="var(--text-header)" _hover={{ bg: "rgba(255,255,255,0.15)" }} />
           </Tooltip>
-          <Tooltip label="View Info" placement="bottom">
-            <IconButton icon={<ViewIcon />} size="sm" variant="ghost" color="var(--text-secondary)" _hover={{ bg: "var(--bg-hover)", color: "var(--color-primary)" }} />
-          </Tooltip>
+          {header.userObj && (
+            <ProfileModal user={header.userObj}>
+              <IconButton icon={<ViewIcon />} size="sm" variant="ghost" color="var(--text-header)" _hover={{ bg: "rgba(255,255,255,0.15)" }} />
+            </ProfileModal>
+          )}
         </Box>
       </Box>
 
@@ -191,9 +284,41 @@ const SingleChat = () => {
                   </Text>
                 )}
 
-                <Text fontSize="sm" whiteSpace="pre-wrap">
-                  {msg.content}
-                </Text>
+                {/* Render Text or Audio or Media */}
+                {msg.type === "image" && (msg.fileUrl || msg.content) ? (
+                  <Box mb={1}>
+                    <Image
+                      src={msg.fileUrl || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=300&auto=format&fit=crop&q=80"}
+                      alt="Attachment"
+                      maxW="260px"
+                      borderRadius="md"
+                      cursor="pointer"
+                      onClick={() => {
+                        setPreviewImage(msg.fileUrl);
+                        onImageOpen();
+                      }}
+                    />
+                    <Text fontSize="xs" mt={1} color="var(--text-secondary)">{msg.content}</Text>
+                  </Box>
+                ) : msg.type === "voice" ? (
+                  <Box display="flex" flexDirection="column" gap={1}>
+                    <Text fontSize="sm" fontWeight="bold" color="var(--color-primary)">
+                      {msg.content}
+                    </Text>
+                    {msg.audioUrl ? (
+                      <audio controls src={msg.audioUrl} style={{ height: "32px", width: "220px" }} />
+                    ) : (
+                      <Box display="flex" alignItems="center" gap={2} bg="rgba(0,0,0,0.2)" p={2} borderRadius="md">
+                        <span>🔊</span>
+                        <Text fontSize="xs" color="var(--text-primary)">Recorded Voice Audio Note</Text>
+                      </Box>
+                    )}
+                  </Box>
+                ) : (
+                  <Text fontSize="sm" whiteSpace="pre-wrap">
+                    {msg.content}
+                  </Text>
+                )}
 
                 {/* Reaction Badges */}
                 {msg.reactions && Object.keys(msg.reactions).length > 0 && (
@@ -236,9 +361,15 @@ const SingleChat = () => {
         {/* Emoji Selector Popover */}
         <Popover placement="top-start">
           <PopoverTrigger>
-            <IconButton icon={<span style={{ fontSize: "18px" }}>😀</span>} size="md" variant="ghost" color="var(--text-secondary)" _hover={{ bg: "var(--bg-hover)" }} />
+            <IconButton
+              icon={<span style={{ fontSize: "18px" }}>😀</span>}
+              size="md"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+            />
           </PopoverTrigger>
-          <PopoverContent bg="var(--bg-header)" borderColor="var(--color-border)" w="auto" p={2}>
+          <PopoverContent bg="var(--bg-menu)" borderColor="var(--color-border)" w="auto" p={2} zIndex="2000">
             <PopoverBody display="flex" gap={2}>
               {availableEmojis.map((emoji) => (
                 <button
@@ -253,8 +384,24 @@ const SingleChat = () => {
           </PopoverContent>
         </Popover>
 
-        {/* Attachment Mock Button */}
-        <IconButton icon={<AttachmentIcon />} size="md" variant="ghost" color="var(--text-secondary)" _hover={{ bg: "var(--bg-hover)", color: "var(--color-primary)" }} />
+        {/* Real File & Media Attachment Button */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: "none" }}
+          onChange={handleFileUpload}
+          accept="image/*,audio/*,.pdf,.doc,.docx"
+        />
+        <Tooltip label="Attach Media / Photo / File" placement="top">
+          <IconButton
+            icon={<AttachmentIcon fontSize="19px" />}
+            size="md"
+            variant="ghost"
+            color="var(--text-header)"
+            _hover={{ bg: "rgba(255,255,255,0.15)" }}
+            onClick={() => fileInputRef.current?.click()}
+          />
+        </Tooltip>
 
         {/* Main Text Input or Voice Recorder */}
         {isRecording ? (
@@ -262,14 +409,14 @@ const SingleChat = () => {
             <Box display="flex" alignItems="center" gap={3}>
               <Box className="recording-dot" />
               <Text fontSize="sm" color="#f44336" fontWeight="bold">
-                Recording... 00:0{recordingSeconds}s
+                Recording Voice... 00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}s
               </Text>
             </Box>
             <Box display="flex" gap={2}>
-              <Button size="xs" colorScheme="red" variant="ghost" onClick={() => setIsRecording(false)}>
+              <Button size="xs" colorScheme="red" variant="ghost" onClick={cancelVoiceRecording}>
                 Cancel
               </Button>
-              <Button size="xs" bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={handleSendVoiceNote}>
+              <Button size="xs" bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={stopAndSendVoiceRecording}>
                 Send Voice
               </Button>
             </Box>
@@ -306,12 +453,22 @@ const SingleChat = () => {
             icon={<span style={{ fontSize: "18px" }}>🎙️</span>}
             size="md"
             variant="ghost"
-            color="var(--text-secondary)"
-            _hover={{ bg: "var(--bg-hover)", color: "var(--color-primary)" }}
-            onClick={() => setIsRecording(true)}
+            color="var(--text-header)"
+            _hover={{ bg: "rgba(255,255,255,0.15)" }}
+            onClick={startVoiceRecording}
           />
         )}
       </Box>
+
+      {/* Image Preview Lightbox Modal */}
+      <Modal isOpen={isImageOpen} onClose={onImageClose} size="xl" isCentered>
+        <ModalOverlay />
+        <ModalContent bg="transparent" boxShadow="none">
+          <ModalBody p={0} display="flex" justifyContent="center" alignItems="center">
+            <Image src={previewImage} maxH="80vh" maxW="90vw" borderRadius="lg" />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

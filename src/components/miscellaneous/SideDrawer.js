@@ -18,7 +18,7 @@ import {
   DrawerOverlay,
 } from "@chakra-ui/modal";
 import { Tooltip } from "@chakra-ui/tooltip";
-import { SearchIcon, BellIcon, ChevronDownIcon, MoonIcon, SunIcon } from "@chakra-ui/icons";
+import { SearchIcon, BellIcon, MoonIcon, SunIcon } from "@chakra-ui/icons";
 import { Avatar } from "@chakra-ui/avatar";
 import { useHistory } from "react-router-dom";
 import NotificationBadge from "react-notification-badge";
@@ -27,6 +27,7 @@ import ProfileModal from "./ProfileModal";
 import GroupChatModal from "./GroupChatModal";
 import UserListItem from "../userAvatar/UserListItem";
 import { ChatState } from "../../Context/ChatProvider";
+import { getRegisteredUsers, clearCurrentSession } from "../../data/fireStorage";
 
 function SideDrawer() {
   const [search, setSearch] = useState("");
@@ -36,10 +37,11 @@ function SideDrawer() {
   const {
     setSelectedChat,
     user,
+    setUser,
     notification,
     setNotification,
     chats,
-    setChats,
+    addOrSelectChat,
     theme,
     toggleTheme,
   } = ChatState();
@@ -48,7 +50,8 @@ function SideDrawer() {
   const history = useHistory();
 
   const logoutHandler = () => {
-    localStorage.removeItem("userInfo");
+    clearCurrentSession();
+    setUser(null);
     history.push("/");
   };
 
@@ -56,43 +59,32 @@ function SideDrawer() {
     if (!search.trim()) return;
     setLoading(true);
 
-    setTimeout(() => {
-      const results = [
-        {
-          _id: "user_search_1",
-          name: "David Miller",
-          email: "david@firemessenger.io",
-          pic: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-        },
-        {
-          _id: "user_search_2",
-          name: "Jessica Chen",
-          email: "jessica@firemessenger.io",
-          pic: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80",
-        },
-      ].filter(
-        (u) =>
-          u.name.toLowerCase().includes(search.toLowerCase()) ||
-          u.email.toLowerCase().includes(search.toLowerCase())
-      );
-      setSearchResult(results);
-      setLoading(false);
-    }, 400);
+    const allRegisteredUsers = getRegisteredUsers();
+    const results = allRegisteredUsers.filter(
+      (u) =>
+        u._id !== user?._id &&
+        (u.name.toLowerCase().includes(search.toLowerCase()) ||
+          u.email.toLowerCase().includes(search.toLowerCase()))
+    );
+
+    setSearchResult(results);
+    setLoading(false);
   };
 
-  const accessChat = (userId) => {
-    const targetUser = searchResult.find((u) => u._id === userId);
+  const accessChat = (targetUserId) => {
+    const allUsers = getRegisteredUsers();
+    const targetUser = allUsers.find((u) => u._id === targetUserId);
     if (!targetUser) return;
 
     const existingChat = chats.find(
-      (c) => !c.isGroupChat && c.users.some((u) => u._id === userId)
+      (c) => !c.isGroupChat && c.users.some((u) => u._id === targetUserId)
     );
 
     if (existingChat) {
       setSelectedChat(existingChat);
     } else {
       const newChat = {
-        _id: `chat_${Date.now()}`,
+        _id: `chat_${user._id}_${targetUser._id}`,
         chatName: targetUser.name,
         isGroupChat: false,
         users: [user, targetUser],
@@ -100,8 +92,7 @@ function SideDrawer() {
         unread: 0,
         category: "Personal",
       };
-      setChats([newChat, ...chats]);
-      setSelectedChat(newChat);
+      addOrSelectChat(newChat);
     }
     onClose();
   };
@@ -115,30 +106,33 @@ function SideDrawer() {
         bg="var(--bg-header)"
         w="100%"
         px={4}
-        py={2}
+        py={2.5}
         borderBottom="1px solid var(--color-border)"
-        color="var(--text-primary)"
+        color="var(--text-header)"
+        boxShadow="var(--shadow-sm)"
+        position="relative"
+        zIndex="1000"
       >
         {/* Fire Messenger Logo & Brand */}
         <Box display="flex" alignItems="center" gap={3}>
           <Box
-            w="36px"
-            h="36px"
+            w="38px"
+            h="38px"
             borderRadius="50%"
-            bg="gradient(135deg, #00a884, #075e54)"
+            bg="linear-gradient(135deg, #00a884, #075e54)"
             display="flex"
             alignItems="center"
             justifyContent="center"
-            fontSize="20px"
-            boxShadow="0 2px 8px rgba(0,168,132,0.4)"
+            fontSize="22px"
+            boxShadow="0 2px 8px rgba(0,0,0,0.3)"
           >
             🔥
           </Box>
-          <Box>
-            <Text fontWeight="bold" fontSize="lg" lineHeight="1.1">
+          <Box display={{ base: "none", sm: "block" }}>
+            <Text fontWeight="bold" fontSize="lg" lineHeight="1.1" color="var(--text-header)">
               Fire Messenger
             </Text>
-            <Text fontSize="xs" color="var(--color-primary)" fontWeight="500">
+            <Text fontSize="xs" color={theme === "light" ? "#e0f2fe" : "var(--color-primary)"} fontWeight="500">
               WhatsApp Emerald Edition
             </Text>
           </Box>
@@ -151,12 +145,13 @@ function SideDrawer() {
             <Button
               size="sm"
               variant="ghost"
-              color="var(--text-primary)"
-              _hover={{ bg: "var(--bg-hover)" }}
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
               onClick={onOpen}
-              leftIcon={<SearchIcon color="var(--color-primary)" />}
+              leftIcon={<SearchIcon color="var(--text-header)" />}
+              fontWeight="600"
             >
-              Search
+              Search Contacts
             </Button>
           </Tooltip>
 
@@ -165,11 +160,11 @@ function SideDrawer() {
             <Button
               size="sm"
               variant="ghost"
-              color="var(--text-primary)"
-              _hover={{ bg: "var(--bg-hover)" }}
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
               onClick={toggleTheme}
             >
-              {theme === "dark" ? <SunIcon color="#ff9800" /> : <MoonIcon color="#00a884" />}
+              {theme === "dark" ? <SunIcon color="#ffb74d" fontSize="18px" /> : <MoonIcon color="#ffffff" fontSize="18px" />}
             </Button>
           </Tooltip>
 
@@ -177,15 +172,16 @@ function SideDrawer() {
           <Menu>
             <MenuButton p={1}>
               <NotificationBadge count={notification.length} effect={Effect.SCALE} />
-              <BellIcon fontSize="xl" m={1} color="var(--text-secondary)" />
+              <BellIcon fontSize="xl" m={1} color="var(--text-header)" />
             </MenuButton>
-            <MenuList color="var(--text-primary)" bg="var(--bg-header)" borderColor="var(--color-border)">
-              {!notification.length && <MenuItem bg="transparent">No New Notifications</MenuItem>}
-              {notification.map((notif) => (
+            <MenuList color="var(--text-primary)" bg="var(--bg-menu)" borderColor="var(--color-border)" boxShadow="var(--shadow-md)" zIndex="2000">
+              {!notification.length && <MenuItem bg="transparent" color="var(--text-secondary)">No New Notifications</MenuItem>}
+              {notification.map((notif, idx) => (
                 <MenuItem
-                  key={notif._id}
+                  key={idx}
                   bg="transparent"
                   _hover={{ bg: "var(--bg-hover)" }}
+                  color="var(--text-primary)"
                   onClick={() => {
                     setSelectedChat(notif.chat);
                     setNotification(notification.filter((n) => n !== notif));
@@ -200,18 +196,18 @@ function SideDrawer() {
           {/* Profile & Settings Menu */}
           <Menu>
             <MenuButton as={Button} bg="transparent" p={0} _hover={{ bg: "transparent" }}>
-              <Avatar size="sm" cursor="pointer" name={user?.name} src={user?.pic} />
+              <Avatar size="sm" cursor="pointer" name={user?.name} src={user?.pic} border="2px solid var(--text-header)" />
             </MenuButton>
-            <MenuList color="var(--text-primary)" bg="var(--bg-header)" borderColor="var(--color-border)">
+            <MenuList color="var(--text-primary)" bg="var(--bg-menu)" borderColor="var(--color-border)" boxShadow="var(--shadow-md)" zIndex="2000">
               <ProfileModal user={user}>
-                <MenuItem bg="transparent" _hover={{ bg: "var(--bg-hover)" }}>My Profile</MenuItem>
+                <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }}>My Profile</MenuItem>
               </ProfileModal>
-              <MenuDivider />
+              <MenuDivider borderColor="var(--color-border)" />
               <GroupChatModal>
-                <MenuItem bg="transparent" _hover={{ bg: "var(--bg-hover)" }}>Create Group Chat</MenuItem>
+                <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }}>Create Group Chat</MenuItem>
               </GroupChatModal>
-              <MenuDivider />
-              <MenuItem bg="transparent" color="#ff5252" _hover={{ bg: "var(--bg-hover)" }} onClick={logoutHandler}>
+              <MenuDivider borderColor="var(--color-border)" />
+              <MenuItem bg="transparent" color="#f44336" fontWeight="bold" _hover={{ bg: "var(--bg-hover)" }} onClick={logoutHandler}>
                 Logout
               </MenuItem>
             </MenuList>
@@ -224,14 +220,17 @@ function SideDrawer() {
         <DrawerOverlay />
         <DrawerContent bg="var(--bg-sidebar)" color="var(--text-primary)">
           <DrawerHeader borderBottomWidth="1px" borderColor="var(--color-border)" display="flex" alignItems="center" gap={2}>
-            <SearchIcon color="var(--color-primary)" /> Search Fire Contacts
+            <SearchIcon color="var(--color-primary)" /> Search Registered Contacts
           </DrawerHeader>
           <DrawerBody>
             <Box display="flex" pb={2} gap={2} mt={2}>
               <Input
                 placeholder="Search by name or email..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  handleSearch();
+                }}
                 bg="var(--bg-search)"
                 borderColor="var(--color-border)"
                 color="var(--text-primary)"
@@ -242,7 +241,9 @@ function SideDrawer() {
             </Box>
 
             {loading ? (
-              <Text mt={4} color="var(--text-secondary)">Searching contacts...</Text>
+              <Text mt={4} color="var(--text-secondary)">Searching database...</Text>
+            ) : searchResult.length === 0 && search.trim() ? (
+              <Text mt={4} color="var(--text-muted)" fontSize="sm">No contact matching "{search}" found.</Text>
             ) : (
               searchResult?.map((u) => (
                 <UserListItem key={u._id} user={u} handleFunction={() => accessChat(u._id)} />

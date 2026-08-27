@@ -1,43 +1,40 @@
+import React from "react";
 import { Avatar } from "@chakra-ui/avatar";
 import { Box, Text } from "@chakra-ui/layout";
-import { ChatState } from "../../Context/ChatProvider";
 
-const UserListItem = ({user, handleFunction }) => {
-  // const { user } = ChatState();
-
+const UserListItem = ({ user, handleFunction }) => {
   return (
     <Box
       onClick={handleFunction}
       cursor="pointer"
-      bg="#E8E8E8"
+      bg="var(--bg-search)"
+      color="var(--text-primary)"
       _hover={{
-        background: "#38B2AC",
+        bg: "var(--color-primary)",
         color: "white",
       }}
       w="100%"
-      d="flex"
+      display="flex"
       alignItems="center"
-      color="black"
       px={3}
-      py={2}
+      py={2.5}
       mb={2}
       borderRadius="lg"
-      style={{ display: "flex" }}
+      transition="all 0.15s ease"
     >
       <Avatar
-        mr={2}
+        mr={3}
         size="sm"
         cursor="pointer"
         name={user.name}
-        src={user.name}
-        color="black"
-        bg={`#${Math.floor(Math.random() * 16777215).toString(16)}`}
+        src={user.pic}
       />
-      <Box>
-        <Text>{user.name}</Text>
-        <Text fontSize="xs">
-          <b>Email : </b>
-          {user.email}
+      <Box overflow="hidden">
+        <Text fontWeight="600" fontSize="sm" isTruncated>
+          {user.name}
+        </Text>
+        <Text fontSize="xs" opacity={0.8} isTruncated>
+          {user.email || user.status || "Fire Contact"}
         </Text>
       </Box>
     </Box>

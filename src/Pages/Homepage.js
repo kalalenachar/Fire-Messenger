@@ -13,18 +13,23 @@ import {
 import { useHistory } from "react-router-dom";
 import Login from "../components/Authentication/Login";
 import Signup from "../components/Authentication/Signup";
-import { defaultUser } from "../data/fireMockData";
+import { defaultUsersList, setCurrentSessionUser } from "../data/fireStorage";
+import { ChatState } from "../Context/ChatProvider";
 
 function Homepage() {
   const history = useHistory();
+  const { user, setUser } = ChatState();
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("userInfo"));
-    if (user) history.push("/chats");
-  }, [history]);
+    if (user) {
+      history.push("/chats");
+    }
+  }, [user, history]);
 
   const handleGuestLogin = () => {
-    localStorage.setItem("userInfo", JSON.stringify(defaultUser));
+    const guestUser = defaultUsersList[0];
+    setCurrentSessionUser(guestUser);
+    setUser(guestUser);
     history.push("/chats");
   };
 
@@ -37,7 +42,7 @@ function Homepage() {
           flexDirection="column"
           alignItems="center"
           p={6}
-          bg="var(--bg-header)"
+          bg="var(--bg-card)"
           w="100%"
           mb={4}
           borderRadius="xl"
@@ -45,8 +50,8 @@ function Homepage() {
           border="1px solid var(--color-border)"
         >
           <Box
-            w="60px"
-            h="60px"
+            w="64px"
+            h="64px"
             borderRadius="50%"
             bg="linear-gradient(135deg, #00a884, #075e54)"
             display="flex"
@@ -54,11 +59,11 @@ function Homepage() {
             justifyContent="center"
             fontSize="32px"
             mb={2}
-            boxShadow="0 4px 12px rgba(0,168,132,0.4)"
+            boxShadow="0 4px 14px rgba(0,168,132,0.4)"
           >
             🔥
           </Box>
-          <Text fontSize="3xl" fontWeight="bold" color="var(--text-primary)" letterSpacing="-0.5px">
+          <Text fontSize="3xl" fontWeight="800" color="var(--text-primary)" letterSpacing="-0.5px">
             Fire Messenger
           </Text>
           <Text fontSize="sm" color="var(--color-primary)" fontWeight="600" mt={1}>
@@ -67,11 +72,25 @@ function Homepage() {
         </Box>
 
         {/* Auth Box */}
-        <Box bg="var(--bg-header)" w="100%" p={6} borderRadius="xl" boxShadow="var(--shadow-md)" border="1px solid var(--color-border)">
-          <Tabs isFitted variant="soft-rounded" colorScheme="teal">
-            <TabList mb={4}>
-              <Tab color="var(--text-secondary)" _selected={{ color: "white", bg: "var(--color-primary)" }}>Login</Tab>
-              <Tab color="var(--text-secondary)" _selected={{ color: "white", bg: "var(--color-primary)" }}>Sign Up</Tab>
+        <Box bg="var(--bg-card)" w="100%" p={6} borderRadius="xl" boxShadow="var(--shadow-md)" border="1px solid var(--color-border)">
+          <Tabs isFitted variant="soft-rounded">
+            <TabList mb={4} bg="var(--bg-app)" p={1} borderRadius="lg">
+              <Tab
+                fontWeight="600"
+                color="var(--text-secondary)"
+                _selected={{ color: "white", bg: "var(--color-primary)" }}
+                borderRadius="md"
+              >
+                Login
+              </Tab>
+              <Tab
+                fontWeight="600"
+                color="var(--text-secondary)"
+                _selected={{ color: "white", bg: "var(--color-primary)" }}
+                borderRadius="md"
+              >
+                Sign Up
+              </Tab>
             </TabList>
             <TabPanels>
               <TabPanel p={0}>
@@ -84,13 +103,16 @@ function Homepage() {
           </Tabs>
 
           <Button
-            mt={4}
+            mt={5}
             w="100%"
             variant="outline"
             borderColor="var(--color-primary)"
             color="var(--color-primary)"
+            fontWeight="bold"
             _hover={{ bg: "var(--color-primary)", color: "white" }}
             onClick={handleGuestLogin}
+            size="lg"
+            borderRadius="lg"
           >
             🚀 Continue as Guest Demo User
           </Button>

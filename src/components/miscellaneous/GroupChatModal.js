@@ -13,10 +13,12 @@ import {
   Input,
   useToast,
   Box,
+  Text,
 } from "@chakra-ui/react";
 import { ChatState } from "../../Context/ChatProvider";
 import UserBadgeItem from "../userAvatar/UserBadgeItem";
 import UserListItem from "../userAvatar/UserListItem";
+import { getRegisteredUsers } from "../../data/fireStorage";
 
 const GroupChatModal = ({ children }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -26,13 +28,7 @@ const GroupChatModal = ({ children }) => {
   const [searchResult, setSearchResult] = useState([]);
   const toast = useToast();
 
-  const { user, chats, setChats, setSelectedChat } = ChatState();
-
-  const sampleContacts = [
-    { _id: "user_sarah", name: "Sarah Jenkins", pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80" },
-    { _id: "user_marcus", name: "Marcus Vance", pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80" },
-    { _id: "user_elena", name: "Elena Rostova", pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80" },
-  ];
+  const { user, addOrSelectChat } = ChatState();
 
   const handleSearch = (query) => {
     setSearch(query);
@@ -40,8 +36,12 @@ const GroupChatModal = ({ children }) => {
       setSearchResult([]);
       return;
     }
-    const results = sampleContacts.filter((c) =>
-      c.name.toLowerCase().includes(query.toLowerCase())
+    const allUsers = getRegisteredUsers();
+    const results = allUsers.filter(
+      (u) =>
+        u._id !== user?._id &&
+        (u.name.toLowerCase().includes(query.toLowerCase()) ||
+          u.email.toLowerCase().includes(query.toLowerCase()))
     );
     setSearchResult(results);
   };
@@ -76,9 +76,20 @@ const GroupChatModal = ({ children }) => {
       return;
     }
 
+    if (selectedUsers.length < 1) {
+      toast({
+        title: "Please select at least 1 member for the group",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+        position: "top",
+      });
+      return;
+    }
+
     const newGroupChat = {
       _id: `group_${Date.now()}`,
-      chatName: groupChatName,
+      chatName: groupChatName.trim(),
       isGroupChat: true,
       groupAdmin: user,
       users: [user, ...selectedUsers],
@@ -91,9 +102,11 @@ const GroupChatModal = ({ children }) => {
       category: "Groups",
     };
 
-    setChats([newGroupChat, ...chats]);
-    setSelectedChat(newGroupChat);
+    addOrSelectChat(newGroupChat);
     onClose();
+    setGroupChatName("");
+    setSelectedUsers([]);
+    setSearchResult([]);
     toast({
       title: "Fire Group Chat Created! 🔥",
       status: "success",
@@ -109,7 +122,7 @@ const GroupChatModal = ({ children }) => {
 
       <Modal onClose={onClose} isOpen={isOpen} isCentered size="md">
         <ModalOverlay />
-        <ModalContent bg="var(--bg-header)" color="var(--text-primary)" borderRadius="xl" border="1px solid var(--color-border)">
+        <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="xl" border="1px solid var(--color-border)">
           <ModalHeader textAlign="center" fontSize="xl" fontWeight="bold">
             Create Fire Group Chat 🔥
           </ModalHeader>
@@ -117,23 +130,25 @@ const GroupChatModal = ({ children }) => {
 
           <ModalBody display="flex" flexDirection="column" gap={3}>
             <FormControl>
+              <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" mb={1}>GROUP NAME</Text>
               <Input
-                placeholder="Group Name (e.g. Fire Developers)"
+                placeholder="e.g. Core Tech Team"
                 value={groupChatName}
                 onChange={(e) => setGroupChatName(e.target.value)}
                 bg="var(--bg-search)"
-                border="none"
+                borderColor="var(--color-border)"
                 color="var(--text-primary)"
               />
             </FormControl>
 
             <FormControl>
+              <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" mb={1}>ADD REGISTERED MEMBERS</Text>
               <Input
-                placeholder="Add Members (e.g. Sarah, Marcus, Elena)"
+                placeholder="Search registered user name..."
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
                 bg="var(--bg-search)"
-                border="none"
+                borderColor="var(--color-border)"
                 color="var(--text-primary)"
               />
             </FormControl>
@@ -144,7 +159,7 @@ const GroupChatModal = ({ children }) => {
               ))}
             </Box>
 
-            {searchResult.map((u) => (
+            {searchResult.slice(0, 4).map((u) => (
               <UserListItem key={u._id} user={u} handleFunction={() => handleGroup(u)} />
             ))}
           </ModalBody>

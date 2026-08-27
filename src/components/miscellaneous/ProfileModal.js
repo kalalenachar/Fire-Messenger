@@ -1,5 +1,5 @@
-import React from "react";
-import { ViewIcon } from "@chakra-ui/icons";
+import React, { useState } from "react";
+import { ViewIcon, EditIcon, CheckIcon } from "@chakra-ui/icons";
 import {
   Modal,
   ModalOverlay,
@@ -14,10 +14,60 @@ import {
   Text,
   Avatar,
   Box,
+  Input,
+  useToast,
+  VStack,
 } from "@chakra-ui/react";
+import { ChatState } from "../../Context/ChatProvider";
 
-const ProfileModal = ({ user, children }) => {
+const ProfileModal = ({ user: targetUser, children }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { user: currentUser, updateUserProfile } = ChatState();
+  const toast = useToast();
+
+  const isMe = currentUser?._id === targetUser?._id;
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(targetUser?.name || "");
+  const [status, setStatus] = useState(targetUser?.status || "");
+  const [pic, setPic] = useState(targetUser?.pic || "");
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPic(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = () => {
+    if (!name.trim()) {
+      toast({
+        title: "Name cannot be empty",
+        status: "warning",
+        duration: 3000,
+        position: "bottom",
+      });
+      return;
+    }
+
+    updateUserProfile({
+      name: name.trim(),
+      status: status.trim() || "🔥 Fire Messenger",
+      pic,
+    });
+
+    setIsEditing(false);
+    toast({
+      title: "Profile Updated! 🔥",
+      status: "success",
+      duration: 3000,
+      position: "bottom",
+    });
+  };
 
   return (
     <>
@@ -35,35 +85,93 @@ const ProfileModal = ({ user, children }) => {
 
       <Modal size="md" onClose={onClose} isOpen={isOpen} isCentered>
         <ModalOverlay />
-        <ModalContent bg="var(--bg-header)" color="var(--text-primary)" borderRadius="xl" border="1px solid var(--color-border)">
-          <ModalHeader textAlign="center" fontSize="2xl" fontWeight="bold" pt={6}>
-            {user?.name || "User Profile"}
+        <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="xl" border="1px solid var(--color-border)" boxShadow="var(--shadow-md)">
+          <ModalHeader textAlign="center" fontSize="2xl" fontWeight="bold" pt={6} display="flex" alignItems="center" justifyContent="center" gap={2}>
+            {isMe ? "My Profile" : targetUser?.name || "User Profile"}
+            {isMe && !isEditing && (
+              <IconButton
+                icon={<EditIcon />}
+                size="xs"
+                variant="ghost"
+                color="var(--color-primary)"
+                onClick={() => setIsEditing(true)}
+              />
+            )}
           </ModalHeader>
           <ModalCloseButton />
 
           <ModalBody display="flex" flexDirection="column" alignItems="center" py={4} gap={4}>
-            <Avatar size="2xl" name={user?.name} src={user?.pic} border="3px solid var(--color-primary)" />
+            <Avatar size="2xl" name={isEditing ? name : targetUser?.name} src={isEditing ? pic : targetUser?.pic} border="3px solid var(--color-primary)" />
 
-            <Box textAlign="center" w="100%">
-              <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
-                {user?.email || "user@firemessenger.io"}
-              </Text>
-
-              <Box mt={3} p={3} bg="var(--bg-search)" borderRadius="lg" w="100%">
-                <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase" mb={1}>
-                  Status / About
+            {isMe && isEditing && (
+              <Box>
+                <Text fontSize="xs" color="var(--text-secondary)" mb={1} textAlign="center">
+                  Upload New Avatar Photo
                 </Text>
-                <Text fontSize="sm" color="var(--text-primary)">
-                  {user?.status || "🔥 Burning with Passion | Fire Messenger"}
-                </Text>
+                <Input type="file" accept="image/*" size="xs" onChange={handleImageUpload} color="var(--text-secondary)" />
               </Box>
-            </Box>
+            )}
+
+            {isMe && isEditing ? (
+              <VStack spacing={3} w="100%" px={4}>
+                <Box w="100%">
+                  <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" mb={1}>
+                    DISPLAY NAME
+                  </Text>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    bg="var(--bg-search)"
+                    color="var(--text-primary)"
+                    borderColor="var(--color-border)"
+                  />
+                </Box>
+                <Box w="100%">
+                  <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" mb={1}>
+                    STATUS / ABOUT
+                  </Text>
+                  <Input
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    bg="var(--bg-search)"
+                    color="var(--text-primary)"
+                    borderColor="var(--color-border)"
+                  />
+                </Box>
+              </VStack>
+            ) : (
+              <Box textAlign="center" w="100%">
+                <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
+                  {targetUser?.email || "user@firemessenger.io"}
+                </Text>
+
+                <Box mt={3} p={3} bg="var(--bg-search)" borderRadius="lg" w="100%">
+                  <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase" mb={1}>
+                    Status / About
+                  </Text>
+                  <Text fontSize="sm" color="var(--text-primary)">
+                    {targetUser?.status || "🔥 Burning with Passion | Fire Messenger"}
+                  </Text>
+                </Box>
+              </Box>
+            )}
           </ModalBody>
 
-          <ModalFooter borderTop="1px solid var(--color-border)">
-            <Button bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={onClose}>
-              Close
-            </Button>
+          <ModalFooter borderTop="1px solid var(--color-border)" gap={2}>
+            {isMe && isEditing ? (
+              <>
+                <Button variant="ghost" color="var(--text-secondary)" onClick={() => setIsEditing(false)}>
+                  Cancel
+                </Button>
+                <Button leftIcon={<CheckIcon />} bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={handleSaveProfile}>
+                  Save Profile
+                </Button>
+              </>
+            ) : (
+              <Button bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={onClose}>
+                Close
+              </Button>
+            )}
           </ModalFooter>
         </ModalContent>
       </Modal>
