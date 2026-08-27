@@ -10,6 +10,7 @@ import {
   getSender,
 } from "../config/ChatLogics";
 import { ChatState } from "../Context/ChatProvider";
+import FormattedMarkdown from "./FormattedMarkdown";
 
 const ScrollableChat = ({ messages }) => {
   const { user } = ChatState();
@@ -139,7 +140,7 @@ const ScrollableChat = ({ messages }) => {
                   maxWidth: "75%",
                 }}
               >
-                {m.content}
+                <FormattedMarkdown content={m.content} />
                 <span
                   style={{
                     color: "black",

@@ -1,7 +1,7 @@
 // Fire Messenger - Real Persistent Data Layer & REST API Client Engine
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:5000/api";
+export const API_BASE_URL = "http://localhost:5000/api";
 const CURRENT_USER_KEY = "userInfo";
 
 export const defaultUsersList = [

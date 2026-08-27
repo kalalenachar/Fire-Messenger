@@ -185,6 +185,17 @@ const ProfileModal = ({ user: targetUser, children }) => {
                     {targetUser?.status || "🔥 Burning with Passion | Fire Messenger"}
                   </Text>
                 </Box>
+
+                {(targetUser?._id === "bot_fire_ai" || targetUser?.name?.includes("Fire Bot")) && (
+                  <Box mt={3} p={3} bg="rgba(239, 68, 68, 0.1)" border="1px solid var(--color-primary)" borderRadius="lg" w="100%" textAlign="left">
+                    <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase" mb={1}>
+                      ⚡ Groq AI Integration Active
+                    </Text>
+                    <Text fontSize="xs" color="var(--text-secondary)">
+                      Model: <strong>openai/gpt-oss-120b & Groq Models</strong> (Groq API)
+                    </Text>
+                  </Box>
+                )}
               </Box>
             )}
           </ModalBody>

@@ -27,6 +27,7 @@ import ProfileModal from "./miscellaneous/ProfileModal";
 import VoicePlayer from "./VoicePlayer";
 import PollComposerModal from "./miscellaneous/PollComposerModal";
 import LocationShareModal from "./miscellaneous/LocationShareModal";
+import FormattedMarkdown from "./FormattedMarkdown";
 
 const DoubleTickIcon = () => (
   <svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor" style={{ display: "inline-block", verticalAlign: "middle" }}>
@@ -1033,16 +1034,14 @@ const SingleChat = () => {
                       </Box>
                     </Box>
                     {msg.content && msg.content !== msg.fileName && !msg.content.startsWith("📄") && (
-                      <Text fontSize="sm" mt={1} whiteSpace="pre-wrap">
-                        {msg.content}
-                      </Text>
+                      <Box mt={1}>
+                        <FormattedMarkdown content={msg.content} />
+                      </Box>
                     )}
                   </Box>
                 ) : (
                   /* --- RENDER REGULAR TEXT MESSAGE --- */
-                  <Text fontSize="sm" whiteSpace="pre-wrap">
-                    {msg.content}
-                  </Text>
+                  <FormattedMarkdown content={msg.content} />
                 )}
 
                 {/* Reaction Badges */}

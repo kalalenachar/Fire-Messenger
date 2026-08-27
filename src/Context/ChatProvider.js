@@ -24,7 +24,7 @@ import {
   updateLiveLocationAsync,
   stopLiveLocationAsync,
 } from "../data/fireStorage";
-import { getBotReply } from "../data/fireMockData";
+import { getBotReply, getBotReplyAsync } from "../data/fireMockData";
 import CallModal from "../components/miscellaneous/CallModal";
 
 const ChatContext = createContext();
@@ -492,43 +492,48 @@ const ChatProvider = ({ children }) => {
     }
     notifySyncEvent("NEW_MESSAGE", { chatId, message: newMessage });
 
-    // AI Bot Reply Handler
+    // AI Bot Reply Handler (Powered by Groq AI)
     if (chatId.includes("bot")) {
-      setTimeout(() => {
-        const botText = getBotReply(content);
-        const botMessage = {
-          _id: `msg_bot_${Date.now()}`,
-          sender: fireBotUser,
-          content: botText,
-          chat: chatId,
-          createdAt: new Date().toISOString(),
-          reactions: { "🔥": 1 },
-        };
+      const currentChatHistory = messagesMap[chatId] || [];
+      (async () => {
+        try {
+          const botText = await getBotReplyAsync(content, currentChatHistory);
+          const botMessage = {
+            _id: `msg_bot_${Date.now()}`,
+            sender: fireBotUser,
+            content: botText,
+            chat: chatId,
+            createdAt: new Date().toISOString(),
+            reactions: { "🔥": 1 },
+          };
 
-        setMessagesMap((prev) => {
-          const chatMsgs = prev[chatId] || [];
-          return { ...prev, [chatId]: [...chatMsgs, botMessage] };
-        });
+          setMessagesMap((prev) => {
+            const chatMsgs = prev[chatId] || [];
+            return { ...prev, [chatId]: [...chatMsgs, botMessage] };
+          });
 
-        saveMessageAsync(botMessage);
+          saveMessageAsync(botMessage);
 
-        setChats((prevChats) =>
-          prevChats.map((c) =>
-            c._id === chatId
-              ? {
-                  ...c,
-                  latestMessage: {
-                    content: botText,
-                    sender: fireBotUser,
-                    createdAt: botMessage.createdAt,
-                  },
-                }
-              : c
-          )
-        );
+          setChats((prevChats) =>
+            prevChats.map((c) =>
+              c._id === chatId
+                ? {
+                    ...c,
+                    latestMessage: {
+                      content: botText,
+                      sender: fireBotUser,
+                      createdAt: botMessage.createdAt,
+                    },
+                  }
+                : c
+            )
+          );
 
-        notifySyncEvent("NEW_MESSAGE", { chatId, message: botMessage });
-      }, 700);
+          notifySyncEvent("NEW_MESSAGE", { chatId, message: botMessage });
+        } catch (err) {
+          console.error("Error generating Fire Bot Groq reply:", err);
+        }
+      })();
     }
   };
 

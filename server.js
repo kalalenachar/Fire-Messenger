@@ -1,9 +1,26 @@
-// Fire Messenger Real-Time Socket.IO Server, REST API & Persistent Database Backend
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
+const axios = require("axios");
 const { Server } = require("socket.io");
 const db = require("./serverDb");
+
+// Load environment variables from .env if present
+const envPath = path.join(__dirname, ".env");
+if (fs.existsSync(envPath)) {
+  const envConfig = fs.readFileSync(envPath, "utf8");
+  envConfig.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...valueParts] = trimmed.split("=");
+      if (key && valueParts.length > 0) {
+        process.env[key.trim()] = valueParts.join("=").trim().replace(/^["']|["']$/g, "");
+      }
+    }
+  });
+}
 
 const app = express();
 app.use(cors());
@@ -179,6 +196,87 @@ app.put("/api/messages/stop-live-location", (req, res) => {
     res.json({ success: true, message: updatedMsg });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// --- GROQ AI BOT ENDPOINT ---
+app.post("/api/bot/chat", async (req, res) => {
+  try {
+    const { message, history = [], apiKey } = req.body;
+    const groqApiKey =
+      apiKey ||
+      process.env.GROQ_API_KEY ||
+      process.env.REACT_APP_GROQ_API_KEY ||
+      "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";
+
+    if (!groqApiKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Groq API key is missing. Please set GROQ_API_KEY in .env file or settings.",
+      });
+    }
+
+    const formattedMessages = [
+      {
+        role: "system",
+        content:
+          "You are Fire Bot 🔥, an intelligent, energetic, and helpful AI assistant built directly into the Fire Messenger platform. " +
+          "Provide concise, accurate, engaging, and friendly responses using clean Markdown formatting and expressive emojis.",
+      },
+      ...history.slice(-10).map((msg) => ({
+        role:
+          msg.sender?._id === "bot_fire_ai" ||
+          msg.sender?._id?.includes("bot") ||
+          msg.sender?.name?.toLowerCase().includes("bot")
+            ? "assistant"
+            : "user",
+        content: msg.content || "",
+      })),
+      {
+        role: "user",
+        content: message,
+      },
+    ];
+
+    const candidateModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "groq/compound-mini"];
+    let botReply = "";
+
+    for (const model of candidateModels) {
+      try {
+        const response = await axios.post(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            model: model,
+            messages: formattedMessages,
+            temperature: 0.7,
+            max_tokens: 1024,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${groqApiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 15000,
+          }
+        );
+        botReply = response.data?.choices?.[0]?.message?.content;
+        if (botReply) break;
+      } catch (modelErr) {
+        console.warn(`Groq model '${model}' failed, trying next model:`, modelErr?.response?.data?.error?.message || modelErr.message);
+      }
+    }
+
+    if (botReply) {
+      return res.json({ success: true, reply: botReply });
+    } else {
+      throw new Error("No response returned from Groq API");
+    }
+  } catch (err) {
+    console.error("Groq API Error:", err.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      message: err.response?.data?.error?.message || err.message || "Failed to fetch response from Groq API.",
+    });
   }
 });
 

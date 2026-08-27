@@ -1,4 +1,6 @@
 // Fire Messenger Initial Mock Dataset & Bot Logic
+import axios from "axios";
+import { API_BASE_URL } from "./fireStorage";
 
 export const defaultUser = {
   _id: "user_fire_01",
@@ -163,31 +165,93 @@ export const initialFireMessages = {
   ],
 };
 
-export const getBotReply = (userMessage) => {
+export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiKey = "") => {
   const text = userMessage.toLowerCase().trim();
 
-  if (text.includes("/help")) {
-    return "🔥 **Fire Bot Commands**:\n- `/fire`: Receive a motivational fire quote\n- `/joke`: Get a developer joke\n- `/weather`: Instant weather report\n- `/quote`: Daily wisdom quote";
+  // Instant preset commands
+  if (text === "/help") {
+    return "🔥 **Fire Bot Commands & Groq AI**:\n- Ask me anything! Powered by **Groq AI** ⚡ (`llama-3.3-70b`)\n- `/fire`: Receive a motivational fire quote\n- `/joke`: Get a developer joke\n- `/weather`: Instant weather report\n- `/quote`: Daily wisdom quote";
   }
-  if (text.includes("/fire")) {
+  if (text === "/fire") {
     return "🔥 *'Set your life on fire. Seek those who fan your flames.'* — Rumi";
   }
-  if (text.includes("/joke")) {
+  if (text === "/joke") {
     return "Why do programmers prefer dark mode? Because light attracts bugs! 🐛💡";
   }
-  if (text.includes("/weather")) {
-    return "☀️ **Fire Messenger Forecast**: 24°C, Clear Skies & High Real-time Performance!";
+  if (text === "/weather") {
+    return "☀️ **Fire Messenger Forecast**: 24°C, Clear Skies & Ultra-Fast Groq AI Performance!";
   }
-  if (text.includes("/quote")) {
+  if (text === "/quote") {
     return "✨ *'Simplicity is the soul of efficiency.'* — Austin Freeman";
   }
 
-  const generalReplies = [
-    "🔥 Fire Bot received your message loud and clear! How can I assist you further?",
-    "That sounds awesome! Fire Messenger is operating at peak speed 🚀",
-    "Got it! I'm here 24/7 if you need assistance or bot commands.",
-    "Nice! Try clicking the emoji reactions or testing voice messages!",
-  ];
+  // 1. Try Express backend Groq proxy endpoint first
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bot/chat`, {
+      message: userMessage,
+      history: chatHistory,
+      apiKey: customApiKey || localStorage.getItem("groq_api_key") || "",
+    });
 
-  return generalReplies[Math.floor(Math.random() * generalReplies.length)];
+    if (res.data && res.data.success && res.data.reply) {
+      return res.data.reply;
+    }
+  } catch (backendErr) {
+    console.warn("Backend Groq endpoint unavailable, trying direct client fetch:", backendErr?.message);
+  }
+
+  // 2. Direct Groq API call fallback
+  const groqApiKey =
+    customApiKey ||
+    localStorage.getItem("groq_api_key") ||
+    process.env.REACT_APP_GROQ_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    "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";
+
+  if (groqApiKey) {
+    const candidateModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "groq/compound-mini"];
+    const formattedMessages = [
+      {
+        role: "system",
+        content:
+          "You are Fire Bot 🔥, an intelligent, energetic, and helpful AI assistant inside Fire Messenger. Provide concise, accurate, friendly responses using Markdown formatting and emojis.",
+      },
+      ...chatHistory.slice(-10).map((msg) => ({
+        role: msg.sender?._id === "bot_fire_ai" || msg.sender?._id?.includes("bot") ? "assistant" : "user",
+        content: msg.content || "",
+      })),
+      { role: "user", content: userMessage },
+    ];
+
+    for (const model of candidateModels) {
+      try {
+        const response = await axios.post(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            model: model,
+            messages: formattedMessages,
+            temperature: 0.7,
+            max_tokens: 1024,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${groqApiKey}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        const reply = response.data?.choices?.[0]?.message?.content;
+        if (reply) return reply;
+      } catch (directErr) {
+        console.warn(`Direct Groq API error with model ${model}:`, directErr?.response?.data?.error?.message || directErr.message);
+      }
+    }
+  }
+
+  return "🤖 **Fire Bot AI Notice**: Please configure `GROQ_API_KEY` in your `.env` file or settings to chat with Groq AI!";
+};
+
+export const getBotReply = (userMessage) => {
+  return "🔥 Thinking... (Powered by Groq AI)";
 };
