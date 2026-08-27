@@ -43,12 +43,15 @@ const Login = () => {
         token: "fire_token_demo",
       };
 
-      try {
-        const config = { headers: { "Content-type": "application/json" } };
-        const { data } = await axios.post("/api/user/login", { email, password }, config);
-        localStorage.setItem("userInfo", JSON.stringify(data));
-      } catch (err) {
-        // Fallback demo user login when no live backend server is running
+      if (process.env.REACT_APP_API_URL) {
+        try {
+          const config = { headers: { "Content-type": "application/json" } };
+          const { data } = await axios.post(`${process.env.REACT_APP_API_URL}/api/user/login`, { email, password }, config);
+          localStorage.setItem("userInfo", JSON.stringify(data));
+        } catch (err) {
+          localStorage.setItem("userInfo", JSON.stringify(userPayload));
+        }
+      } else {
         localStorage.setItem("userInfo", JSON.stringify(userPayload));
       }
 
