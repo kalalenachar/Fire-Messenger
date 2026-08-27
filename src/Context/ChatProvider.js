@@ -36,6 +36,8 @@ const ChatProvider = ({ children }) => {
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const originalVideoTrackRef = useRef(null);
 
   const selectedChatRef = useRef(selectedChat);
   useEffect(() => {
@@ -452,70 +454,84 @@ const ChatProvider = ({ children }) => {
     notifySyncEvent("TOGGLE_REACTION", { chatId, messageId, emoji });
   };
 
-  // WebRTC Calling Engine
-  const startCall = async (targetUser, callType = "audio", chatId) => {
-    try {
-      const constraints = {
-        audio: true,
-        video: callType === "video",
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      setLocalStream(stream);
-
-      setCallData({
-        caller: targetUser,
-        callType,
-        chatId,
-        targetUserId: targetUser._id,
-        status: "calling",
-      });
-      setIsCallModalOpen(true);
-
-      if (socket) {
-        socket.emit("call-user", {
-          targetUserId: targetUser._id,
-          signalData: null,
-          caller: user,
-          callType,
-          chatId,
-        });
+  // Robust WebRTC MediaStream helper with video/audio hardware fallbacks
+  const getCallStream = async (callType) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.warn("navigator.mediaDevices.getUserMedia is not supported on this device/origin");
+      return null;
+    }
+    if (callType === "video") {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      } catch (e1) {
+        console.warn("Primary HD video stream failed, trying basic video:", e1);
+        try {
+          return await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          });
+        } catch (e2) {
+          console.warn("Camera hardware or permission unavailable, falling back to audio stream:", e2);
+          try {
+            return await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (e3) {
+            console.warn("Audio hardware stream unavailable:", e3);
+            return null;
+          }
+        }
       }
-    } catch (err) {
-      console.warn("Camera/Microphone access error:", err);
-      // Fallback simulated call modal if hardware unavailable
-      setCallData({
-        caller: targetUser,
+    } else {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        console.warn("Audio stream unavailable:", e);
+        return null;
+      }
+    }
+  };
+
+  // WebRTC Calling Engine
+  const startCall = async (targetUser, callType = "video", chatId) => {
+    if (!targetUser || !targetUser._id) {
+      console.warn("Cannot start call: target user is missing");
+      return;
+    }
+
+    const stream = await getCallStream(callType);
+    if (stream) setLocalStream(stream);
+
+    setCallData({
+      caller: targetUser,
+      callType,
+      chatId,
+      targetUserId: targetUser._id,
+      status: "calling",
+    });
+    setIsCallModalOpen(true);
+
+    if (socket) {
+      socket.emit("call-user", {
+        targetUserId: targetUser._id,
+        signalData: null,
+        caller: user,
         callType,
         chatId,
-        targetUserId: targetUser._id,
-        status: "calling",
       });
-      setIsCallModalOpen(true);
-      setTimeout(() => {
-        setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
-      }, 2000);
     }
   };
 
   const acceptCall = async () => {
-    try {
-      const constraints = {
-        audio: true,
-        video: callData?.callType === "video",
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      setLocalStream(stream);
-      setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
+    const stream = await getCallStream(callData?.callType);
+    if (stream) setLocalStream(stream);
 
-      if (socket && callData) {
-        socket.emit("answer-call", {
-          toSocketId: callData.fromSocketId,
-          toUserId: callData.caller._id,
-          signalData: null,
-        });
-      }
-    } catch (err) {
-      setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
+    setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
+
+    if (socket && callData) {
+      socket.emit("answer-call", {
+        toSocketId: callData.fromSocketId,
+        toUserId: callData.caller?._id || callData.targetUserId,
+        signalData: null,
+      });
     }
   };
 
@@ -539,6 +555,73 @@ const ChatProvider = ({ children }) => {
     cleanupCall();
   };
 
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      await stopScreenShare();
+    } else {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (!screenTrack) return;
+
+        if (localStream) {
+          const currentVideoTrack = localStream.getVideoTracks()[0];
+          if (currentVideoTrack) {
+            originalVideoTrackRef.current = currentVideoTrack;
+          }
+        }
+
+        screenTrack.onended = () => {
+          stopScreenShare();
+        };
+
+        const newStream = new MediaStream([
+          screenTrack,
+          ...(localStream ? localStream.getAudioTracks() : []),
+        ]);
+
+        setLocalStream(newStream);
+        setIsScreenSharing(true);
+      } catch (err) {
+        console.warn("Screen sharing cancelled or not supported:", err);
+      }
+    }
+  };
+
+  const stopScreenShare = async () => {
+    if (localStream) {
+      localStream.getVideoTracks().forEach((track) => {
+        if (track !== originalVideoTrackRef.current) {
+          track.stop();
+        }
+      });
+    }
+
+    try {
+      let cameraTrack = originalVideoTrackRef.current;
+      if (!cameraTrack || cameraTrack.readyState === "ended") {
+        const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        cameraTrack = cameraStream.getVideoTracks()[0];
+      }
+
+      const restoredStream = new MediaStream([
+        cameraTrack,
+        ...(localStream ? localStream.getAudioTracks() : []),
+      ]);
+
+      setLocalStream(restoredStream);
+    } catch (err) {
+      console.warn("Could not restore camera stream:", err);
+    }
+
+    setIsScreenSharing(false);
+    originalVideoTrackRef.current = null;
+  };
+
   const cleanupCall = () => {
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
@@ -548,6 +631,8 @@ const ChatProvider = ({ children }) => {
       remoteStream.getTracks().forEach((track) => track.stop());
       setRemoteStream(null);
     }
+    setIsScreenSharing(false);
+    originalVideoTrackRef.current = null;
     setIsCallModalOpen(false);
     setCallData(null);
   };
@@ -621,6 +706,9 @@ const ChatProvider = ({ children }) => {
         onAcceptCall={acceptCall}
         onRejectCall={rejectCall}
         onEndCall={endCall}
+        isScreenSharing={isScreenSharing}
+        onToggleScreenShare={toggleScreenShare}
+        onSendRecordedCall={sendMessage}
       />
     </ChatContext.Provider>
   );

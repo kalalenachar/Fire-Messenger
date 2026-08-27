@@ -200,45 +200,42 @@ io.on("connection", (socket) => {
 
   // WebRTC Audio & Video Call Signaling
   socket.on("call-user", ({ targetUserId, signalData, caller, callType, chatId }) => {
-    console.log(`📞 Call initiated from ${caller.name} to ${targetUserId} (${callType})`);
-    socket.in(targetUserId).emit("incoming-call", {
-      caller,
-      signalData,
-      callType,
-      chatId,
-      fromSocketId: socket.id,
-    });
+    console.log(`📞 Call initiated from ${caller?.name || "User"} to ${targetUserId} (${callType})`);
+    if (targetUserId) {
+      io.to(targetUserId).emit("incoming-call", {
+        caller,
+        signalData,
+        callType,
+        chatId,
+        fromSocketId: socket.id,
+      });
+    }
   });
 
   socket.on("answer-call", ({ toSocketId, toUserId, signalData }) => {
     console.log(`📞 Call answered by ${toUserId || socket.id}`);
     if (toSocketId) {
-      socket.in(toSocketId).emit("call-accepted", { signalData, fromSocketId: socket.id });
-    } else if (toUserId) {
-      socket.in(toUserId).emit("call-accepted", { signalData, fromSocketId: socket.id });
+      io.to(toSocketId).emit("call-accepted", { signalData, fromSocketId: socket.id });
+    }
+    if (toUserId) {
+      io.to(toUserId).emit("call-accepted", { signalData, fromSocketId: socket.id });
     }
   });
 
   socket.on("ice-candidate", ({ targetUserId, candidate }) => {
     if (targetUserId) {
-      socket.in(targetUserId).emit("ice-candidate", { candidate, fromSocketId: socket.id });
+      io.to(targetUserId).emit("ice-candidate", { candidate, fromSocketId: socket.id });
     }
   });
 
   socket.on("reject-call", ({ targetUserId, toSocketId }) => {
-    if (toSocketId) {
-      socket.in(toSocketId).emit("call-rejected");
-    } else if (targetUserId) {
-      socket.in(targetUserId).emit("call-rejected");
-    }
+    if (toSocketId) io.to(toSocketId).emit("call-rejected");
+    if (targetUserId) io.to(targetUserId).emit("call-rejected");
   });
 
   socket.on("end-call", ({ targetUserId, toSocketId }) => {
-    if (toSocketId) {
-      socket.in(toSocketId).emit("call-ended");
-    } else if (targetUserId) {
-      socket.in(targetUserId).emit("call-ended");
-    }
+    if (toSocketId) io.to(toSocketId).emit("call-ended");
+    if (targetUserId) io.to(targetUserId).emit("call-ended");
   });
 
   socket.on("disconnect", () => {
