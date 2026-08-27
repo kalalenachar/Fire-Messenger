@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import io from "socket.io-client";
 import {
   getCurrentSessionUser,
@@ -37,6 +37,11 @@ const ChatProvider = ({ children }) => {
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
+
+  const selectedChatRef = useRef(selectedChat);
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
 
   // Sync theme to DOM
   useEffect(() => {
@@ -129,8 +134,9 @@ const ChatProvider = ({ children }) => {
       });
 
       setChats((prevChats) => {
+        const activeChat = selectedChatRef.current;
         const chatExists = prevChats.some((c) => c._id === chatId);
-        const isCurrentActive = selectedChat && typeof selectedChat === "object" && selectedChat._id === chatId;
+        const isCurrentActive = activeChat && typeof activeChat === "object" && activeChat._id === chatId;
         const latestMsgObj = {
           content: newMessage.type === "voice" ? "🎤 Voice Note" : newMessage.type === "image" ? "📷 Photo" : newMessage.type === "file" ? `📄 ${newMessage.content || "File"}` : newMessage.content,
           sender: newMessage.sender,
@@ -166,7 +172,8 @@ const ChatProvider = ({ children }) => {
         return updated;
       });
 
-      if (!selectedChat || typeof selectedChat !== "object" || selectedChat._id !== chatId) {
+      const activeChat = selectedChatRef.current;
+      if (!activeChat || typeof activeChat !== "object" || activeChat._id !== chatId) {
         const notifItem = {
           ...newMessage,
           chatObj: newMessage.chatObj || (typeof newMessage.chat === "object" ? newMessage.chat : null),
