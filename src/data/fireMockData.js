@@ -205,8 +205,7 @@ export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiK
     customApiKey ||
     localStorage.getItem("groq_api_key") ||
     process.env.REACT_APP_GROQ_API_KEY ||
-    process.env.GROQ_API_KEY ||
-    "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";
+    process.env.GROQ_API_KEY;
 
   if (groqApiKey) {
     const candidateModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "groq/compound-mini"];

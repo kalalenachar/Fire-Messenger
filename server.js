@@ -363,8 +363,7 @@ app.post("/api/bot/chat", async (req, res) => {
     const groqApiKey =
       apiKey ||
       process.env.GROQ_API_KEY ||
-      process.env.REACT_APP_GROQ_API_KEY ||
-      "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";
+      process.env.REACT_APP_GROQ_API_KEY;
 
     if (!groqApiKey) {
       return res.status(400).json({
