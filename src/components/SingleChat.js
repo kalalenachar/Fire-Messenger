@@ -1645,6 +1645,11 @@ const SingleChat = () => {
             );
           }
         }}
+      {/* Global Report Modal */}
+      <ReportModal
+        isOpen={Boolean(reportTarget)}
+        onClose={() => setReportTarget(null)}
+        targetObj={reportTarget}
       />
     </Box>
   );
