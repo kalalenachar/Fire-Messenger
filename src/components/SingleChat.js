@@ -102,6 +102,9 @@ const SingleChat = () => {
     votePoll,
     addPollOption,
     stopLiveLocation,
+    togglePinChat,
+    isChatPinned,
+    saveToSavedMessages,
   } = ChatState();
 
   const [textInput, setTextInput] = useState("");
@@ -180,6 +183,7 @@ const SingleChat = () => {
       fileName,
       content: msg.content,
       msgId: msg._id,
+      msgObj: msg,
     });
   };
 
@@ -478,6 +482,14 @@ const SingleChat = () => {
   }
 
   const getHeaderInfo = () => {
+    if (selectedChat.isSavedMessages || selectedChat._id?.startsWith("chat_saved_")) {
+      return {
+        title: "Saved Messages",
+        avatar: null,
+        isSavedMessages: true,
+        status: "Your personal cloud storage 🔖",
+      };
+    }
     if (selectedChat.isGroupChat) {
       return {
         title: selectedChat.chatName,
@@ -554,11 +566,35 @@ const SingleChat = () => {
         boxShadow="var(--shadow-sm)"
       >
         <Box display="flex" alignItems="center" gap={3}>
-          <Avatar size="md" name={header.title} src={header.avatar} border="2px solid var(--text-header)" />
+          {header.isSavedMessages ? (
+            <Box
+              w="40px"
+              h="40px"
+              borderRadius="50%"
+              bg="linear-gradient(135deg, #2AABEE, #229ED9)"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              fontSize="20px"
+              boxShadow="0 2px 8px rgba(42, 171, 238, 0.4)"
+              color="white"
+            >
+              🔖
+            </Box>
+          ) : (
+            <Avatar size="md" name={header.title} src={header.avatar} border="2px solid var(--text-header)" />
+          )}
           <Box>
-            <Text fontWeight="600" fontSize="md" color="var(--text-header)" lineHeight="1.2">
-              {header.title}
-            </Text>
+            <Box display="flex" alignItems="center" gap={1.5}>
+              <Text fontWeight="600" fontSize="md" color="var(--text-header)" lineHeight="1.2">
+                {header.title}
+              </Text>
+              {isChatPinned?.(selectedChat._id) && (
+                <Text fontSize="xs" title="Pinned Chat" opacity={0.85}>
+                  📌
+                </Text>
+              )}
+            </Box>
             <Text
               fontSize="xs"
               color={activeTypingText ? "#38bdf8" : theme === "light" ? "#e0f2fe" : "var(--color-online)"}
@@ -570,6 +606,18 @@ const SingleChat = () => {
         </Box>
 
         <Box display="flex" gap={2}>
+          {/* Pin / Unpin Button */}
+          <Tooltip label={isChatPinned?.(selectedChat._id) ? "Unpin Chat" : "Pin Chat"} placement="bottom">
+            <IconButton
+              icon={<span style={{ fontSize: "16px" }}>{isChatPinned?.(selectedChat._id) ? "📌" : "📍"}</span>}
+              size="sm"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+              onClick={() => togglePinChat?.(selectedChat._id)}
+            />
+          </Tooltip>
+
           {header.userObj && (
             <>
               <Tooltip label="Real HD Voice Call" placement="bottom">
@@ -628,7 +676,7 @@ const SingleChat = () => {
               onMouseEnter={() => setHoveredMsgId(msg._id)}
               onMouseLeave={() => setHoveredMsgId(null)}
             >
-              {/* Floating Reaction Bar on Hover */}
+              {/* Floating Reaction & Save Bar on Hover */}
               {showHoverReactions && (
                 <Box className="reaction-bar">
                   {["👍", "❤️", "🔥", "😂", "👏", "💩"].map((emoji) => (
@@ -640,6 +688,13 @@ const SingleChat = () => {
                       {emoji}
                     </button>
                   ))}
+                  <button
+                    className="reaction-btn"
+                    title="Save to Saved Messages 🔖"
+                    onClick={() => saveToSavedMessages?.(msg)}
+                  >
+                    🔖
+                  </button>
                 </Box>
               )}
 
@@ -648,6 +703,13 @@ const SingleChat = () => {
                 className={`message-bubble ${isMe ? "sent" : "received"}`}
                 onContextMenu={(e) => handleContextMenu(e, msg)}
               >
+                {msg.forwardedFrom && (
+                  <Text fontSize="11px" fontWeight="600" color="var(--color-primary)" mb={1} display="flex" alignItems="center" gap={1}>
+                    <span>↩</span>
+                    <span>Forwarded from {msg.forwardedFrom.senderName}</span>
+                  </Text>
+                )}
+
                 {!isMe && selectedChat.isGroupChat && (
                   <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" mb={0.5}>
                     {msg.sender?.name}
@@ -1412,6 +1474,29 @@ const SingleChat = () => {
             >
               <span>📋</span>
               <span>Copy Message</span>
+            </Box>
+          )}
+
+          {contextMenu.msgObj && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                saveToSavedMessages?.(contextMenu.msgObj);
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>🔖</span>
+              <span>Save to Saved Messages</span>
             </Box>
           )}
 

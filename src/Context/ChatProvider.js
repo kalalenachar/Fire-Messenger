@@ -25,6 +25,7 @@ import {
   stopLiveLocationAsync,
   fetchUserFoldersAsync,
   saveUserFoldersAsync,
+  safeLocalStorageSetItem,
 } from "../data/fireStorage";
 import { getBotReplyAsync } from "../data/fireMockData";
 import CallModal from "../components/miscellaneous/CallModal";
@@ -47,6 +48,152 @@ const ChatProvider = ({ children }) => {
   // Folder Settings State
   const [folders, setFolders] = useState([]);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+
+  // Pinned Chats State
+  const [pinnedChatIds, setPinnedChatIds] = useState(() => {
+    if (!user || !user._id) return ["chat_fire_bot"];
+    const local = localStorage.getItem(`fire_pinned_chats_${user._id}`);
+    return local ? JSON.parse(local) : ["chat_fire_bot", `chat_saved_${user._id}`];
+  });
+
+  const togglePinChat = useCallback((chatId) => {
+    if (!chatId) return;
+    setPinnedChatIds((prev) => {
+      const isPinned = prev.includes(chatId);
+      const updated = isPinned ? prev.filter((id) => id !== chatId) : [...prev, chatId];
+      if (user && user._id) {
+        safeLocalStorageSetItem(`fire_pinned_chats_${user._id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, [user]);
+
+  const isChatPinned = useCallback((chatId) => {
+    return pinnedChatIds.includes(chatId);
+  }, [pinnedChatIds]);
+
+  // Saved Messages Concept
+  const getSavedMessagesChatId = (userId) => `chat_saved_${userId}`;
+
+  const ensureSavedMessagesChat = useCallback((currentUser, currentChats) => {
+    if (!currentUser || !currentUser._id) return currentChats || [];
+    const savedId = getSavedMessagesChatId(currentUser._id);
+    const exists = currentChats.some((c) => c._id === savedId || c.isSavedMessages);
+    if (!exists) {
+      const savedChat = {
+        _id: savedId,
+        chatName: "Saved Messages",
+        isGroupChat: false,
+        isSavedMessages: true,
+        users: [currentUser],
+        category: "Personal",
+        latestMessage: {
+          content: "Your personal cloud storage for notes, files, & forwarded messages 🔖",
+          sender: currentUser,
+          createdAt: new Date().toISOString(),
+        },
+        unread: 0,
+      };
+      saveChatAsync({ chat: savedChat });
+      return [savedChat, ...currentChats];
+    }
+    return currentChats;
+  }, []);
+
+  const openSavedMessages = useCallback(() => {
+    if (!user || !user._id) return;
+    const savedId = getSavedMessagesChatId(user._id);
+    let savedChat = chats.find((c) => c._id === savedId || c.isSavedMessages);
+    if (!savedChat) {
+      savedChat = {
+        _id: savedId,
+        chatName: "Saved Messages",
+        isGroupChat: false,
+        isSavedMessages: true,
+        users: [user],
+        category: "Personal",
+        latestMessage: {
+          content: "Your personal cloud storage for notes, files, & forwarded messages 🔖",
+          sender: user,
+          createdAt: new Date().toISOString(),
+        },
+        unread: 0,
+      };
+      saveChatAsync({ chat: savedChat });
+      setChats((prev) => [savedChat, ...prev]);
+    }
+    setSelectedChat(savedChat);
+  }, [user, chats]);
+
+  const saveToSavedMessages = useCallback(async (msg) => {
+    if (!user || !user._id || !msg) return;
+    const savedId = getSavedMessagesChatId(user._id);
+    let savedChat = chats.find((c) => c._id === savedId || c.isSavedMessages);
+    if (!savedChat) {
+      savedChat = {
+        _id: savedId,
+        chatName: "Saved Messages",
+        isGroupChat: false,
+        isSavedMessages: true,
+        users: [user],
+        category: "Personal",
+        latestMessage: {
+          content: "Your personal cloud storage for notes, files, & forwarded messages 🔖",
+          sender: user,
+          createdAt: new Date().toISOString(),
+        },
+        unread: 0,
+      };
+      await saveChatAsync({ chat: savedChat });
+      setChats((prev) => [savedChat, ...prev]);
+    }
+
+    const senderName = msg.sender?.name || "User";
+    const sourceChatName = selectedChatRef.current?.chatName || "Chat";
+
+    const forwardedMsg = {
+      ...msg,
+      _id: `msg_saved_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      chat: savedId,
+      sender: user,
+      forwardedFrom: {
+        senderName,
+        sourceChatName,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    const savedMessage = await saveMessageAsync(forwardedMsg);
+    setMessagesMap((prev) => ({
+      ...prev,
+      [savedId]: [...(prev[savedId] || []), savedMessage],
+    }));
+
+    const latestText = msg.type === "voice"
+      ? "🎤 Voice Note"
+      : msg.type === "image"
+      ? "📷 Photo"
+      : msg.type === "file"
+      ? `📄 ${msg.content || "File"}`
+      : msg.content || "Saved Message";
+
+    setChats((prev) =>
+      prev.map((c) =>
+        c._id === savedId || c.isSavedMessages
+          ? {
+              ...c,
+              latestMessage: {
+                content: `Forwarded: ${latestText}`,
+                sender: user,
+                createdAt: new Date().toISOString(),
+              },
+            }
+          : c
+      )
+    );
+
+    notifySyncEvent("NEW_MESSAGE", savedMessage);
+  }, [user, chats]);
 
 
   // Status & Story States
@@ -186,7 +333,8 @@ const ChatProvider = ({ children }) => {
   // Load chats & folders for user from backend server DB
   const loadUserData = useCallback(async (currentUser) => {
     if (!currentUser) return;
-    const userChats = await fetchUserChatsAsync(currentUser._id);
+    let userChats = await fetchUserChatsAsync(currentUser._id);
+    userChats = ensureSavedMessagesChat(currentUser, userChats);
     setChats(userChats);
 
     const userFolders = await fetchUserFoldersAsync(currentUser._id);
@@ -196,7 +344,7 @@ const ChatProvider = ({ children }) => {
       setSelectedChat(userChats[0]);
     }
     loadStatusData(currentUser);
-  }, [loadStatusData]);
+  }, [ensureSavedMessagesChat, loadStatusData]);
 
 
   // When selectedChat changes, load its messages from backend server DB & join socket room
@@ -973,6 +1121,12 @@ const ChatProvider = ({ children }) => {
         addChatToFolder,
         removeChatFromFolder,
         toggleChatFolder,
+        // Pin Chat & Saved Messages Context Values
+        pinnedChatIds,
+        togglePinChat,
+        isChatPinned,
+        openSavedMessages,
+        saveToSavedMessages,
       }}
     >
       {children}

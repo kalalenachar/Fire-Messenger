@@ -32,6 +32,8 @@ const MyChats = () => {
     isFolderModalOpen,
     setIsFolderModalOpen,
     toggleChatFolder,
+    togglePinChat,
+    isChatPinned,
   } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -48,7 +50,7 @@ const MyChats = () => {
         (activeFilter === "Groups" && chat.isGroupChat && !chat.isChannel) ||
         (activeFilter === "Channels" && chat.isChannel) ||
         (activeFilter === "Bots" && chat.category === "Bots") ||
-        (activeFilter === "Personal" && !chat.isGroupChat && chat.category !== "Bots");
+        (activeFilter === "Personal" && (!chat.isGroupChat || chat.isSavedMessages) && chat.category !== "Bots");
     } else {
       const isIncludedById = activeCustomFolder.includedChatIds?.includes(chat._id);
       const rules = activeCustomFolder.rules || {};
@@ -61,13 +63,26 @@ const MyChats = () => {
       );
     }
 
-    const chatName = chat.isGroupChat
+    const chatName = chat.isSavedMessages
+      ? "Saved Messages"
+      : chat.isGroupChat
       ? chat.chatName
       : chat.users?.find((u) => u._id !== user?._id)?.name || chat.chatName;
 
     const matchesSearch = chatName?.toLowerCase().includes(searchTerm.toLowerCase());
 
     return matchesCategory && matchesSearch;
+  });
+
+  // Sort chats so pinned chats stay at top
+  const sortedChats = [...filteredChats].sort((a, b) => {
+    const pinnedA = isChatPinned?.(a._id);
+    const pinnedB = isChatPinned?.(b._id);
+    if (pinnedA && !pinnedB) return -1;
+    if (!pinnedA && pinnedB) return 1;
+    const timeA = new Date(a.latestMessage?.createdAt || 0).getTime();
+    const timeB = new Date(b.latestMessage?.createdAt || 0).getTime();
+    return timeB - timeA;
   });
 
   const getChatAvatar = (chat) => {
@@ -79,9 +94,49 @@ const MyChats = () => {
   };
 
   const getChatTitle = (chat) => {
+    if (chat.isSavedMessages) return "Saved Messages";
     if (chat.isGroupChat) return chat.chatName;
     const otherUser = chat.users?.find((u) => u._id !== user?._id);
     return otherUser?.name || chat.chatName;
+  };
+
+  const renderAvatar = (chat, title) => {
+    if (chat.isSavedMessages || chat._id?.startsWith("chat_saved_")) {
+      return (
+        <Box
+          w="48px"
+          h="48px"
+          borderRadius="50%"
+          bg="linear-gradient(135deg, #2AABEE, #229ED9)"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          fontSize="22px"
+          boxShadow="0 2px 8px rgba(42, 171, 238, 0.4)"
+          color="white"
+        >
+          🔖
+        </Box>
+      );
+    }
+    const avatar = getChatAvatar(chat);
+    return (
+      <Box position="relative">
+        <Avatar size="md" name={title} src={avatar} />
+        {!chat.isGroupChat && (
+          <Box
+            position="absolute"
+            bottom="0"
+            right="0"
+            w="12px"
+            h="12px"
+            borderRadius="50%"
+            bg="var(--color-online)"
+            border="2px solid var(--bg-sidebar)"
+          />
+        )}
+      </Box>
+    );
   };
 
   const formatTime = (isoString) => {
@@ -201,12 +256,12 @@ const MyChats = () => {
         </Box>
       ) : (
         <Box flex="1" overflowY="auto" px={2} py={1}>
-          {filteredChats.length > 0 ? (
+          {sortedChats.length > 0 ? (
             <Stack spacing={1}>
-              {filteredChats.map((chat) => {
+              {sortedChats.map((chat) => {
                 const isSelected = selectedChat?._id === chat._id;
                 const title = getChatTitle(chat);
-                const avatar = getChatAvatar(chat);
+                const isPinned = isChatPinned?.(chat._id);
 
                 return (
                   <Box
@@ -227,34 +282,28 @@ const MyChats = () => {
                     position="relative"
                     role="group"
                   >
-                    {/* Avatar & Online Dot */}
-                    <Box position="relative">
-                      <Avatar size="md" name={title} src={avatar} />
-                      {!chat.isGroupChat && (
-                        <Box
-                          position="absolute"
-                          bottom="0"
-                          right="0"
-                          w="12px"
-                          h="12px"
-                          borderRadius="50%"
-                          bg="var(--color-online)"
-                          border="2px solid var(--bg-sidebar)"
-                        />
-                      )}
-                    </Box>
+                    {/* Avatar & Online Indicator */}
+                    {renderAvatar(chat, title)}
 
                     {/* Chat Info */}
                     <Box flex="1" overflow="hidden">
                       <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
-                        <Text fontWeight="600" fontSize="sm" color="var(--text-primary)" isTruncated>
-                          {title}
-                        </Text>
+                        <Box display="flex" alignItems="center" gap={1.5} flex="1" overflow="hidden" pr={1}>
+                          <Text fontWeight="600" fontSize="sm" color="var(--text-primary)" isTruncated>
+                            {title}
+                          </Text>
+                          {isPinned && (
+                            <Text fontSize="xs" title="Pinned Chat" opacity={0.85}>
+                              📌
+                            </Text>
+                          )}
+                        </Box>
                         {chat.latestMessage?.createdAt && (
                           <Text
                             fontSize="11px"
                             color={chat.unread > 0 ? "var(--color-primary)" : "var(--text-secondary)"}
                             fontWeight={chat.unread > 0 ? "bold" : "normal"}
+                            whiteSpace="nowrap"
                           >
                             {formatTime(chat.latestMessage.createdAt)}
                           </Text>
@@ -263,7 +312,7 @@ const MyChats = () => {
 
                       <Box display="flex" justifyContent="space-between" alignItems="center">
                         <Text fontSize="xs" color="var(--text-secondary)" isTruncated pr={2}>
-                          {chat.latestMessage?.sender?.name ? `${chat.latestMessage.sender.name}: ` : ""}
+                          {chat.latestMessage?.sender?.name && !chat.isSavedMessages ? `${chat.latestMessage.sender.name}: ` : ""}
                           {chat.latestMessage?.content || "No messages yet"}
                         </Text>
 
@@ -281,7 +330,7 @@ const MyChats = () => {
                             </Badge>
                           )}
 
-                          {/* Quick 'Add to Folder' Options Menu */}
+                          {/* Quick Options Menu */}
                           <Menu placement="right-start">
                             <MenuButton
                               className="chat-action-menu"
@@ -300,6 +349,21 @@ const MyChats = () => {
                               onClick={(e) => e.stopPropagation()}
                               zIndex="1500"
                             >
+                              <MenuItem
+                                bg="transparent"
+                                fontSize="xs"
+                                fontWeight="bold"
+                                color="var(--text-primary)"
+                                _hover={{ bg: "var(--bg-hover)" }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePinChat?.(chat._id);
+                                }}
+                              >
+                                {isPinned ? "📌 Unpin Chat" : "📌 Pin Chat"}
+                              </MenuItem>
+                              <MenuDivider borderColor="var(--color-border)" />
+
                               <MenuItem
                                 bg="transparent"
                                 fontSize="xs"

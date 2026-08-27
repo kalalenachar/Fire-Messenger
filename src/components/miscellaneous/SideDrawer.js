@@ -55,6 +55,7 @@ function SideDrawer() {
     activeStatusUser,
     setActiveStatusUser,
     setIsFolderModalOpen,
+    openSavedMessages,
   } = ChatState();
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -172,6 +173,20 @@ function SideDrawer() {
             </Button>
           </Tooltip>
 
+          {/* Saved Messages Quick Shortcut */}
+          <Tooltip label="Open Saved Messages" placement="bottom">
+            <Button
+              size="sm"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+              onClick={openSavedMessages}
+              fontWeight="600"
+            >
+              Saved Messages 🔖
+            </Button>
+          </Tooltip>
+
           {/* Dark / Light Theme Switcher */}
           <Tooltip label={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`} placement="bottom">
             <Button
@@ -233,6 +248,10 @@ function SideDrawer() {
               <ProfileModal user={user}>
                 <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }}>My Profile</MenuItem>
               </ProfileModal>
+              <MenuDivider borderColor="var(--color-border)" />
+              <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={openSavedMessages}>
+                Saved Messages 🔖
+              </MenuItem>
               <MenuDivider borderColor="var(--color-border)" />
               <GroupChatModal>
                 <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }}>Create Group Chat</MenuItem>
