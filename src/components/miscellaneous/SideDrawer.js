@@ -109,30 +109,32 @@ function SideDrawer() {
         alignItems="center"
         bg="var(--bg-header)"
         w="100%"
-        px={4}
-        py={2.5}
+        px={{ base: 2.5, sm: 4 }}
+        py={{ base: 1.5, sm: 2.5 }}
         borderBottom="1px solid var(--color-border)"
         color="var(--text-header)"
         boxShadow="var(--shadow-sm)"
         position="relative"
         zIndex="1000"
+        flexShrink={0}
       >
         {/* Fire Messenger Logo & Brand */}
-        <Box display="flex" alignItems="center" gap={3}>
+        <Box display="flex" alignItems="center" gap={{ base: 2, sm: 3 }} flexShrink={0}>
           <Box
-            w="38px"
-            h="38px"
+            w={{ base: "32px", sm: "38px" }}
+            h={{ base: "32px", sm: "38px" }}
             borderRadius="50%"
             bg="linear-gradient(135deg, #00a884, #075e54)"
             display="flex"
             alignItems="center"
             justifyContent="center"
-            fontSize="22px"
+            fontSize={{ base: "18px", sm: "22px" }}
             boxShadow="0 2px 8px rgba(0,0,0,0.3)"
+            flexShrink={0}
           >
             🔥
           </Box>
-          <Box display={{ base: "none", sm: "block" }}>
+          <Box display={{ base: "none", md: "block" }}>
             <Text fontWeight="bold" fontSize="lg" lineHeight="1.1" color="var(--text-header)">
               Fire Messenger
             </Text>
@@ -143,7 +145,7 @@ function SideDrawer() {
         </Box>
 
         {/* Action Controls */}
-        <Box display="flex" alignItems="center" gap={2}>
+        <Box display="flex" alignItems="center" gap={{ base: 1, sm: 2 }} flexShrink={0}>
           {/* Search Button */}
           <Tooltip label="Search Contacts" placement="bottom">
             <Button
@@ -154,8 +156,12 @@ function SideDrawer() {
               onClick={onOpen}
               leftIcon={<SearchIcon color="var(--text-header)" />}
               fontWeight="600"
+              px={{ base: 2, md: 3 }}
+              minW="auto"
             >
-              Search Contacts
+              <Box as="span" display={{ base: "none", md: "inline" }}>
+                Search Contacts
+              </Box>
             </Button>
           </Tooltip>
 
@@ -168,8 +174,15 @@ function SideDrawer() {
               _hover={{ bg: "rgba(255,255,255,0.15)" }}
               onClick={() => setActiveFilter("Status")}
               fontWeight="600"
+              px={{ base: 2, md: 3 }}
+              minW="auto"
             >
-              Status 🔥
+              <Box as="span" display={{ base: "none", md: "inline" }}>
+                Status 🔥
+              </Box>
+              <Box as="span" display={{ base: "inline", md: "none" }}>
+                🔥
+              </Box>
             </Button>
           </Tooltip>
 
@@ -182,8 +195,15 @@ function SideDrawer() {
               _hover={{ bg: "rgba(255,255,255,0.15)" }}
               onClick={openSavedMessages}
               fontWeight="600"
+              px={{ base: 2, md: 3 }}
+              minW="auto"
             >
-              Saved Messages 🔖
+              <Box as="span" display={{ base: "none", md: "inline" }}>
+                Saved Messages 🔖
+              </Box>
+              <Box as="span" display={{ base: "inline", md: "none" }}>
+                🔖
+              </Box>
             </Button>
           </Tooltip>
 
@@ -195,6 +215,8 @@ function SideDrawer() {
               color="var(--text-header)"
               _hover={{ bg: "rgba(255,255,255,0.15)" }}
               onClick={toggleTheme}
+              px={{ base: 1.5, sm: 2 }}
+              minW="auto"
             >
               {theme === "dark" ? <SunIcon color="#ffb74d" fontSize="18px" /> : <MoonIcon color="#ffffff" fontSize="18px" />}
             </Button>

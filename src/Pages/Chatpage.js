@@ -25,12 +25,12 @@ const Chatpage = () => {
   const activeUser = user || getCurrentSessionUser();
 
   return (
-    <Box w="100vw" h="100vh" display="flex" flexDirection="column" bg="var(--bg-app)" overflow="hidden">
+    <Box w="100vw" h="100dvh" maxH="100vh" display="flex" flexDirection="column" bg="var(--bg-app)" overflow="hidden">
       {/* Top Header */}
       {activeUser && <SideDrawer />}
 
       {/* Main Messenger Workspace Layout */}
-      <Box flex="1" display="flex" w="100%" h="calc(100vh - 53px)" overflow="hidden">
+      <Box flex="1" display="flex" w="100%" minH="0" h="100%" overflow="hidden">
         {/* Left Sidebar - Chat List */}
         <Box
           w={{ base: selectedChat ? "0%" : "100%", md: "360px", lg: "400px" }}
@@ -46,6 +46,7 @@ const Chatpage = () => {
           flex="1"
           display={{ base: selectedChat ? "flex" : "none", md: "flex" }}
           h="100%"
+          minH="0"
         >
           {activeUser && <SingleChat />}
         </Box>
