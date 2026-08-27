@@ -109,6 +109,17 @@ const SingleChat = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Right-Click Context Menu State
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    fileUrl: null,
+    fileName: null,
+    content: null,
+    msgId: null,
+  });
+
   // Attachment Preview Modal State
   const [attachmentModal, setAttachmentModal] = useState({
     isOpen: false,
@@ -136,6 +147,42 @@ const SingleChat = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeMessages.length, selectedChat, activeTypingText]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (contextMenu.visible) setContextMenu((prev) => ({ ...prev, visible: false }));
+    };
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, [contextMenu.visible]);
+
+  const handleContextMenu = (e, msg) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const fileUrl = msg.fileUrl || msg.audioUrl;
+    const fileName = msg.fileName || (msg.type === "voice" ? `voice_note_${Date.now()}.webm` : "attachment");
+    setContextMenu({
+      visible: true,
+      x: Math.min(e.clientX, window.innerWidth - 200),
+      y: Math.min(e.clientY, window.innerHeight - 150),
+      fileUrl,
+      fileName,
+      content: msg.content,
+      msgId: msg._id,
+    });
+  };
+
+  const triggerDownload = (fileUrl, fileName) => {
+    if (!fileUrl) return;
+    const a = document.createElement("a");
+    a.href = fileUrl;
+    a.download = fileName || "download";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setContextMenu((prev) => ({ ...prev, visible: false }));
+  };
 
   // Handle Real Audio Recording Timer & Recorder
   useEffect(() => {
@@ -587,7 +634,10 @@ const SingleChat = () => {
               )}
 
               {/* Message Bubble */}
-              <Box className={`message-bubble ${isMe ? "sent" : "received"}`}>
+              <Box
+                className={`message-bubble ${isMe ? "sent" : "received"}`}
+                onContextMenu={(e) => handleContextMenu(e, msg)}
+              >
                 {!isMe && selectedChat.isGroupChat && (
                   <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" mb={0.5}>
                     {msg.sender?.name}
@@ -613,15 +663,6 @@ const SingleChat = () => {
                           onImageOpen();
                         }}
                       />
-                      <a
-                        href={msg.fileUrl}
-                        download={msg.fileName || "photo.png"}
-                        className="file-download-btn"
-                        style={{ position: "absolute", bottom: "8px", right: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}
-                        title="Download Photo"
-                      >
-                        <DownloadIcon />
-                      </a>
                     </Box>
                     {msg.content && !msg.content.startsWith("📷 Photo") && (
                       <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
@@ -638,15 +679,6 @@ const SingleChat = () => {
                         src={msg.fileUrl}
                         style={{ width: "100%", maxHeight: "280px", borderRadius: "12px", background: "#000" }}
                       />
-                      <a
-                        href={msg.fileUrl}
-                        download={msg.fileName || "video.mp4"}
-                        className="file-download-btn"
-                        style={{ position: "absolute", top: "8px", right: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}
-                        title="Download Video"
-                      >
-                        <DownloadIcon />
-                      </a>
                     </Box>
                     {msg.content && !msg.content.startsWith("🎥 Video") && (
                       <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
@@ -679,16 +711,6 @@ const SingleChat = () => {
                           {formatBytes(msg.fileSize)} • {category.toUpperCase()}
                         </Text>
                       </Box>
-                      {hasFileUrl && (
-                        <a
-                          href={msg.fileUrl}
-                          download={msg.fileName || "attachment"}
-                          className="file-download-btn"
-                          title={`Download ${msg.fileName || "File"}`}
-                        >
-                          <DownloadIcon />
-                        </a>
-                      )}
                     </Box>
                     {msg.content && msg.content !== msg.fileName && !msg.content.startsWith("📄") && (
                       <Text fontSize="sm" mt={1} whiteSpace="pre-wrap">
@@ -946,6 +968,90 @@ const SingleChat = () => {
           </ModalBody>
         </ModalContent>
       </Modal>
+
+      {/* Floating Custom Right-Click Context Menu */}
+      {contextMenu.visible && (
+        <Box
+          position="fixed"
+          top={`${contextMenu.y}px`}
+          left={`${contextMenu.x}px`}
+          bg="var(--bg-header)"
+          border="1px solid var(--color-border)"
+          borderRadius="14px"
+          boxShadow="0 10px 30px rgba(0,0,0,0.4)"
+          zIndex="9999"
+          py={1.5}
+          px={1.5}
+          minW="180px"
+          backdropFilter="blur(12px)"
+        >
+          {contextMenu.fileUrl && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="600"
+              _hover={{ bg: "var(--color-primary)", color: "white" }}
+              onClick={() => triggerDownload(contextMenu.fileUrl, contextMenu.fileName)}
+            >
+              <DownloadIcon />
+              <span>Download File</span>
+            </Box>
+          )}
+
+          {contextMenu.content && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                navigator.clipboard.writeText(contextMenu.content);
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>📋</span>
+              <span>Copy Message</span>
+            </Box>
+          )}
+
+          {contextMenu.fileUrl && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                navigator.clipboard.writeText(contextMenu.fileUrl);
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>🔗</span>
+              <span>Copy Link</span>
+            </Box>
+          )}
+        </Box>
+      )}
     </Box>
   );
 };

@@ -165,20 +165,11 @@ const VoicePlayer = ({ audioUrl, fileName, isMe }) => {
         />
       </Box>
 
-      {/* Bottom Row: Time Display & Download Icon */}
+      {/* Bottom Row: Time Display */}
       <Box display="flex" alignItems="center" justifyContent="space-between" px={0.5}>
         <Text fontSize="11px" fontWeight="600" color="var(--vp-text)">
           {formatTime(currentTime)} / {formatTime(duration)}
         </Text>
-
-        <a
-          href={audioUrl}
-          download={fileName || "voice_note.webm"}
-          className="voice-download-btn"
-          title="Download Voice Note"
-        >
-          <DownloadIcon />
-        </a>
       </Box>
     </Box>
   );
