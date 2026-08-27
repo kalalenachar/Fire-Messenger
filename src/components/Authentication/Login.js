@@ -19,7 +19,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submitHandler = () => {
+  const submitHandler = async () => {
     setLoading(true);
     if (!email || !password) {
       toast({
@@ -35,7 +35,7 @@ const Login = () => {
     }
 
     try {
-      const loggedInUser = loginUser(email, password);
+      const loggedInUser = await loginUser(email, password);
       setCurrentSessionUser(loggedInUser);
       setUser(loggedInUser); // Update Context state immediately!
 

@@ -21,6 +21,12 @@ import { PhoneIcon, ViewIcon, AttachmentIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
 import ProfileModal from "./miscellaneous/ProfileModal";
 
+const DoubleTickIcon = () => (
+  <svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor" style={{ display: "inline-block", verticalAlign: "middle" }}>
+    <path d="M15.01 3.316l-6.88 6.88-3.13-3.13 1.06-1.06 2.07 2.07 5.82-5.82 1.06 1.06zm-4.32 0l-1.06-1.06-4.76 4.76-2.07-2.07-1.06 1.06 3.13 3.13 5.82-5.82z" />
+  </svg>
+);
+
 const SingleChat = () => {
   const {
     selectedChat,
@@ -404,7 +410,11 @@ const SingleChat = () => {
                   <span>
                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </span>
-                  {isMe && <span className="status-ticks">✓✓</span>}
+                  {isMe && (
+                    <span className="status-ticks">
+                      <DoubleTickIcon />
+                    </span>
+                  )}
                 </Box>
               </Box>
             </Box>

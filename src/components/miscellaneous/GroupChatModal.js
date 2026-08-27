@@ -18,7 +18,7 @@ import {
 import { ChatState } from "../../Context/ChatProvider";
 import UserBadgeItem from "../userAvatar/UserBadgeItem";
 import UserListItem from "../userAvatar/UserListItem";
-import { getRegisteredUsers } from "../../data/fireStorage";
+import { searchUsersAsync, saveChatAsync } from "../../data/fireStorage";
 
 const GroupChatModal = ({ children }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -30,19 +30,13 @@ const GroupChatModal = ({ children }) => {
 
   const { user, addOrSelectChat } = ChatState();
 
-  const handleSearch = (query) => {
+  const handleSearch = async (query) => {
     setSearch(query);
     if (!query.trim()) {
       setSearchResult([]);
       return;
     }
-    const allUsers = getRegisteredUsers();
-    const results = allUsers.filter(
-      (u) =>
-        u._id !== user?._id &&
-        (u.name.toLowerCase().includes(query.toLowerCase()) ||
-          u.email.toLowerCase().includes(query.toLowerCase()))
-    );
+    const results = await searchUsersAsync(query, user?._id);
     setSearchResult(results);
   };
 
@@ -64,7 +58,7 @@ const GroupChatModal = ({ children }) => {
     setSelectedUsers(selectedUsers.filter((sel) => sel._id !== delUser._id));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!groupChatName.trim()) {
       toast({
         title: "Please enter a group name",
@@ -87,32 +81,33 @@ const GroupChatModal = ({ children }) => {
       return;
     }
 
-    const newGroupChat = {
-      _id: `group_${Date.now()}`,
+    const groupPayload = {
       chatName: groupChatName.trim(),
       isGroupChat: true,
       groupAdmin: user,
       users: [user, ...selectedUsers],
-      latestMessage: {
-        content: `Created group "${groupChatName}" 🔥`,
-        sender: user,
-        createdAt: new Date().toISOString(),
-      },
+    };
+
+    const createdChat = await saveChatAsync(groupPayload);
+    const finalChat = createdChat || {
+      _id: `group_${Date.now()}`,
+      ...groupPayload,
+      latestMessage: { content: `Created group "${groupChatName}" 🔥`, sender: user, createdAt: new Date().toISOString() },
       unread: 0,
       category: "Groups",
     };
 
-    addOrSelectChat(newGroupChat);
+    addOrSelectChat(finalChat);
     onClose();
-    setGroupChatName("");
     setSelectedUsers([]);
+    setGroupChatName("");
     setSearchResult([]);
     toast({
-      title: "Fire Group Chat Created! 🔥",
+      title: `Group "${groupChatName}" created! 🔥`,
       status: "success",
       duration: 3000,
       isClosable: true,
-      position: "bottom",
+      position: "top",
     });
   };
 

@@ -59,7 +59,7 @@ const Signup = () => {
     reader.readAsDataURL(file);
   };
 
-  const submitHandler = () => {
+  const submitHandler = async () => {
     setLoading(true);
 
     if (!name.trim() || !email.trim() || !password || !confirmpassword) {
@@ -89,7 +89,7 @@ const Signup = () => {
     }
 
     try {
-      const newUser = registerUser({
+      const newUser = await registerUser({
         name,
         email,
         password,

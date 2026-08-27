@@ -1,25 +1,133 @@
-// Fire Messenger Real-Time Socket.IO Server & WebRTC Signaling Backend
+// Fire Messenger Real-Time Socket.IO Server, REST API & Persistent Database Backend
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
+const db = require("./serverDb");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
   pingTimeout: 60000,
+  maxHttpBufferSize: 1e8, // 100MB for voice notes & attachments
   cors: {
     origin: "*",
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PUT"],
   },
 });
 
+// Initialize database on startup
+db.readDb();
+
 app.get("/", (req, res) => {
-  res.send({ status: "online", message: "🔥 Fire Messenger Real-Time API & Signaling Server is Running!" });
+  res.send({ status: "online", message: "🔥 Fire Messenger Real-Time API & Persistent DB Server is Running!" });
 });
+
+// --- REST API ENDPOINTS ---
+
+// Auth - Login
+app.post("/api/user/login", (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = db.loginUser(email, password);
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Auth - Signup
+app.post("/api/user/signup", (req, res) => {
+  try {
+    const user = db.registerUser(req.body);
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Update Profile
+app.put("/api/user/profile", (req, res) => {
+  try {
+    const { userId, updates } = req.body;
+    const updatedUser = db.updateUserProfile(userId, updates);
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Search Users
+app.get("/api/user/search", (req, res) => {
+  try {
+    const { search, userId } = req.query;
+    const users = db.searchUsers(search || "", userId || "");
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Fetch User Chats
+app.get("/api/chats/:userId", (req, res) => {
+  try {
+    const chats = db.getUserChats(req.params.userId);
+    res.json({ success: true, chats });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Save or Create Chat
+app.post("/api/chats", (req, res) => {
+  try {
+    if (req.body.isGroupChat) {
+      const groupChat = db.createGroupChat(req.body);
+      res.json({ success: true, chat: groupChat });
+    } else {
+      const saved = db.saveChat(req.body.chat);
+      res.json({ success: true, chat: saved });
+    }
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Fetch Messages for a Chat
+app.get("/api/messages/:chatId", (req, res) => {
+  try {
+    const messages = db.getChatMessages(req.params.chatId);
+    res.json({ success: true, messages });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Send/Save Message
+app.post("/api/messages", (req, res) => {
+  try {
+    const message = db.addMessage(req.body);
+    res.json({ success: true, message });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Toggle Reaction
+app.put("/api/messages/reaction", (req, res) => {
+  try {
+    const updatedMsgs = db.toggleMessageReaction(req.body);
+    res.json({ success: true, messages: updatedMsgs });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// --- SOCKET.IO REAL-TIME ENGINE ---
 
 // Active online users mapping: userId -> socketId
 const onlineUsers = new Map();
@@ -40,7 +148,6 @@ io.on("connection", (socket) => {
   socket.on("join chat", (room) => {
     if (!room) return;
     socket.join(room);
-    console.log("⚡ User joined socket room:", room);
   });
 
   // Typing Events
@@ -52,12 +159,13 @@ io.on("connection", (socket) => {
     socket.in(room).emit("stop typing", { room, user });
   });
 
-  // Message Sending
+  // Message Sending & Server DB Persistence
   socket.on("new message", (newMessageReceived) => {
+    db.addMessage(newMessageReceived);
+
     const chat = newMessageReceived.chatObj || newMessageReceived.chat;
     if (!chat) return;
 
-    // Send to recipient user rooms if users list is present
     if (typeof chat === "object" && Array.isArray(chat.users)) {
       chat.users.forEach((u) => {
         if (u._id === newMessageReceived.sender._id) return;
@@ -65,15 +173,15 @@ io.on("connection", (socket) => {
       });
     }
 
-    // Also broadcast to room ID
     const roomId = typeof chat === "string" ? chat : chat._id;
     if (roomId) {
       socket.in(roomId).emit("message received", newMessageReceived);
     }
   });
 
-  // Reactions
+  // Reactions & Server DB Persistence
   socket.on("toggle reaction", (data) => {
+    db.toggleMessageReaction(data);
     const { chatId, messageId, emoji, userId, targetUserId } = data;
     if (targetUserId) {
       socket.in(targetUserId).emit("reaction received", { chatId, messageId, emoji, userId });
@@ -136,6 +244,7 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🔥 Fire Messenger Socket.IO & Signaling Server running on port ${PORT}`);
+  console.log(`🔥 Fire Messenger Server running on http://localhost:${PORT} with Persistent JSON Database!`);
 });
+
 

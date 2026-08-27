@@ -3,15 +3,14 @@ import io from "socket.io-client";
 import {
   getCurrentSessionUser,
   setCurrentSessionUser,
-  getStoredChats,
-  saveStoredChats,
-  getStoredMessagesMap,
-  saveStoredMessagesMap,
-  getInitialChatsForUser,
-  getInitialMessagesForUser,
+  updateUserProfileInDb,
+  fetchUserChatsAsync,
+  saveChatAsync,
+  fetchChatMessagesAsync,
+  saveMessageAsync,
+  toggleReactionAsync,
   notifySyncEvent,
   subscribeSyncEvent,
-  updateUserProfileInDb,
   fireBotUser,
 } from "../data/fireStorage";
 import { getBotReply } from "../data/fireMockData";
@@ -33,7 +32,7 @@ const ChatProvider = ({ children }) => {
   const [isTypingMap, setIsTypingMap] = useState({});
 
   // WebRTC Audio / Video Call States
-  const [callData, setCallData] = useState(null); // { caller, callType, status, chatId, toSocketId, targetUserId }
+  const [callData, setCallData] = useState(null);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -49,31 +48,18 @@ const ChatProvider = ({ children }) => {
     document.documentElement.setAttribute("data-theme", activeTheme);
   }, [theme]);
 
-  // Load chats & messages for user
-  const loadUserData = useCallback((currentUser) => {
+  // Load chats for user from backend server DB
+  const loadUserData = useCallback(async (currentUser) => {
     if (!currentUser) return;
-
-    let userChats = getStoredChats(currentUser._id);
-    if (!userChats) {
-      userChats = getInitialChatsForUser(currentUser);
-      saveStoredChats(currentUser._id, userChats);
-    }
-
-    let userMessages = getStoredMessagesMap(currentUser._id);
-    if (!userMessages) {
-      userMessages = getInitialMessagesForUser(currentUser);
-      saveStoredMessagesMap(currentUser._id, userMessages);
-    }
-
+    const userChats = await fetchUserChatsAsync(currentUser._id);
     setChats(userChats);
-    setMessagesMap(userMessages);
 
-    if (userChats.length > 0 && !selectedChat) {
+    if (userChats.length > 0 && !selectedChatRef.current) {
       setSelectedChat(userChats[0]);
     }
-  }, [selectedChat]);
+  }, []);
 
-  // When selectedChat changes, join socket room and clear unreads / notifications for that chat
+  // When selectedChat changes, load its messages from backend server DB & join socket room
   useEffect(() => {
     if (!selectedChat || typeof selectedChat !== "object" || !selectedChat._id) return;
 
@@ -81,19 +67,15 @@ const ChatProvider = ({ children }) => {
       socket.emit("join chat", selectedChat._id);
     }
 
-    // Reset unread count for this chat
-    setChats((prevChats) => {
-      let changed = false;
-      const updated = prevChats.map((c) => {
-        if (c._id === selectedChat._id && c.unread > 0) {
-          changed = true;
-          return { ...c, unread: 0 };
-        }
-        return c;
-      });
-      if (changed && user) saveStoredChats(user._id, updated);
-      return updated;
+    // Fetch messages for selected chat from persistent DB
+    fetchChatMessagesAsync(selectedChat._id).then((msgs) => {
+      setMessagesMap((prev) => ({ ...prev, [selectedChat._id]: msgs }));
     });
+
+    // Reset unread count for this chat
+    setChats((prevChats) =>
+      prevChats.map((c) => (c._id === selectedChat._id && c.unread > 0 ? { ...c, unread: 0 } : c))
+    );
 
     // Remove any notifications corresponding to selectedChat
     setNotification((prevNotifs) =>
@@ -102,7 +84,7 @@ const ChatProvider = ({ children }) => {
         return notifChatId !== selectedChat._id;
       })
     );
-  }, [selectedChat, user]);
+  }, [selectedChat]);
 
   // Handle Socket.IO connection and real-time events
   useEffect(() => {
@@ -118,7 +100,7 @@ const ChatProvider = ({ children }) => {
     socket.emit("setup", user);
 
     socket.on("connected", () => {
-      console.log("🔥 Connected to Socket.IO Server!");
+      console.log("🔥 Connected to Socket.IO Server & Persistent Database!");
     });
 
     socket.on("message received", (newMessage) => {
@@ -128,9 +110,7 @@ const ChatProvider = ({ children }) => {
       setMessagesMap((prev) => {
         const chatMsgs = prev[chatId] || [];
         if (chatMsgs.some((m) => m._id === newMessage._id)) return prev;
-        const updated = { ...prev, [chatId]: [...chatMsgs, newMessage] };
-        saveStoredMessagesMap(user._id, updated);
-        return updated;
+        return { ...prev, [chatId]: [...chatMsgs, newMessage] };
       });
 
       setChats((prevChats) => {
@@ -143,9 +123,8 @@ const ChatProvider = ({ children }) => {
           createdAt: newMessage.createdAt,
         };
 
-        let updated;
         if (chatExists) {
-          updated = prevChats.map((c) => {
+          return prevChats.map((c) => {
             if (c._id === chatId) {
               return {
                 ...c,
@@ -165,11 +144,8 @@ const ChatProvider = ({ children }) => {
             unread: isCurrentActive ? 0 : 1,
             category: "Personal",
           };
-          updated = [{ ...newChat, latestMessage: latestMsgObj, unread: isCurrentActive ? 0 : 1 }, ...prevChats];
+          return [{ ...newChat, latestMessage: latestMsgObj, unread: isCurrentActive ? 0 : 1 }, ...prevChats];
         }
-
-        saveStoredChats(user._id, updated);
-        return updated;
       });
 
       const activeChat = selectedChatRef.current;
@@ -236,16 +212,12 @@ const ChatProvider = ({ children }) => {
         setMessagesMap((prev) => {
           const chatMsgs = prev[chatId] || [];
           if (chatMsgs.some((m) => m._id === message._id)) return prev;
-          const updated = { ...prev, [chatId]: [...chatMsgs, message] };
-          saveStoredMessagesMap(user._id, updated);
-          return updated;
+          return { ...prev, [chatId]: [...chatMsgs, message] };
         });
       } else if (type === "NEW_CHAT") {
         setChats((prev) => {
           if (prev.some((c) => c._id === payload._id)) return prev;
-          const updated = [payload, ...prev];
-          saveStoredChats(user._id, updated);
-          return updated;
+          return [payload, ...prev];
         });
       } else if (type === "TOGGLE_REACTION") {
         const { chatId, messageId, emoji } = payload;
@@ -264,9 +236,7 @@ const ChatProvider = ({ children }) => {
             }
             return m;
           });
-          const updatedMap = { ...prev, [chatId]: updatedMsgs };
-          saveStoredMessagesMap(user._id, updatedMap);
-          return updatedMap;
+          return { ...prev, [chatId]: updatedMsgs };
         });
       }
     });
@@ -291,7 +261,7 @@ const ChatProvider = ({ children }) => {
       _id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       sender: user,
       content,
-      type, // "text" | "voice" | "image" | "file"
+      type,
       audioUrl: type === "voice" ? attachmentData : null,
       fileUrl: type === "image" || type === "file" ? attachmentData : null,
       chat: chatId,
@@ -300,12 +270,13 @@ const ChatProvider = ({ children }) => {
       reactions: {},
     };
 
+    // Save locally into state & send REST POST to backend DB
     setMessagesMap((prev) => {
       const chatMsgs = prev[chatId] || [];
-      const updated = { ...prev, [chatId]: [...chatMsgs, newMessage] };
-      saveStoredMessagesMap(user._id, updated);
-      return updated;
+      return { ...prev, [chatId]: [...chatMsgs, newMessage] };
     });
+
+    saveMessageAsync(newMessage);
 
     const latestMsgObj = {
       content: displayContent,
@@ -315,34 +286,21 @@ const ChatProvider = ({ children }) => {
 
     setChats((prevChats) => {
       const chatExists = prevChats.some((c) => c._id === chatId);
-      let updated;
       if (chatExists) {
-        updated = prevChats.map((c) => {
-          if (c._id === chatId) {
-            return {
-              ...c,
-              latestMessage: latestMsgObj,
-            };
-          }
-          return c;
-        });
+        return prevChats.map((c) => (c._id === chatId ? { ...c, latestMessage: latestMsgObj } : c));
       } else if (currentChatObj) {
-        updated = [{ ...currentChatObj, latestMessage: latestMsgObj }, ...prevChats];
-      } else {
-        updated = prevChats;
+        return [{ ...currentChatObj, latestMessage: latestMsgObj }, ...prevChats];
       }
-      saveStoredChats(user._id, updated);
-      return updated;
+      return prevChats;
     });
 
-    // Broadcast via socket & localStorage cross-tab channel
     if (socket) {
       socket.emit("new message", newMessage);
     }
     notifySyncEvent("NEW_MESSAGE", { chatId, message: newMessage });
 
     // AI Bot Reply Handler
-    if (chatId === "chat_fire_bot") {
+    if (chatId.includes("bot")) {
       setTimeout(() => {
         const botText = getBotReply(content);
         const botMessage = {
@@ -356,28 +314,25 @@ const ChatProvider = ({ children }) => {
 
         setMessagesMap((prev) => {
           const chatMsgs = prev[chatId] || [];
-          const updated = { ...prev, [chatId]: [...chatMsgs, botMessage] };
-          saveStoredMessagesMap(user._id, updated);
-          return updated;
+          return { ...prev, [chatId]: [...chatMsgs, botMessage] };
         });
 
-        setChats((prevChats) => {
-          const updated = prevChats.map((c) => {
-            if (c._id === chatId) {
-              return {
-                ...c,
-                latestMessage: {
-                  content: botText,
-                  sender: fireBotUser,
-                  createdAt: botMessage.createdAt,
-                },
-              };
-            }
-            return c;
-          });
-          saveStoredChats(user._id, updated);
-          return updated;
-        });
+        saveMessageAsync(botMessage);
+
+        setChats((prevChats) =>
+          prevChats.map((c) =>
+            c._id === chatId
+              ? {
+                  ...c,
+                  latestMessage: {
+                    content: botText,
+                    sender: fireBotUser,
+                    createdAt: botMessage.createdAt,
+                  },
+                }
+              : c
+          )
+        );
 
         notifySyncEvent("NEW_MESSAGE", { chatId, message: botMessage });
       }, 700);
@@ -412,10 +367,10 @@ const ChatProvider = ({ children }) => {
         }
         return m;
       });
-      const updatedMap = { ...prev, [chatId]: updatedMsgs };
-      saveStoredMessagesMap(user._id, updatedMap);
-      return updatedMap;
+      return { ...prev, [chatId]: updatedMsgs };
     });
+
+    toggleReactionAsync(chatId, messageId, emoji);
 
     if (socket) {
       const otherUser = selectedChat?.users?.find((u) => u._id !== user._id);
@@ -538,10 +493,9 @@ const ChatProvider = ({ children }) => {
     setChats((prev) => {
       const existing = prev.find((c) => c._id === newChat._id);
       if (existing) return prev;
-      const updated = [newChat, ...prev];
-      saveStoredChats(user._id, updated);
-      return updated;
+      return [newChat, ...prev];
     });
+    saveChatAsync({ chat: newChat });
     setSelectedChat(newChat);
     notifySyncEvent("NEW_CHAT", newChat);
   };

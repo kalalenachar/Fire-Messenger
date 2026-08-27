@@ -1,8 +1,7 @@
-// Fire Messenger - Real Persistent Data Layer & Live Cross-Tab Synchronization Engine
+// Fire Messenger - Real Persistent Data Layer & REST API Client Engine
+import axios from "axios";
 
-const USERS_KEY = "fire_messenger_users_db";
-const CHATS_KEY = "fire_messenger_chats_db";
-const MESSAGES_KEY = "fire_messenger_messages_db";
+const API_BASE_URL = "http://localhost:5000/api";
 const CURRENT_USER_KEY = "userInfo";
 
 export const defaultUsersList = [
@@ -52,77 +51,60 @@ export const fireBotUser = {
   status: "Official Automated Assistant | Online 24/7",
 };
 
-// Seed default users into local storage if not present
-export const getRegisteredUsers = () => {
-  const data = localStorage.getItem(USERS_KEY);
-  if (!data) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(defaultUsersList));
-    return defaultUsersList;
-  }
+// --- AUTHENTICATION & USERS REST APIS ---
+
+export const loginUserAsync = async (email, password) => {
   try {
-    return JSON.parse(data);
-  } catch (e) {
-    return defaultUsersList;
+    const { data } = await axios.post(`${API_BASE_URL}/user/login`, { email, password });
+    if (data.success) {
+      setCurrentSessionUser(data.user);
+      return data.user;
+    }
+    throw new Error(data.message || "Login failed");
+  } catch (error) {
+    const msg = error.response?.data?.message || error.message || "Server connection error";
+    throw new Error(msg);
   }
 };
 
-export const saveRegisteredUsers = (users) => {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+export const registerUserAsync = async ({ name, email, password, pic, status }) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/user/signup`, { name, email, password, pic, status });
+    if (data.success) {
+      setCurrentSessionUser(data.user);
+      return data.user;
+    }
+    throw new Error(data.message || "Registration failed");
+  } catch (error) {
+    const msg = error.response?.data?.message || error.message || "Server connection error";
+    throw new Error(msg);
+  }
 };
 
-// User Registration
-export const registerUser = ({ name, email, password, pic, status }) => {
-  const users = getRegisteredUsers();
-  const existing = users.find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
-  if (existing) {
-    throw new Error("An account with this email address already exists.");
+export const updateUserProfileInDb = async (userId, updates) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/user/profile`, { userId, updates });
+    if (data.success) {
+      const current = getCurrentSessionUser();
+      if (current && current._id === userId) {
+        setCurrentSessionUser({ ...current, ...updates });
+      }
+      return data.user;
+    }
+  } catch (error) {
+    console.warn("Could not update user profile on server:", error);
   }
-
-  const newUser = {
-    _id: `user_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    name: name.trim(),
-    email: email.toLowerCase().trim(),
-    password: password,
-    pic: pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-    status: status || "Available | 🔥 Fire Messenger",
-    token: `token_${Date.now()}`,
-  };
-
-  users.push(newUser);
-  saveRegisteredUsers(users);
-
-  // Return clean user profile without password
-  const { password: _, ...cleanUser } = newUser;
-  return cleanUser;
 };
 
-// User Login
-export const loginUser = (email, password) => {
-  const users = getRegisteredUsers();
-  const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
-
-  if (!user) {
-    throw new Error("No account found with this email address.");
-  }
-  if (user.password !== password) {
-    throw new Error("Invalid password. Please check your credentials.");
-  }
-
-  const { password: _, ...cleanUser } = user;
-  return cleanUser;
-};
-
-// Update Profile
-export const updateUserProfileInDb = (userId, updates) => {
-  const users = getRegisteredUsers();
-  const updatedUsers = users.map((u) => (u._id === userId ? { ...u, ...updates } : u));
-  saveRegisteredUsers(updatedUsers);
-
-  // Update current user session if applicable
-  const current = getCurrentSessionUser();
-  if (current && current._id === userId) {
-    const updatedSession = { ...current, ...updates };
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedSession));
+export const searchUsersAsync = async (searchQuery, currentUserId) => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/user/search`, {
+      params: { search: searchQuery, userId: currentUserId },
+    });
+    return data.success ? data.users : [];
+  } catch (error) {
+    console.warn("Error searching users:", error);
+    return [];
   }
 };
 
@@ -145,131 +127,84 @@ export const clearCurrentSession = () => {
   localStorage.removeItem(CURRENT_USER_KEY);
 };
 
-// Initial Seed Chats
-export const getInitialChatsForUser = (user) => {
-  const allUsers = getRegisteredUsers();
-  const sarah = allUsers.find((u) => u._id === "user_sarah") || defaultUsersList[1];
-  const marcus = allUsers.find((u) => u._id === "user_marcus") || defaultUsersList[2];
+// --- CHATS & MESSAGES REST APIS ---
 
-  return [
-    {
-      _id: "chat_fire_bot",
-      chatName: "Fire Bot 🔥",
-      isGroupChat: false,
-      users: [user, fireBotUser],
-      latestMessage: {
-        content: "Welcome to Fire Messenger! Send a message or command like /help",
-        sender: fireBotUser,
-        createdAt: new Date(Date.now() - 60000).toISOString(),
-      },
-      unread: 1,
-      pinned: true,
-      category: "Bots",
-    },
-    {
-      _id: "chat_fire_squad",
-      chatName: "Fire Squad 🔥 Core Team",
-      isGroupChat: true,
-      groupAdmin: user,
-      users: [user, sarah, marcus],
-      latestMessage: {
-        content: "Welcome to the team! Real-time messaging is live 🔥",
-        sender: sarah,
-        createdAt: new Date(Date.now() - 300000).toISOString(),
-      },
-      unread: 2,
-      pinned: true,
-      category: "Groups",
-    },
-    {
-      _id: `chat_sarah_${user._id}`,
-      chatName: "Sarah Jenkins",
-      isGroupChat: false,
-      users: [user, sarah],
-      latestMessage: {
-        content: "Hey! Ready to test real-time chat?",
-        sender: sarah,
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-      },
-      unread: 0,
-      pinned: false,
-      category: "Personal",
-    },
-  ];
-};
-
-export const getInitialMessagesForUser = (user) => {
-  return {
-    chat_fire_bot: [
-      {
-        _id: "msg_bot_1",
-        sender: fireBotUser,
-        content: "Greetings! Welcome to **Fire Messenger 🔥**.",
-        chat: "chat_fire_bot",
-        createdAt: new Date(Date.now() - 360000).toISOString(),
-        reactions: { "🔥": 2 },
-      },
-      {
-        _id: "msg_bot_2",
-        sender: fireBotUser,
-        content: "I am your automated AI assistant. Try commands like `/help`, `/fire`, `/joke`, `/weather`, or `/time`!",
-        chat: "chat_fire_bot",
-        createdAt: new Date(Date.now() - 60000).toISOString(),
-        reactions: { "👍": 1 },
-      },
-    ],
-    chat_fire_squad: [
-      {
-        _id: "msg_squad_1",
-        sender: { _id: "user_marcus", name: "Marcus Vance", pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80" },
-        content: "Hey team! Fire Messenger real registration system is officially online!",
-        chat: "chat_fire_squad",
-        createdAt: new Date(Date.now() - 1800000).toISOString(),
-        reactions: { "🚀": 3 },
-      },
-      {
-        _id: "msg_squad_2",
-        sender: { _id: "user_sarah", name: "Sarah Jenkins", pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80" },
-        content: "Welcome to the team! Real-time messaging is live 🔥",
-        chat: "chat_fire_squad",
-        createdAt: new Date(Date.now() - 300000).toISOString(),
-        reactions: { "❤️": 2, "🔥": 4 },
-      },
-    ],
-  };
-};
-
-// Storage Helpers for Chats & Messages
-export const getStoredChats = (userId) => {
-  const key = `${CHATS_KEY}_${userId}`;
-  const data = localStorage.getItem(key);
-  if (!data) return null;
+export const fetchUserChatsAsync = async (userId) => {
   try {
-    return JSON.parse(data);
-  } catch (e) {
-    return null;
+    const { data } = await axios.get(`${API_BASE_URL}/chats/${userId}`);
+    return data.success ? data.chats : [];
+  } catch (error) {
+    console.warn("Server unavailable, fallback to stored chats:", error);
+    return [];
   }
+};
+
+export const saveChatAsync = async (chatData) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/chats`, chatData);
+    return data.success ? data.chat : null;
+  } catch (error) {
+    console.warn("Error saving chat to server DB:", error);
+  }
+};
+
+export const fetchChatMessagesAsync = async (chatId) => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/messages/${chatId}`);
+    return data.success ? data.messages : [];
+  } catch (error) {
+    console.warn("Error fetching messages for chat:", chatId, error);
+    return [];
+  }
+};
+
+export const saveMessageAsync = async (newMessage) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/messages`, newMessage);
+    return data.success ? data.message : newMessage;
+  } catch (error) {
+    console.warn("Error persisting message to server DB:", error);
+    return newMessage;
+  }
+};
+
+export const toggleReactionAsync = async (chatId, messageId, emoji) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/messages/reaction`, { chatId, messageId, emoji });
+    return data.success ? data.messages : [];
+  } catch (error) {
+    console.warn("Error toggling reaction on server DB:", error);
+  }
+};
+
+// Synchronous fallbacks for backwards compatibility
+export const loginUser = loginUserAsync;
+export const registerUser = registerUserAsync;
+
+export const getStoredChats = (userId) => {
+  const data = localStorage.getItem(`fire_messenger_chats_${userId}`);
+  return data ? JSON.parse(data) : null;
 };
 
 export const saveStoredChats = (userId, chats) => {
-  const key = `${CHATS_KEY}_${userId}`;
-  localStorage.setItem(key, JSON.stringify(chats));
+  localStorage.setItem(`fire_messenger_chats_${userId}`, JSON.stringify(chats));
 };
 
 export const getStoredMessagesMap = (userId) => {
-  const key = `${MESSAGES_KEY}_${userId}`;
-  const data = localStorage.getItem(key);
-  if (!data) return null;
-  try {
-    return JSON.parse(data);
-  } catch (e) {
-    return null;
-  }
+  const data = localStorage.getItem(`fire_messenger_messages_${userId}`);
+  return data ? JSON.parse(data) : null;
 };
 
 export const saveStoredMessagesMap = (userId, messagesMap) => {
-  const key = `${MESSAGES_KEY}_${userId}`;
-  localStorage.setItem(key, JSON.stringify(messagesMap));
+  localStorage.setItem(`fire_messenger_messages_${userId}`, JSON.stringify(messagesMap));
+};
+
+export const getInitialChatsForUser = (user) => {
+  return [];
+};
+
+export const getInitialMessagesForUser = (user) => {
+  return {};
 };
 
 // Live Broadcast Sync Channel Across Tabs
@@ -296,3 +231,4 @@ export const subscribeSyncEvent = (callback) => {
     broadcastChannel.removeEventListener("message", handler);
   };
 };
+

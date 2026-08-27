@@ -61,7 +61,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 3px;
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 4px;
@@ -70,7 +70,15 @@
 
 .status-ticks {
   color: #53bdeb; /* WhatsApp blue ticks */
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  line-height: 1;
+}
+
+.status-ticks svg {
+  display: block;
 }
 
 /* Reaction Toolbar */

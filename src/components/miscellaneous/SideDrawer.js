@@ -27,7 +27,7 @@ import ProfileModal from "./ProfileModal";
 import GroupChatModal from "./GroupChatModal";
 import UserListItem from "../userAvatar/UserListItem";
 import { ChatState } from "../../Context/ChatProvider";
-import { getRegisteredUsers, clearCurrentSession } from "../../data/fireStorage";
+import { searchUsersAsync, clearCurrentSession } from "../../data/fireStorage";
 
 function SideDrawer() {
   const [search, setSearch] = useState("");
@@ -55,26 +55,17 @@ function SideDrawer() {
     history.push("/");
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!search.trim()) return;
     setLoading(true);
-
-    const allRegisteredUsers = getRegisteredUsers();
-    const results = allRegisteredUsers.filter(
-      (u) =>
-        u._id !== user?._id &&
-        (u.name.toLowerCase().includes(search.toLowerCase()) ||
-          u.email.toLowerCase().includes(search.toLowerCase()))
-    );
-
+    const results = await searchUsersAsync(search, user?._id);
     setSearchResult(results);
     setLoading(false);
   };
 
-  const accessChat = (targetUserId) => {
-    const allUsers = getRegisteredUsers();
-    const targetUser = allUsers.find((u) => u._id === targetUserId);
+  const accessChat = (targetUser) => {
     if (!targetUser) return;
+    const targetUserId = typeof targetUser === "object" ? targetUser._id : targetUser;
 
     const existingChat = chats.find(
       (c) => !c.isGroupChat && c.users.some((u) => u._id === targetUserId)
@@ -83,11 +74,12 @@ function SideDrawer() {
     if (existingChat) {
       setSelectedChat(existingChat);
     } else {
+      const targetObj = typeof targetUser === "object" ? targetUser : { _id: targetUserId, name: "User" };
       const newChat = {
-        _id: `chat_${user._id}_${targetUser._id}`,
-        chatName: targetUser.name,
+        _id: `chat_${user._id}_${targetUserId}`,
+        chatName: targetObj.name,
         isGroupChat: false,
-        users: [user, targetUser],
+        users: [user, targetObj],
         latestMessage: { content: "Started a new conversation 🔥", createdAt: new Date().toISOString() },
         unread: 0,
         category: "Personal",
