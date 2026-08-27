@@ -21,7 +21,7 @@ import {
   Badge,
   useDisclosure,
 } from "@chakra-ui/react";
-import { PhoneIcon, ViewIcon, AttachmentIcon } from "@chakra-ui/icons";
+import { PhoneIcon, ViewIcon, AttachmentIcon, ArrowBackIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
 import ProfileModal from "./miscellaneous/ProfileModal";
 import VoicePlayer from "./VoicePlayer";
@@ -92,6 +92,7 @@ const getFileBadgeClass = (category) => {
 const SingleChat = () => {
   const {
     selectedChat,
+    setSelectedChat,
     user,
     messagesMap,
     sendMessage,
@@ -575,7 +576,17 @@ const SingleChat = () => {
         zIndex="2"
         boxShadow="var(--shadow-sm)"
       >
-        <Box display="flex" alignItems="center" gap={3}>
+        <Box display="flex" alignItems="center" gap={2}>
+          <IconButton
+            display={{ base: "flex", md: "none" }}
+            icon={<ArrowBackIcon fontSize="20px" />}
+            onClick={() => setSelectedChat(null)}
+            aria-label="Back to chat list"
+            variant="ghost"
+            color="var(--text-header)"
+            size="sm"
+            mr={1}
+          />
           {header.isSavedMessages ? (
             <Box
               w="40px"

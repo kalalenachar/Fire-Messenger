@@ -411,7 +411,8 @@ const ChatProvider = ({ children }) => {
     const userFolders = await fetchUserFoldersAsync(currentUser._id);
     setFolders(userFolders);
 
-    if (userChats.length > 0 && !selectedChatRef.current) {
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    if (userChats.length > 0 && !selectedChatRef.current && !isMobile) {
       setSelectedChat(userChats[0]);
     }
     loadStatusData(currentUser);
