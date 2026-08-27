@@ -303,8 +303,8 @@ const ChatProvider = ({ children }) => {
   }, [user, handleUserProfileUpdated]);
 
   // Send message function
-  const sendMessage = (chatId, content, type = "text", attachmentData = null) => {
-    if (!content.trim() && type === "text" && !attachmentData) return;
+  const sendMessage = (chatId, content, type = "text", attachmentData = null, fileMeta = {}) => {
+    if (!content?.trim() && type === "text" && !attachmentData) return;
     if (!user || !chatId) return;
 
     const currentChatObj =
@@ -312,8 +312,20 @@ const ChatProvider = ({ children }) => {
         ? selectedChat
         : chats.find((c) => c._id === chatId) || null;
 
+    const fileName = fileMeta.fileName || (type === "file" ? content : null);
+    const fileSize = fileMeta.fileSize || null;
+    const fileType = fileMeta.fileType || null;
+
     const displayContent =
-      type === "voice" ? "🎤 Voice Note" : type === "image" ? "📷 Photo" : type === "file" ? `📄 File: ${content}` : content;
+      type === "voice"
+        ? "🎤 Voice Note"
+        : type === "video"
+        ? "🎥 Video"
+        : type === "image"
+        ? "📷 Photo"
+        : type === "file"
+        ? `📄 ${fileName || "File"}`
+        : content;
 
     const newMessage = {
       _id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -321,7 +333,10 @@ const ChatProvider = ({ children }) => {
       content,
       type,
       audioUrl: type === "voice" ? attachmentData : null,
-      fileUrl: type === "image" || type === "file" ? attachmentData : null,
+      fileUrl: type === "image" || type === "file" || type === "video" ? attachmentData : null,
+      fileName,
+      fileSize,
+      fileType,
       chat: chatId,
       chatObj: currentChatObj,
       createdAt: new Date().toISOString(),

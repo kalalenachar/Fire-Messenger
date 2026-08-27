@@ -341,8 +341,19 @@ function addMessage(message) {
   // Update latest message in chat
   const chatIndex = db.chats.findIndex((c) => c._id === chatId);
   if (chatIndex !== -1) {
+    const displayContent =
+      message.type === "voice"
+        ? "🎤 Voice Note"
+        : message.type === "video"
+        ? "🎥 Video"
+        : message.type === "image"
+        ? "📷 Photo"
+        : message.type === "file"
+        ? `📄 ${message.fileName || message.content || "File"}`
+        : message.content;
+
     db.chats[chatIndex].latestMessage = {
-      content: message.type === "voice" ? "🎤 Voice Note" : message.type === "image" ? "📷 Photo" : message.type === "file" ? `📄 ${message.content}` : message.content,
+      content: displayContent,
       sender: message.sender,
       createdAt: message.createdAt,
     };

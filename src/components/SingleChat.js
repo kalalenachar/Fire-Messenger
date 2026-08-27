@@ -13,7 +13,10 @@ import {
   Modal,
   ModalOverlay,
   ModalContent,
+  ModalHeader,
+  ModalFooter,
   ModalBody,
+  ModalCloseButton,
   Image,
   useDisclosure,
 } from "@chakra-ui/react";
@@ -26,6 +29,59 @@ const DoubleTickIcon = () => (
     <path d="M15.01 3.316l-6.88 6.88-3.13-3.13 1.06-1.06 2.07 2.07 5.82-5.82 1.06 1.06zm-4.32 0l-1.06-1.06-4.76 4.76-2.07-2.07-1.06 1.06 3.13 3.13 5.82-5.82z" />
   </svg>
 );
+
+const DownloadIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const formatBytes = (bytes, decimals = 1) => {
+  if (!bytes || bytes === 0) return "0 B";
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+};
+
+const getFileCategory = (mimeType = "", fileName = "") => {
+  const ext = fileName ? fileName.split(".").pop().toLowerCase() : "";
+  if (mimeType?.startsWith("image/")) return "image";
+  if (mimeType?.startsWith("video/")) return "video";
+  if (mimeType?.startsWith("audio/")) return "audio";
+  if (ext === "pdf" || mimeType?.includes("pdf")) return "pdf";
+  if (["doc", "docx", "txt", "rtf", "odt"].includes(ext) || mimeType?.includes("word") || mimeType?.includes("document")) return "doc";
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext) || mimeType?.includes("zip") || mimeType?.includes("compressed")) return "zip";
+  if (["js", "ts", "jsx", "tsx", "html", "css", "json", "py", "java", "cpp", "c", "cs"].includes(ext)) return "code";
+  return "file";
+};
+
+const getFileCategoryIcon = (category) => {
+  switch (category) {
+    case "pdf": return "📄";
+    case "doc": return "📝";
+    case "zip": return "📦";
+    case "code": return "💻";
+    case "video": return "🎥";
+    case "audio": return "🎵";
+    default: return "📎";
+  }
+};
+
+const getFileBadgeClass = (category) => {
+  switch (category) {
+    case "pdf": return "file-icon-pdf";
+    case "doc": return "file-icon-doc";
+    case "zip": return "file-icon-zip";
+    case "code": return "file-icon-code";
+    case "video": return "file-icon-video";
+    case "audio": return "file-icon-audio";
+    default: return "file-icon-generic";
+  }
+};
 
 const SingleChat = () => {
   const {
@@ -45,6 +101,16 @@ const SingleChat = () => {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Attachment Preview Modal State
+  const [attachmentModal, setAttachmentModal] = useState({
+    isOpen: false,
+    file: null,
+    dataUrl: null,
+    category: null,
+    caption: "",
+  });
 
   const { isOpen: isImageOpen, onOpen: onImageOpen, onClose: onImageClose } = useDisclosure();
 
@@ -117,7 +183,13 @@ const SingleChat = () => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const audioBase64 = reader.result;
-          sendMessage(selectedChat._id, `🎤 Voice Note (${recordingSeconds}s)`, "voice", audioBase64);
+          sendMessage(
+            selectedChat._id,
+            `🎤 Voice Note (${recordingSeconds}s)`,
+            "voice",
+            audioBase64,
+            { fileName: `voice_note_${Date.now()}.webm`, fileSize: audioBlob.size, fileType: "audio/webm" }
+          );
         };
         reader.readAsDataURL(audioBlob);
 
@@ -138,23 +210,74 @@ const SingleChat = () => {
     setIsRecording(false);
   };
 
+  // Drag & Drop Handlers
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget && !e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      processSelectedFile(e.dataTransfer.files[0]);
+    }
+  };
+
   // Attachment Upload Handler
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    processSelectedFile(file);
+    e.target.value = "";
+  };
 
-    const isImage = file.type.startsWith("image/");
+  const processSelectedFile = (file) => {
+    if (!file) return;
+    const category = getFileCategory(file.type, file.name);
     const reader = new FileReader();
     reader.onloadend = () => {
-      const fileData = reader.result;
-      if (isImage) {
-        sendMessage(selectedChat._id, `📷 Photo (${file.name})`, "image", fileData);
-      } else {
-        sendMessage(selectedChat._id, `📄 File: ${file.name}`, "file", fileData);
-      }
+      setAttachmentModal({
+        isOpen: true,
+        file: file,
+        dataUrl: reader.result,
+        category: category,
+        caption: "",
+      });
     };
     reader.readAsDataURL(file);
-    e.target.value = "";
+  };
+
+  const confirmSendAttachment = () => {
+    if (!attachmentModal.file || !attachmentModal.dataUrl || !selectedChat) return;
+
+    const { file, dataUrl, category, caption } = attachmentModal;
+    const msgType = category === "image" ? "image" : category === "video" ? "video" : category === "audio" ? "voice" : "file";
+    const fileMeta = {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+    };
+
+    sendMessage(
+      selectedChat._id,
+      caption.trim() || (category === "image" ? `📷 Photo` : category === "video" ? `🎥 Video` : file.name),
+      msgType,
+      dataUrl,
+      fileMeta
+    );
+
+    setAttachmentModal({ isOpen: false, file: null, dataUrl: null, category: null, caption: "" });
   };
 
   if (!selectedChat || typeof selectedChat !== "object" || !selectedChat._id) {
@@ -189,7 +312,7 @@ const SingleChat = () => {
           Fire Messenger Web
         </Text>
         <Text fontSize="sm" color="var(--text-secondary)" maxW="400px">
-          Real-time WebSockets messaging, live WebRTC Audio/Video calling, typing status, voice notes, and media attachments.
+          Real-time WebSockets messaging, live WebRTC Audio/Video calling, drag & drop file sharing, voice notes, and media attachments.
         </Text>
       </Box>
     );
@@ -237,7 +360,27 @@ const SingleChat = () => {
   const availableEmojis = ["🔥", "❤️", "👍", "😂", "👏", "🚀", "💻", "✨"];
 
   return (
-    <Box flex="1" h="100%" display="flex" flexDirection="column" bg="var(--bg-chat)" className="chat-wallpaper">
+    <Box
+      flex="1"
+      h="100%"
+      display="flex"
+      flexDirection="column"
+      bg="var(--bg-chat)"
+      className="chat-wallpaper"
+      position="relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag & Drop Visual Overlay */}
+      {isDragging && (
+        <Box className="drag-drop-overlay">
+          <Text fontSize="4xl" mb={2}>📁</Text>
+          <Text fontSize="xl" fontWeight="bold">Drop File Here to Share</Text>
+          <Text fontSize="sm" opacity={0.8}>Supports Images, PDFs, Videos, Documents, Archives & Code</Text>
+        </Box>
+      )}
+
       {/* Header Bar */}
       <Box
         px={4}
@@ -313,6 +456,8 @@ const SingleChat = () => {
         {activeMessages.map((msg) => {
           const isMe = msg.sender?._id === user?._id;
           const showHoverReactions = hoveredMsgId === msg._id;
+          const category = getFileCategory(msg.fileType, msg.fileName || msg.content);
+          const hasFileUrl = Boolean(msg.fileUrl);
 
           return (
             <Box
@@ -347,29 +492,84 @@ const SingleChat = () => {
                   </Text>
                 )}
 
-                {/* Render Text, Voice, or Image Attachment */}
-                {msg.type === "image" && (msg.fileUrl || msg.content) ? (
+                {/* --- RENDER IMAGE ATTACHMENT --- */}
+                {msg.type === "image" && hasFileUrl ? (
+                  <Box mb={1} position="relative" group="true">
+                    <Box position="relative" display="inline-block" overflow="hidden" borderRadius="12px">
+                      <Image
+                        src={msg.fileUrl}
+                        alt="Photo Attachment"
+                        maxW="280px"
+                        maxH="300px"
+                        objectFit="cover"
+                        borderRadius="12px"
+                        cursor="pointer"
+                        transition="transform 0.2s ease"
+                        _hover={{ transform: "scale(1.02)" }}
+                        onClick={() => {
+                          setPreviewImage(msg.fileUrl);
+                          onImageOpen();
+                        }}
+                      />
+                      <a
+                        href={msg.fileUrl}
+                        download={msg.fileName || "photo.png"}
+                        className="file-download-btn"
+                        style={{ position: "absolute", bottom: "8px", right: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}
+                        title="Download Photo"
+                      >
+                        <DownloadIcon />
+                      </a>
+                    </Box>
+                    {msg.content && !msg.content.startsWith("📷 Photo") && (
+                      <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
+                        {msg.content}
+                      </Text>
+                    )}
+                  </Box>
+                ) : msg.type === "video" && hasFileUrl ? (
+                  /* --- RENDER VIDEO ATTACHMENT --- */
                   <Box mb={1}>
-                    <Image
-                      src={msg.fileUrl || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=300&auto=format&fit=crop&q=80"}
-                      alt="Attachment"
-                      maxW="260px"
-                      borderRadius="md"
-                      cursor="pointer"
-                      onClick={() => {
-                        setPreviewImage(msg.fileUrl);
-                        onImageOpen();
-                      }}
-                    />
-                    <Text fontSize="xs" mt={1} color="var(--text-secondary)">{msg.content}</Text>
+                    <Box position="relative" maxW="290px" borderRadius="12px" overflow="hidden">
+                      <video
+                        controls
+                        src={msg.fileUrl}
+                        style={{ width: "100%", maxHeight: "280px", borderRadius: "12px", background: "#000" }}
+                      />
+                      <a
+                        href={msg.fileUrl}
+                        download={msg.fileName || "video.mp4"}
+                        className="file-download-btn"
+                        style={{ position: "absolute", top: "8px", right: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}
+                        title="Download Video"
+                      >
+                        <DownloadIcon />
+                      </a>
+                    </Box>
+                    {msg.content && !msg.content.startsWith("🎥 Video") && (
+                      <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
+                        {msg.content}
+                      </Text>
+                    )}
                   </Box>
                 ) : msg.type === "voice" ? (
+                  /* --- RENDER VOICE NOTE --- */
                   <Box display="flex" flexDirection="column" gap={1}>
-                    <Text fontSize="sm" fontWeight="bold" color="var(--color-primary)">
+                    <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)">
                       {msg.content}
                     </Text>
-                    {msg.audioUrl ? (
-                      <audio controls src={msg.audioUrl} style={{ height: "32px", width: "220px" }} />
+                    {msg.audioUrl || msg.fileUrl ? (
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <audio controls src={msg.audioUrl || msg.fileUrl} style={{ height: "36px", width: "230px" }} />
+                        <a
+                          href={msg.audioUrl || msg.fileUrl}
+                          download={msg.fileName || "voice_note.webm"}
+                          className="file-download-btn"
+                          title="Download Voice Note"
+                        >
+                          <DownloadIcon />
+                        </a>
+                      </Box>
                     ) : (
                       <Box display="flex" alignItems="center" gap={2} bg="rgba(0,0,0,0.2)" p={2} borderRadius="md">
                         <span>🔊</span>
@@ -377,7 +577,40 @@ const SingleChat = () => {
                       </Box>
                     )}
                   </Box>
+                ) : msg.type === "file" || msg.fileName ? (
+                  /* --- RENDER FILE / PDF / DOCUMENT / ZIP CARD --- */
+                  <Box mb={1}>
+                    <Box className="file-attachment-card">
+                      <Box className={`file-icon-badge ${getFileBadgeClass(category)}`}>
+                        {getFileCategoryIcon(category)}
+                      </Box>
+                      <Box className="file-info">
+                        <Text className="file-name" title={msg.fileName || msg.content}>
+                          {msg.fileName || msg.content}
+                        </Text>
+                        <Text className="file-size">
+                          {formatBytes(msg.fileSize)} • {category.toUpperCase()}
+                        </Text>
+                      </Box>
+                      {hasFileUrl && (
+                        <a
+                          href={msg.fileUrl}
+                          download={msg.fileName || "attachment"}
+                          className="file-download-btn"
+                          title={`Download ${msg.fileName || "File"}`}
+                        >
+                          <DownloadIcon />
+                        </a>
+                      )}
+                    </Box>
+                    {msg.content && msg.content !== msg.fileName && !msg.content.startsWith("📄") && (
+                      <Text fontSize="sm" mt={1} whiteSpace="pre-wrap">
+                        {msg.content}
+                      </Text>
+                    )}
+                  </Box>
                 ) : (
+                  /* --- RENDER REGULAR TEXT MESSAGE --- */
                   <Text fontSize="sm" whiteSpace="pre-wrap">
                     {msg.content}
                   </Text>
@@ -468,9 +701,9 @@ const SingleChat = () => {
           ref={fileInputRef}
           style={{ display: "none" }}
           onChange={handleFileUpload}
-          accept="image/*,audio/*,.pdf,.doc,.docx"
+          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.zip,.rar,.txt,.js,.py"
         />
-        <Tooltip label="Attach Media / Photo / File" placement="top">
+        <Tooltip label="Attach Photo, Video, PDF, or Document" placement="top">
           <IconButton
             icon={<AttachmentIcon fontSize="19px" />}
             size="md"
@@ -502,7 +735,7 @@ const SingleChat = () => {
         ) : (
           <Input
             flex="1"
-            placeholder="Type a message..."
+            placeholder="Type a message or drop files to send..."
             value={textInput}
             onChange={handleInputChange}
             onKeyDown={handleKeyPress}
@@ -538,12 +771,59 @@ const SingleChat = () => {
         )}
       </Box>
 
-      {/* Image Preview Lightbox Modal */}
+      {/* Attachment Preview & Caption Modal */}
+      <Modal isOpen={attachmentModal.isOpen} onClose={() => setAttachmentModal({ isOpen: false, file: null, dataUrl: null, category: null, caption: "" })} isCentered size="lg">
+        <ModalOverlay backdropFilter="blur(6px)" />
+        <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="20px" border="1px solid var(--color-border)">
+          <ModalHeader borderBottom="1px solid var(--color-border)" fontSize="lg" fontWeight="bold">
+            Send Attachment
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody p={6} display="flex" flexDirection="column" alignItems="center" gap={4}>
+            {attachmentModal.category === "image" ? (
+              <Image src={attachmentModal.dataUrl} maxH="280px" borderRadius="14px" objectFit="contain" boxShadow="var(--shadow-md)" />
+            ) : attachmentModal.category === "video" ? (
+              <video controls src={attachmentModal.dataUrl} style={{ maxHeight: "280px", width: "100%", borderRadius: "14px" }} />
+            ) : (
+              <Box className="file-attachment-card" w="100%" maxW="100%" p={4}>
+                <Box className={`file-icon-badge ${getFileBadgeClass(attachmentModal.category)}`} w="48px" h="48px" fontSize="24px">
+                  {getFileCategoryIcon(attachmentModal.category)}
+                </Box>
+                <Box className="file-info">
+                  <Text className="file-name" fontSize="sm">{attachmentModal.file?.name}</Text>
+                  <Text className="file-size">{formatBytes(attachmentModal.file?.size)} • {attachmentModal.file?.type || "File"}</Text>
+                </Box>
+              </Box>
+            )}
+
+            <Input
+              placeholder="Add an optional caption..."
+              value={attachmentModal.caption}
+              onChange={(e) => setAttachmentModal((prev) => ({ ...prev, caption: e.target.value }))}
+              bg="var(--bg-search)"
+              border="none"
+              borderRadius="14px"
+              color="var(--text-primary)"
+              _placeholder={{ color: "var(--text-secondary)" }}
+            />
+          </ModalBody>
+          <ModalFooter borderTop="1px solid var(--color-border)" gap={3}>
+            <Button variant="ghost" color="var(--text-secondary)" onClick={() => setAttachmentModal({ isOpen: false, file: null, dataUrl: null, category: null, caption: "" })}>
+              Cancel
+            </Button>
+            <Button bg="var(--color-primary)" color="white" _hover={{ bg: "var(--color-primary-hover)" }} onClick={confirmSendAttachment} px={6}>
+              Send Attachment
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Image Lightbox Modal */}
       <Modal isOpen={isImageOpen} onClose={onImageClose} size="xl" isCentered>
-        <ModalOverlay />
+        <ModalOverlay backdropFilter="blur(8px)" />
         <ModalContent bg="transparent" boxShadow="none">
           <ModalBody p={0} display="flex" justifyContent="center" alignItems="center">
-            <Image src={previewImage} maxH="80vh" maxW="90vw" borderRadius="lg" />
+            <Image src={previewImage} maxH="85vh" maxW="90vw" borderRadius="lg" boxShadow="var(--shadow-xl)" />
           </ModalBody>
         </ModalContent>
       </Modal>

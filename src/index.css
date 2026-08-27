@@ -105,3 +105,111 @@ code {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(134, 150, 160, 0.5);
 }
+
+/* Drag & Drop File Overlay */
+.drag-drop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 2px dashed var(--color-primary);
+  border-radius: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+  animation: pulse-drop 1.5s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes pulse-drop {
+  0%, 100% { opacity: 0.9; transform: scale(0.99); }
+  50% { opacity: 1; transform: scale(1.005); }
+}
+
+/* File Attachment Card */
+.file-attachment-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  max-w: 320px;
+  transition: all 0.2s ease;
+}
+
+.file-attachment-card:hover {
+  background: rgba(0, 0, 0, 0.35);
+  border-color: var(--color-primary);
+}
+
+.file-icon-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: bold;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.file-icon-pdf { background: #ef4444; color: #fff; }
+.file-icon-doc { background: #3b82f6; color: #fff; }
+.file-icon-zip { background: #eab308; color: #fff; }
+.file-icon-code { background: #10b981; color: #fff; }
+.file-icon-video { background: #8b5cf6; color: #fff; }
+.file-icon-audio { background: #ec4899; color: #fff; }
+.file-icon-generic { background: #64748b; color: #fff; }
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+.file-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.file-download-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-primary);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.file-download-btn:hover {
+  background: var(--color-primary);
+  color: #fff;
+  transform: scale(1.1);
+}
+
