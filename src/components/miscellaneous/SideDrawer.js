@@ -252,7 +252,7 @@ function SideDrawer() {
               <Text mt={4} color="var(--text-muted)" fontSize="sm">No contact matching "{search}" found.</Text>
             ) : (
               searchResult?.map((u) => (
-                <UserListItem key={u._id} user={u} handleFunction={() => accessChat(u._id)} />
+                <UserListItem key={u._id} user={u} handleFunction={() => accessChat(u)} />
               ))
             )}
           </DrawerBody>

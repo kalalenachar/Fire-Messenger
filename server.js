@@ -55,6 +55,9 @@ app.put("/api/user/profile", (req, res) => {
   try {
     const { userId, updates } = req.body;
     const updatedUser = db.updateUserProfile(userId, updates);
+    if (updatedUser) {
+      io.emit("user profile updated", updatedUser);
+    }
     res.json({ success: true, user: updatedUser });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -143,6 +146,11 @@ io.on("connection", (socket) => {
     socket.userId = userData._id;
     socket.emit("connected");
     io.emit("user presence", { userId: userData._id, status: "online" });
+  });
+
+  socket.on("update user profile", (updatedUser) => {
+    if (!updatedUser || !updatedUser._id) return;
+    socket.broadcast.emit("user profile updated", updatedUser);
   });
 
   socket.on("join chat", (room) => {

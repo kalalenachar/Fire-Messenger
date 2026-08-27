@@ -121,9 +121,8 @@ const ScrollableChat = ({ messages }) => {
                     size="sm"
                     cursor="pointer"
                     name={m.sender.name}
-                    src={m.sender.name}
+                    src={m.sender.pic}
                     color="white"
-                    bg={`#${Math.floor(Math.random() * 16777215).toString(16)}`}
                   />
                 </Tooltip>
               )}

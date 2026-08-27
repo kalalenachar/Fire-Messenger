@@ -253,7 +253,32 @@ function searchUsers(query, currentUserId) {
 // Chat methods
 function getUserChats(userId) {
   const db = readDb();
-  return db.chats.filter((c) => c.users.some((u) => u._id === userId));
+  const userMap = new Map(db.users.map((u) => [u._id, u]));
+  if (fireBotUser) userMap.set(fireBotUser._id, fireBotUser);
+
+  return db.chats
+    .filter((c) => c.users && c.users.some((u) => u._id === userId))
+    .map((c) => ({
+      ...c,
+      users: c.users.map((u) => {
+        const fullUser = userMap.get(u._id);
+        if (fullUser) {
+          const { password, ...clean } = fullUser;
+          return { ...clean, ...u, pic: fullUser.pic || u.pic, name: fullUser.name || u.name, status: fullUser.status || u.status };
+        }
+        return u;
+      }),
+      latestMessage: c.latestMessage?.sender?._id && userMap.get(c.latestMessage.sender._id)
+        ? {
+            ...c.latestMessage,
+            sender: (() => {
+              const full = userMap.get(c.latestMessage.sender._id);
+              const { password, ...clean } = full;
+              return { ...clean, ...c.latestMessage.sender, pic: full.pic || c.latestMessage.sender.pic };
+            })(),
+          }
+        : c.latestMessage,
+    }));
 }
 
 function saveChat(chat) {

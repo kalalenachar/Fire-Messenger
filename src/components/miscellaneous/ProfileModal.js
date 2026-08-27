@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ViewIcon, EditIcon, CheckIcon } from "@chakra-ui/icons";
 import {
   Modal,
@@ -32,13 +32,45 @@ const ProfileModal = ({ user: targetUser, children }) => {
   const [status, setStatus] = useState(targetUser?.status || "");
   const [pic, setPic] = useState(targetUser?.pic || "");
 
+  useEffect(() => {
+    setName(targetUser?.name || "");
+    setStatus(targetUser?.status || "");
+    setPic(targetUser?.pic || "");
+  }, [targetUser, isOpen]);
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setPic(reader.result);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 250;
+        const MAX_HEIGHT = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const resizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
+        setPic(resizedBase64);
+      };
+      img.src = event.target.result;
     };
     reader.readAsDataURL(file);
   };

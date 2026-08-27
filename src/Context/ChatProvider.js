@@ -86,6 +86,58 @@ const ChatProvider = ({ children }) => {
     );
   }, [selectedChat]);
 
+  // Handle user profile updates across local state, chats, and messages
+  const handleUserProfileUpdated = useCallback((updatedUser) => {
+    if (!updatedUser || !updatedUser._id) return;
+
+    setUser((currentUser) => {
+      if (currentUser && currentUser._id === updatedUser._id) {
+        const merged = { ...currentUser, ...updatedUser };
+        setCurrentSessionUser(merged);
+        return merged;
+      }
+      return currentUser;
+    });
+
+    setChats((prevChats) =>
+      prevChats.map((c) => {
+        const updatedUsers = c.users?.map((u) => (u._id === updatedUser._id ? { ...u, ...updatedUser } : u));
+        return {
+          ...c,
+          users: updatedUsers,
+          latestMessage: c.latestMessage?.sender?._id === updatedUser._id
+            ? { ...c.latestMessage, sender: { ...c.latestMessage.sender, ...updatedUser } }
+            : c.latestMessage,
+        };
+      })
+    );
+
+    setSelectedChat((prevSelected) => {
+      if (!prevSelected) return prevSelected;
+      const isUserInChat = prevSelected.users?.some((u) => u._id === updatedUser._id);
+      if (!isUserInChat) return prevSelected;
+      return {
+        ...prevSelected,
+        users: prevSelected.users?.map((u) => (u._id === updatedUser._id ? { ...u, ...updatedUser } : u)),
+      };
+    });
+
+    setMessagesMap((prevMap) => {
+      const newMap = { ...prevMap };
+      let changed = false;
+      for (const chatId in newMap) {
+        const msgs = newMap[chatId];
+        if (msgs?.some((m) => m.sender?._id === updatedUser._id)) {
+          changed = true;
+          newMap[chatId] = msgs.map((m) =>
+            m.sender?._id === updatedUser._id ? { ...m, sender: { ...m.sender, ...updatedUser } } : m
+          );
+        }
+      }
+      return changed ? newMap : prevMap;
+    });
+  }, []);
+
   // Handle Socket.IO connection and real-time events
   useEffect(() => {
     if (!user) return;
@@ -101,6 +153,10 @@ const ChatProvider = ({ children }) => {
 
     socket.on("connected", () => {
       console.log("🔥 Connected to Socket.IO Server & Persistent Database!");
+    });
+
+    socket.on("user profile updated", (updatedUser) => {
+      handleUserProfileUpdated(updatedUser);
     });
 
     socket.on("message received", (newMessage) => {
@@ -238,11 +294,13 @@ const ChatProvider = ({ children }) => {
           });
           return { ...prev, [chatId]: updatedMsgs };
         });
+      } else if (type === "USER_UPDATED") {
+        handleUserProfileUpdated(payload);
       }
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, handleUserProfileUpdated]);
 
   // Send message function
   const sendMessage = (chatId, content, type = "text", attachmentData = null) => {
@@ -485,7 +543,11 @@ const ChatProvider = ({ children }) => {
     setUser(updatedUser);
     setCurrentSessionUser(updatedUser);
     updateUserProfileInDb(user._id, updates);
+    if (socket) {
+      socket.emit("update user profile", updatedUser);
+    }
     notifySyncEvent("USER_UPDATED", updatedUser);
+    handleUserProfileUpdated(updatedUser);
   };
 
   const addOrSelectChat = (newChat) => {
