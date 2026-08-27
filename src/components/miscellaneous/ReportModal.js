@@ -18,6 +18,7 @@ import {
 } from "@chakra-ui/react";
 
 import { submitReportAsync, getCurrentSessionUser } from "../../data/fireStorage";
+import { ChatState } from "../../Context/ChatProvider";
 
 const reportReasons = [
   { id: "spam", label: "Spam or Unsolicited Messaging", icon: "🚫" },
@@ -33,6 +34,7 @@ const ReportModal = ({ isOpen, onClose, targetObj }) => {
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
+  const { user } = ChatState() || {};
 
   const isUserTarget = targetObj && !targetObj.isGroupChat && !targetObj.chatName;
   const targetTitle = targetObj
@@ -43,24 +45,17 @@ const ReportModal = ({ isOpen, onClose, targetObj }) => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    const currentUser = getCurrentSessionUser();
+    const currentUser = user || getCurrentSessionUser();
+    const reasonLabel = reportReasons.find((r) => r.id === selectedReason)?.label || selectedReason;
 
-    await submitReportAsync({
-      reporterUserId: currentUser?._id,
-      reporterName: currentUser?.name,
-      targetId: targetObj?._id,
-      targetType: isUserTarget ? "USER" : "CHAT",
-      targetTitle,
-      reason: selectedReason,
-      details,
-    });
+    const res = await submitReportAsync(currentUser, targetObj, reasonLabel, details);
 
     setIsSubmitting(false);
     toast({
-      title: "Report Submitted to Moderation",
-      description: `Thank you! Your report for "${targetTitle}" has been logged and sent to the Fire Messenger Moderation Team & Security Center.`,
+      title: "🚨 Report Logged & Email Dispatched",
+      description: `Report for "${targetTitle}" was recorded in database and an instant email alert was sent to Admin (${res.adminEmail || "admin@firemessenger.io"}).`,
       status: "success",
-      duration: 4500,
+      duration: 5000,
       isClosable: true,
       position: "top",
     });

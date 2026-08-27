@@ -745,15 +745,20 @@ function saveUserFolders(userId, folders) {
 function saveReport(reportData) {
   const db = readDb();
   if (!db.reports) db.reports = [];
-  const report = {
+  const newReport = {
     _id: `report_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     ...reportData,
-    submittedAt: new Date().toISOString(),
-    status: "PENDING_REVIEW",
+    status: "pending",
+    createdAt: new Date().toISOString(),
   };
-  db.reports.unshift(report);
+  db.reports.unshift(newReport);
   writeDb(db);
-  return report;
+  return newReport;
+}
+
+function getReports() {
+  const db = readDb();
+  return db.reports || [];
 }
 
 module.exports = {
@@ -783,6 +788,7 @@ module.exports = {
   getUserFolders,
   saveUserFolders,
   saveReport,
+  getReports,
 };
 
 
