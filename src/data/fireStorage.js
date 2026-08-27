@@ -108,6 +108,57 @@ export const searchUsersAsync = async (searchQuery, currentUserId) => {
   }
 };
 
+export const safeLocalStorageSetItem = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (error) {
+    if (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" || error.code === 22) {
+      try {
+        // Clear message caches to free space for primary state
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith("fire_messenger_messages_")) {
+            localStorage.removeItem(k);
+          }
+        });
+        localStorage.setItem(key, value);
+      } catch (e) {
+        // Fallback silently if browser storage is disabled
+      }
+    }
+  }
+};
+
+// User Folders Management
+export const fetchUserFoldersAsync = async (userId) => {
+  if (!userId) return [];
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/user/folders/${userId}`);
+    if (data.success) {
+      safeLocalStorageSetItem(`fire_folders_${userId}`, JSON.stringify(data.folders));
+      return data.folders;
+    }
+    return [];
+  } catch (error) {
+    console.warn("Could not fetch user folders from server:", error?.message || error);
+    const local = localStorage.getItem(`fire_folders_${userId}`);
+    return local ? JSON.parse(local) : [];
+  }
+};
+
+export const saveUserFoldersAsync = async (userId, folders) => {
+  if (!userId) return folders;
+  try {
+    safeLocalStorageSetItem(`fire_folders_${userId}`, JSON.stringify(folders));
+    const { data } = await axios.put(`${API_BASE_URL}/user/folders`, { userId, folders });
+    return data.success ? data.folders : folders;
+  } catch (error) {
+    console.warn("Could not save user folders to server:", error?.message || error);
+    return folders;
+  }
+};
+
+
+
 // Session Management
 export const getCurrentSessionUser = () => {
   const data = localStorage.getItem(CURRENT_USER_KEY);
@@ -120,7 +171,7 @@ export const getCurrentSessionUser = () => {
 };
 
 export const setCurrentSessionUser = (user) => {
-  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  safeLocalStorageSetItem(CURRENT_USER_KEY, JSON.stringify(user));
 };
 
 export const clearCurrentSession = () => {
@@ -263,7 +314,7 @@ export const getStoredChats = (userId) => {
 };
 
 export const saveStoredChats = (userId, chats) => {
-  localStorage.setItem(`fire_messenger_chats_${userId}`, JSON.stringify(chats));
+  safeLocalStorageSetItem(`fire_messenger_chats_${userId}`, JSON.stringify(chats));
 };
 
 export const getStoredMessagesMap = (userId) => {
@@ -272,7 +323,7 @@ export const getStoredMessagesMap = (userId) => {
 };
 
 export const saveStoredMessagesMap = (userId, messagesMap) => {
-  localStorage.setItem(`fire_messenger_messages_${userId}`, JSON.stringify(messagesMap));
+  safeLocalStorageSetItem(`fire_messenger_messages_${userId}`, JSON.stringify(messagesMap));
 };
 
 export const getInitialChatsForUser = (user) => {

@@ -728,6 +728,20 @@ function stopLiveLocation({ chatId, messageId }) {
   return db.messages[chatId][msgIndex];
 }
 
+function getUserFolders(userId) {
+  const db = readDb();
+  if (!db.userFolders) db.userFolders = {};
+  return db.userFolders[userId] || [];
+}
+
+function saveUserFolders(userId, folders) {
+  const db = readDb();
+  if (!db.userFolders) db.userFolders = {};
+  db.userFolders[userId] = folders;
+  writeDb(db);
+  return db.userFolders[userId];
+}
+
 module.exports = {
   readDb,
   loginUser,
@@ -752,6 +766,9 @@ module.exports = {
   addPollOption,
   updateLiveLocation,
   stopLiveLocation,
+  getUserFolders,
+  saveUserFolders,
 };
+
 
 

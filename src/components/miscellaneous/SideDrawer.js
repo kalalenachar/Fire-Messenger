@@ -54,6 +54,7 @@ function SideDrawer() {
     setIsAudienceModalOpen,
     activeStatusUser,
     setActiveStatusUser,
+    setIsFolderModalOpen,
   } = ChatState();
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -236,6 +237,10 @@ function SideDrawer() {
               <GroupChatModal>
                 <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }}>Create Group Chat</MenuItem>
               </GroupChatModal>
+              <MenuDivider borderColor="var(--color-border)" />
+              <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={() => setIsFolderModalOpen(true)}>
+                Folder Settings 📁
+              </MenuItem>
               <MenuDivider borderColor="var(--color-border)" />
               <MenuItem bg="transparent" color="#f44336" fontWeight="bold" _hover={{ bg: "var(--bg-hover)" }} onClick={logoutHandler}>
                 Logout

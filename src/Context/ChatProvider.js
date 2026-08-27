@@ -23,8 +23,10 @@ import {
   addPollOptionAsync,
   updateLiveLocationAsync,
   stopLiveLocationAsync,
+  fetchUserFoldersAsync,
+  saveUserFoldersAsync,
 } from "../data/fireStorage";
-import { getBotReply, getBotReplyAsync } from "../data/fireMockData";
+import { getBotReplyAsync } from "../data/fireMockData";
 import CallModal from "../components/miscellaneous/CallModal";
 
 const ChatContext = createContext();
@@ -41,6 +43,11 @@ const ChatProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => localStorage.getItem("fire_messenger_theme") || "dark");
   const [activeFilter, setActiveFilter] = useState("All");
   const [isTypingMap, setIsTypingMap] = useState({});
+
+  // Folder Settings State
+  const [folders, setFolders] = useState([]);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+
 
   // Status & Story States
   const [statusFeed, setStatusFeed] = useState([]);
@@ -109,17 +116,88 @@ const ChatProvider = ({ children }) => {
     await loadStatusData(user);
   };
 
-  // Load chats for user from backend server DB
+  // Folder Operations & Persistence
+  const saveFolders = async (newFolders) => {
+    setFolders(newFolders);
+    if (user && user._id) {
+      await saveUserFoldersAsync(user._id, newFolders);
+    }
+  };
+
+  const createFolder = async (folderData) => {
+    const newFolder = {
+      id: `folder_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: folderData.name || "New Folder",
+      icon: folderData.icon || "📁",
+      includedChatIds: folderData.includedChatIds || [],
+      rules: folderData.rules || { groups: false, channels: false, bots: false, unreadOnly: false },
+    };
+    const updated = [...folders, newFolder];
+    await saveFolders(updated);
+    return newFolder;
+  };
+
+  const updateFolder = async (folderId, updates) => {
+    const updated = folders.map((f) => (f.id === folderId ? { ...f, ...updates } : f));
+    await saveFolders(updated);
+  };
+
+  const deleteFolder = async (folderId) => {
+    const updated = folders.filter((f) => f.id !== folderId);
+    await saveFolders(updated);
+    if (activeFilter === folderId) {
+      setActiveFilter("All");
+    }
+  };
+
+  const addChatToFolder = async (folderId, chatId) => {
+    const updated = folders.map((f) => {
+      if (f.id === folderId) {
+        const included = f.includedChatIds || [];
+        if (!included.includes(chatId)) {
+          return { ...f, includedChatIds: [...included, chatId] };
+        }
+      }
+      return f;
+    });
+    await saveFolders(updated);
+  };
+
+  const removeChatFromFolder = async (folderId, chatId) => {
+    const updated = folders.map((f) => {
+      if (f.id === folderId) {
+        return { ...f, includedChatIds: (f.includedChatIds || []).filter((id) => id !== chatId) };
+      }
+      return f;
+    });
+    await saveFolders(updated);
+  };
+
+  const toggleChatFolder = async (folderId, chatId) => {
+    const targetFolder = folders.find((f) => f.id === folderId);
+    if (!targetFolder) return;
+    if (targetFolder.includedChatIds?.includes(chatId)) {
+      await removeChatFromFolder(folderId, chatId);
+    } else {
+      await addChatToFolder(folderId, chatId);
+    }
+  };
+
+  // Load chats & folders for user from backend server DB
   const loadUserData = useCallback(async (currentUser) => {
     if (!currentUser) return;
     const userChats = await fetchUserChatsAsync(currentUser._id);
     setChats(userChats);
+
+    const userFolders = await fetchUserFoldersAsync(currentUser._id);
+    setFolders(userFolders);
 
     if (userChats.length > 0 && !selectedChatRef.current) {
       setSelectedChat(userChats[0]);
     }
     loadStatusData(currentUser);
   }, [loadStatusData]);
+
 
   // When selectedChat changes, load its messages from backend server DB & join socket room
   useEffect(() => {
@@ -883,6 +961,18 @@ const ChatProvider = ({ children }) => {
         addPollOption,
         updateLiveLocation,
         stopLiveLocation,
+        // Folder Settings Context Values
+        folders,
+        setFolders,
+        isFolderModalOpen,
+        setIsFolderModalOpen,
+        saveFolders,
+        createFolder,
+        updateFolder,
+        deleteFolder,
+        addChatToFolder,
+        removeChatFromFolder,
+        toggleChatFolder,
       }}
     >
       {children}

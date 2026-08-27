@@ -102,6 +102,29 @@ app.get("/api/chats/:userId", (req, res) => {
   }
 });
 
+// Fetch User Folders
+app.get("/api/user/folders/:userId", (req, res) => {
+  try {
+    const folders = db.getUserFolders(req.params.userId);
+    res.json({ success: true, folders });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Save/Update User Folders
+app.put("/api/user/folders", (req, res) => {
+  try {
+    const { userId, folders } = req.body;
+    const updatedFolders = db.saveUserFolders(userId, folders);
+    io.emit("folders updated", { userId, folders: updatedFolders });
+    res.json({ success: true, folders: updatedFolders });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+
 // Save or Create Chat
 app.post("/api/chats", (req, res) => {
   try {
