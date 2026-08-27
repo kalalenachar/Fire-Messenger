@@ -49,6 +49,74 @@ const ChatProvider = ({ children }) => {
   const [folders, setFolders] = useState([]);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
 
+  // Hidden Chats State
+  const [hiddenChatIds, setHiddenChatIds] = useState(() => {
+    if (!user || !user._id) return [];
+    const local = localStorage.getItem(`fire_hidden_chats_${user._id}`);
+    return local ? JSON.parse(local) : [];
+  });
+
+  const hideChat = useCallback((chatId) => {
+    if (!chatId) return;
+    setHiddenChatIds((prev) => {
+      if (prev.includes(chatId)) return prev;
+      const updated = [...prev, chatId];
+      if (user && user._id) {
+        safeLocalStorageSetItem(`fire_hidden_chats_${user._id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, [user]);
+
+  const unhideChat = useCallback((chatId) => {
+    if (!chatId) return;
+    setHiddenChatIds((prev) => {
+      const updated = prev.filter((id) => id !== chatId);
+      if (user && user._id) {
+        safeLocalStorageSetItem(`fire_hidden_chats_${user._id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, [user]);
+
+  const isChatHidden = useCallback((chatId) => {
+    return hiddenChatIds.includes(chatId);
+  }, [hiddenChatIds]);
+
+  // Blocked Users State
+  const [blockedUserIds, setBlockedUserIds] = useState(() => {
+    if (!user || !user._id) return [];
+    const local = localStorage.getItem(`fire_blocked_users_${user._id}`);
+    return local ? JSON.parse(local) : [];
+  });
+
+  const blockUser = useCallback((userId) => {
+    if (!userId) return;
+    setBlockedUserIds((prev) => {
+      if (prev.includes(userId)) return prev;
+      const updated = [...prev, userId];
+      if (user && user._id) {
+        safeLocalStorageSetItem(`fire_blocked_users_${user._id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, [user]);
+
+  const unblockUser = useCallback((userId) => {
+    if (!userId) return;
+    setBlockedUserIds((prev) => {
+      const updated = prev.filter((id) => id !== userId);
+      if (user && user._id) {
+        safeLocalStorageSetItem(`fire_blocked_users_${user._id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, [user]);
+
+  const isUserBlocked = useCallback((userId) => {
+    return blockedUserIds.includes(userId);
+  }, [blockedUserIds]);
+
   // Pinned Chats State
   const [pinnedChatIds, setPinnedChatIds] = useState(() => {
     if (!user || !user._id) return ["chat_fire_bot"];
@@ -58,6 +126,9 @@ const ChatProvider = ({ children }) => {
 
   const togglePinChat = useCallback((chatId) => {
     if (!chatId) return;
+    // Auto-unhide if pinning a hidden chat
+    unhideChat(chatId);
+
     setPinnedChatIds((prev) => {
       const isPinned = prev.includes(chatId);
       const updated = isPinned ? prev.filter((id) => id !== chatId) : [...prev, chatId];
@@ -66,7 +137,7 @@ const ChatProvider = ({ children }) => {
       }
       return updated;
     });
-  }, [user]);
+  }, [unhideChat, user]);
 
   const isChatPinned = useCallback((chatId) => {
     return pinnedChatIds.includes(chatId);
@@ -1127,6 +1198,15 @@ const ChatProvider = ({ children }) => {
         isChatPinned,
         openSavedMessages,
         saveToSavedMessages,
+        // Hide Chat & Block Contact Context Values
+        hiddenChatIds,
+        hideChat,
+        unhideChat,
+        isChatHidden,
+        blockedUserIds,
+        blockUser,
+        unblockUser,
+        isUserBlocked,
       }}
     >
       {children}

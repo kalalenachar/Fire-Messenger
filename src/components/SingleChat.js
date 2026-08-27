@@ -28,6 +28,7 @@ import VoicePlayer from "./VoicePlayer";
 import PollComposerModal from "./miscellaneous/PollComposerModal";
 import LocationShareModal from "./miscellaneous/LocationShareModal";
 import FormattedMarkdown from "./FormattedMarkdown";
+import ReportModal from "./miscellaneous/ReportModal";
 
 const DoubleTickIcon = () => (
   <svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor" style={{ display: "inline-block", verticalAlign: "middle" }}>
@@ -105,6 +106,12 @@ const SingleChat = () => {
     togglePinChat,
     isChatPinned,
     saveToSavedMessages,
+    hideChat,
+    unhideChat,
+    isChatHidden,
+    blockUser,
+    unblockUser,
+    isUserBlocked,
   } = ChatState();
 
   const [textInput, setTextInput] = useState("");
@@ -121,6 +128,7 @@ const SingleChat = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isPollModalOpen, setIsPollModalOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
 
   // Right-Click Context Menu State
   const [contextMenu, setContextMenu] = useState({
@@ -498,11 +506,13 @@ const SingleChat = () => {
       };
     }
     const otherUser = selectedChat.users?.find((u) => u._id !== user?._id) || selectedChat.users?.[0];
+    const isBlocked = otherUser ? isUserBlocked?.(otherUser._id) : false;
     return {
       title: otherUser?.name || selectedChat.chatName,
       avatar: otherUser?.pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-      status: activeTypingText || otherUser?.status || "Online",
+      status: isBlocked ? "🚫 Blocked" : activeTypingText || otherUser?.status || "Online",
       userObj: otherUser,
+      isBlocked,
     };
   };
 
@@ -1273,7 +1283,16 @@ const SingleChat = () => {
         </Popover>
 
         {/* Main Text Input or Voice Recorder / Audio Preview */}
-        {recordingState === "recording" ? (
+        {header.isBlocked ? (
+          <Box flex="1" py={2.5} px={4} bg="rgba(244, 67, 54, 0.12)" borderRadius="16px" border="1px solid rgba(244, 67, 54, 0.3)" display="flex" alignItems="center" justifyContent="space-between">
+            <Text fontSize="xs" fontWeight="bold" color="#f44336">
+              🚫 You have blocked {header.title}. Unblock to send messages.
+            </Text>
+            <Button size="xs" colorScheme="blue" variant="solid" onClick={() => unblockUser?.(header.userObj?._id)}>
+              🔓 Unblock Contact
+            </Button>
+          </Box>
+        ) : recordingState === "recording" ? (
           <Box flex="1" bg="var(--bg-search)" borderRadius="20px" px={4} py={2} display="flex" alignItems="center" justifyContent="space-between">
             <Box display="flex" alignItems="center" gap={3}>
               <Box className="recording-dot" />
@@ -1339,7 +1358,7 @@ const SingleChat = () => {
         )}
 
         {/* Voice Recorder or Send Button */}
-        {textInput.trim() ? (
+        {!header.isBlocked && (textInput.trim() ? (
           <IconButton
             icon={<span style={{ fontSize: "16px" }}>🚀</span>}
             size="md"
@@ -1358,7 +1377,7 @@ const SingleChat = () => {
             _hover={{ bg: "rgba(255,255,255,0.15)" }}
             onClick={startVoiceRecording}
           />
-        )}
+        ))}
       </Box>
 
       {/* Attachment Preview & Caption Modal */}
@@ -1499,6 +1518,82 @@ const SingleChat = () => {
               <span>Save to Saved Messages</span>
             </Box>
           )}
+
+          {/* Hide / Unhide Option */}
+          <Box
+            display="flex"
+            alignItems="center"
+            gap={2.5}
+            px={3}
+            py={2}
+            borderRadius="10px"
+            cursor="pointer"
+            color="var(--text-primary)"
+            fontSize="13px"
+            fontWeight="500"
+            _hover={{ bg: "var(--bg-hover)" }}
+            onClick={() => {
+              if (isChatHidden?.(selectedChat._id)) {
+                unhideChat?.(selectedChat._id);
+              } else {
+                hideChat?.(selectedChat._id);
+              }
+              setContextMenu((prev) => ({ ...prev, visible: false }));
+            }}
+          >
+            <span>{isChatHidden?.(selectedChat._id) ? "👁️" : "🙈"}</span>
+            <span>{isChatHidden?.(selectedChat._id) ? "Unhide Chat" : "Hide Chat"}</span>
+          </Box>
+
+          {/* Block / Unblock Option for Contacts */}
+          {header.userObj && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color={header.isBlocked ? "#38bdf8" : "#f44336"}
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                if (header.isBlocked) {
+                  unblockUser?.(header.userObj._id);
+                } else {
+                  blockUser?.(header.userObj._id);
+                }
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>{header.isBlocked ? "🔓" : "🚫"}</span>
+              <span>{header.isBlocked ? "Unblock Contact" : "Block Contact"}</span>
+            </Box>
+          )}
+
+          {/* Report User Option */}
+          <Box
+            display="flex"
+            alignItems="center"
+            gap={2.5}
+            px={3}
+            py={2}
+            borderRadius="10px"
+            cursor="pointer"
+            color="#ffb74d"
+            fontSize="13px"
+            fontWeight="500"
+            _hover={{ bg: "var(--bg-hover)" }}
+            onClick={() => {
+              setReportTarget(header.userObj || selectedChat);
+              setContextMenu((prev) => ({ ...prev, visible: false }));
+            }}
+          >
+            <span>⚠️</span>
+            <span>Report {header.userObj ? "User" : "Chat"}</span>
+          </Box>
 
           {contextMenu.fileUrl && (
             <Box

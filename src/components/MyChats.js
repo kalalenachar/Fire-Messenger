@@ -17,6 +17,7 @@ import { SearchIcon, SettingsIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
 import StatusSection from "./StatusSection";
 import FolderSettingsModal from "./miscellaneous/FolderSettingsModal";
+import ReportModal from "./miscellaneous/ReportModal";
 
 const MyChats = () => {
   const {
@@ -34,13 +35,25 @@ const MyChats = () => {
     toggleChatFolder,
     togglePinChat,
     isChatPinned,
+    hideChat,
+    unhideChat,
+    isChatHidden,
+    blockUser,
+    unblockUser,
+    isUserBlocked,
   } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
+  const [reportTarget, setReportTarget] = useState(null);
 
   const defaultCategories = ["All", "Status", "Personal", "Groups", "Channels", "Bots"];
 
   // Filter chats by active category/folder & search term
   const filteredChats = (chats || []).filter((chat) => {
+    const isHidden = isChatHidden?.(chat._id);
+    if (isHidden && !searchTerm.trim()) {
+      return false; // Hide from standard stream unless explicitly searching
+    }
+
     const activeCustomFolder = folders?.find((f) => f.id === activeFilter);
     let matchesCategory = false;
 
@@ -297,6 +310,11 @@ const MyChats = () => {
                               📌
                             </Text>
                           )}
+                          {isChatHidden?.(chat._id) && (
+                            <Badge colorScheme="purple" fontSize="9px" px={1.5} borderRadius="4px">
+                              👁️ Hidden
+                            </Badge>
+                          )}
                         </Box>
                         {chat.latestMessage?.createdAt && (
                           <Text
@@ -360,7 +378,77 @@ const MyChats = () => {
                                   togglePinChat?.(chat._id);
                                 }}
                               >
-                                {isPinned ? "📌 Unpin Chat" : "📌 Pin Chat"}
+                                {isChatHidden?.(chat._id) ? "📌 Pin & Unhide Chat" : isPinned ? "📌 Unpin Chat" : "📌 Pin Chat"}
+                              </MenuItem>
+
+                              {isChatHidden?.(chat._id) ? (
+                                <MenuItem
+                                  bg="transparent"
+                                  fontSize="xs"
+                                  fontWeight="bold"
+                                  color="var(--text-primary)"
+                                  _hover={{ bg: "var(--bg-hover)" }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    unhideChat?.(chat._id);
+                                  }}
+                                >
+                                  👁️ Unhide Chat
+                                </MenuItem>
+                              ) : (
+                                <MenuItem
+                                  bg="transparent"
+                                  fontSize="xs"
+                                  fontWeight="bold"
+                                  color="var(--text-primary)"
+                                  _hover={{ bg: "var(--bg-hover)" }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    hideChat?.(chat._id);
+                                  }}
+                                >
+                                  🙈 Hide Chat
+                                </MenuItem>
+                              )}
+
+                              {!chat.isGroupChat && !chat.isSavedMessages && (() => {
+                                const otherUser = chat.users?.find((u) => u._id !== user?._id);
+                                if (!otherUser) return null;
+                                const isBlocked = isUserBlocked?.(otherUser._id);
+                                return (
+                                  <MenuItem
+                                    key="block-option"
+                                    bg="transparent"
+                                    fontSize="xs"
+                                    fontWeight="bold"
+                                    color={isBlocked ? "#38bdf8" : "#f44336"}
+                                    _hover={{ bg: "var(--bg-hover)" }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isBlocked) {
+                                        unblockUser?.(otherUser._id);
+                                      } else {
+                                        blockUser?.(otherUser._id);
+                                      }
+                                    }}
+                                  >
+                                    {isBlocked ? "🔓 Unblock User" : "🚫 Block User"}
+                                  </MenuItem>
+                                );
+                              })()}
+
+                              <MenuItem
+                                bg="transparent"
+                                fontSize="xs"
+                                fontWeight="bold"
+                                color="#ffb74d"
+                                _hover={{ bg: "var(--bg-hover)" }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReportTarget(chat);
+                                }}
+                              >
+                                ⚠️ Report Chat
                               </MenuItem>
                               <MenuDivider borderColor="var(--color-border)" />
 
@@ -433,6 +521,13 @@ const MyChats = () => {
 
       {/* Global Folder Settings Modal */}
       <FolderSettingsModal isOpen={isFolderModalOpen} onClose={() => setIsFolderModalOpen(false)} />
+
+      {/* Global Report Modal */}
+      <ReportModal
+        isOpen={Boolean(reportTarget)}
+        onClose={() => setReportTarget(null)}
+        targetObj={reportTarget}
+      />
     </Box>
   );
 };
