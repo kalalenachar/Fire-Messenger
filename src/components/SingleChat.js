@@ -1645,6 +1645,8 @@ const SingleChat = () => {
             );
           }
         }}
+      />
+
       {/* Global Report Modal */}
       <ReportModal
         isOpen={Boolean(reportTarget)}
