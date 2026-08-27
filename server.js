@@ -130,6 +130,90 @@ app.put("/api/messages/reaction", (req, res) => {
   }
 });
 
+// --- STATUS & AUDIENCE PROFILE REST ENDPOINTS ---
+
+// Get Status Feed for User
+app.get("/api/status/feed/:userId", (req, res) => {
+  try {
+    const feed = db.getActiveStatusFeed(req.params.userId);
+    res.json({ success: true, feed });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Create New Status Post
+app.post("/api/status", (req, res) => {
+  try {
+    const { userId, postData } = req.body;
+    const newPost = db.createStatusPost(userId, postData);
+    io.emit("new_status_posted", { userId, post: newPost });
+    res.json({ success: true, post: newPost });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Record Status View
+app.post("/api/status/view", (req, res) => {
+  try {
+    const { statusId, viewerUser } = req.body;
+    const updatedPost = db.recordStatusView(statusId, viewerUser);
+    if (updatedPost) {
+      io.emit("status_viewed", { statusId, viewerUser, viewers: updatedPost.viewers, authorId: updatedPost.userId });
+    }
+    res.json({ success: true, post: updatedPost });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Delete Status Post
+app.delete("/api/status/:userId/:statusId", (req, res) => {
+  try {
+    const { userId, statusId } = req.params;
+    const success = db.deleteStatusPost(userId, statusId);
+    if (success) {
+      io.emit("status_deleted", { userId, statusId });
+    }
+    res.json({ success });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Get Audience Profiles for User
+app.get("/api/audience-profiles/:userId", (req, res) => {
+  try {
+    const profiles = db.getAudienceProfiles(req.params.userId);
+    res.json({ success: true, profiles });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Save / Create / Edit Audience Profile
+app.post("/api/audience-profiles", (req, res) => {
+  try {
+    const { userId, profileData } = req.body;
+    const profile = db.saveAudienceProfile(userId, profileData);
+    res.json({ success: true, profile });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Delete Audience Profile
+app.delete("/api/audience-profiles/:userId/:profileId", (req, res) => {
+  try {
+    const { userId, profileId } = req.params;
+    const success = db.deleteAudienceProfile(userId, profileId);
+    res.json({ success });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
 // --- SOCKET.IO REAL-TIME ENGINE ---
 
 // Active online users mapping: userId -> socketId

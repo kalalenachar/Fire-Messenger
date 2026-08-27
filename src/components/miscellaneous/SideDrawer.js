@@ -26,6 +26,9 @@ import { Effect } from "react-notification-badge";
 import ProfileModal from "./ProfileModal";
 import GroupChatModal from "./GroupChatModal";
 import UserListItem from "../userAvatar/UserListItem";
+import StatusComposerModal from "./StatusComposerModal";
+import AudienceProfileModal from "./AudienceProfileModal";
+import StatusViewerModal from "./StatusViewerModal";
 import { ChatState } from "../../Context/ChatProvider";
 import { searchUsersAsync, clearCurrentSession } from "../../data/fireStorage";
 
@@ -44,6 +47,13 @@ function SideDrawer() {
     addOrSelectChat,
     theme,
     toggleTheme,
+    setActiveFilter,
+    isStatusComposerOpen,
+    setIsStatusComposerOpen,
+    isAudienceModalOpen,
+    setIsAudienceModalOpen,
+    activeStatusUser,
+    setActiveStatusUser,
   } = ChatState();
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -125,7 +135,7 @@ function SideDrawer() {
               Fire Messenger
             </Text>
             <Text fontSize="xs" color={theme === "light" ? "#e0f2fe" : "var(--color-primary)"} fontWeight="500">
-              WhatsApp Emerald Edition
+              Fire Real-Time Edition
             </Text>
           </Box>
         </Box>
@@ -144,6 +154,20 @@ function SideDrawer() {
               fontWeight="600"
             >
               Search Contacts
+            </Button>
+          </Tooltip>
+
+          {/* Status / Stories Button */}
+          <Tooltip label="Status & Stories" placement="bottom">
+            <Button
+              size="sm"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+              onClick={() => setActiveFilter("Status")}
+              fontWeight="600"
+            >
+              Status 🔥
             </Button>
           </Tooltip>
 
@@ -258,6 +282,24 @@ function SideDrawer() {
           </DrawerBody>
         </DrawerContent>
       </Drawer>
+
+      {/* Global Status Modals */}
+      <StatusComposerModal
+        isOpen={isStatusComposerOpen}
+        onClose={() => setIsStatusComposerOpen(false)}
+        onOpenAudienceManager={() => setIsAudienceModalOpen(true)}
+      />
+
+      <AudienceProfileModal
+        isOpen={isAudienceModalOpen}
+        onClose={() => setIsAudienceModalOpen(false)}
+      />
+
+      <StatusViewerModal
+        isOpen={Boolean(activeStatusUser)}
+        onClose={() => setActiveStatusUser(null)}
+        userStatusStack={activeStatusUser}
+      />
     </>
   );
 }

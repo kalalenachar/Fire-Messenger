@@ -132,28 +132,78 @@ export const clearCurrentSession = () => {
 export const fetchUserChatsAsync = async (userId) => {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/chats/${userId}`);
-    return data.success ? data.chats : [];
+    if (data.success && Array.isArray(data.chats)) {
+      saveStoredChats(userId, data.chats);
+      return data.chats;
+    }
+    return getStoredChats(userId) || [];
   } catch (error) {
     console.warn("Server unavailable, fallback to stored chats:", error);
-    return [];
+    return getStoredChats(userId) || [];
   }
 };
 
 export const saveChatAsync = async (chatData) => {
   try {
     const { data } = await axios.post(`${API_BASE_URL}/chats`, chatData);
-    return data.success ? data.chat : null;
+    const chat = data.success ? data.chat : chatData.chat || chatData;
+    if (chat) {
+      const currentUser = getCurrentSessionUser();
+      if (currentUser) {
+        const stored = getStoredChats(currentUser._id) || [];
+        const existingIdx = stored.findIndex((c) => c._id === chat._id);
+        if (existingIdx !== -1) {
+          stored[existingIdx] = chat;
+        } else {
+          stored.unshift(chat);
+        }
+        saveStoredChats(currentUser._id, stored);
+      }
+    }
+    return chat;
   } catch (error) {
-    console.warn("Error saving chat to server DB:", error);
+    console.warn("Error saving chat to server DB, storing locally:", error);
+    const chat = chatData.chat || chatData;
+    const currentUser = getCurrentSessionUser();
+    if (currentUser && chat) {
+      const stored = getStoredChats(currentUser._id) || [];
+      const existingIdx = stored.findIndex((c) => c._id === chat._id);
+      if (existingIdx !== -1) {
+        stored[existingIdx] = chat;
+      } else {
+        stored.unshift(chat);
+      }
+      saveStoredChats(currentUser._id, stored);
+    }
+    return chat;
   }
 };
 
 export const fetchChatMessagesAsync = async (chatId) => {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/messages/${chatId}`);
-    return data.success ? data.messages : [];
+    if (data.success && Array.isArray(data.messages)) {
+      const currentUser = getCurrentSessionUser();
+      if (currentUser) {
+        const storedMap = getStoredMessagesMap(currentUser._id) || {};
+        storedMap[chatId] = data.messages;
+        saveStoredMessagesMap(currentUser._id, storedMap);
+      }
+      return data.messages;
+    }
+    const currentUser = getCurrentSessionUser();
+    if (currentUser) {
+      const storedMap = getStoredMessagesMap(currentUser._id) || {};
+      return storedMap[chatId] || [];
+    }
+    return [];
   } catch (error) {
     console.warn("Error fetching messages for chat:", chatId, error);
+    const currentUser = getCurrentSessionUser();
+    if (currentUser) {
+      const storedMap = getStoredMessagesMap(currentUser._id) || {};
+      return storedMap[chatId] || [];
+    }
     return [];
   }
 };
@@ -161,9 +211,34 @@ export const fetchChatMessagesAsync = async (chatId) => {
 export const saveMessageAsync = async (newMessage) => {
   try {
     const { data } = await axios.post(`${API_BASE_URL}/messages`, newMessage);
-    return data.success ? data.message : newMessage;
+    const msg = data.success ? data.message : newMessage;
+    const currentUser = getCurrentSessionUser();
+    if (currentUser && msg) {
+      const chatId = msg.chatObj?._id || (typeof msg.chat === "object" ? msg.chat?._id : msg.chat);
+      if (chatId) {
+        const storedMap = getStoredMessagesMap(currentUser._id) || {};
+        const chatMsgs = storedMap[chatId] || [];
+        if (!chatMsgs.some((m) => m._id === msg._id)) {
+          storedMap[chatId] = [...chatMsgs, msg];
+          saveStoredMessagesMap(currentUser._id, storedMap);
+        }
+      }
+    }
+    return msg;
   } catch (error) {
-    console.warn("Error persisting message to server DB:", error);
+    console.warn("Error persisting message to server DB, saving locally:", error);
+    const currentUser = getCurrentSessionUser();
+    if (currentUser && newMessage) {
+      const chatId = newMessage.chatObj?._id || (typeof newMessage.chat === "object" ? newMessage.chat?._id : newMessage.chat);
+      if (chatId) {
+        const storedMap = getStoredMessagesMap(currentUser._id) || {};
+        const chatMsgs = storedMap[chatId] || [];
+        if (!chatMsgs.some((m) => m._id === newMessage._id)) {
+          storedMap[chatId] = [...chatMsgs, newMessage];
+          saveStoredMessagesMap(currentUser._id, storedMap);
+        }
+      }
+    }
     return newMessage;
   }
 };
@@ -174,6 +249,7 @@ export const toggleReactionAsync = async (chatId, messageId, emoji) => {
     return data.success ? data.messages : [];
   } catch (error) {
     console.warn("Error toggling reaction on server DB:", error);
+    return [];
   }
 };
 
@@ -231,4 +307,77 @@ export const subscribeSyncEvent = (callback) => {
     broadcastChannel.removeEventListener("message", handler);
   };
 };
+
+// --- STATUS & AUDIENCE PROFILE API CLIENT METHODS ---
+
+export const fetchStatusFeedAsync = async (userId) => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/status/feed/${userId}`);
+    return data.success ? data.feed : [];
+  } catch (error) {
+    console.error("Error fetching status feed:", error);
+    return [];
+  }
+};
+
+export const createStatusPostAsync = async (userId, postData) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/status`, { userId, postData });
+    return data.success ? data.post : null;
+  } catch (error) {
+    console.error("Error creating status post:", error);
+    throw error;
+  }
+};
+
+export const recordStatusViewAsync = async (statusId, viewerUser) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/status/view`, { statusId, viewerUser });
+    return data.success ? data.post : null;
+  } catch (error) {
+    console.error("Error recording status view:", error);
+    return null;
+  }
+};
+
+export const deleteStatusPostAsync = async (userId, statusId) => {
+  try {
+    const { data } = await axios.delete(`${API_BASE_URL}/status/${userId}/${statusId}`);
+    return data.success;
+  } catch (error) {
+    console.error("Error deleting status post:", error);
+    return false;
+  }
+};
+
+export const fetchAudienceProfilesAsync = async (userId) => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/audience-profiles/${userId}`);
+    return data.success ? data.profiles : [];
+  } catch (error) {
+    console.error("Error fetching audience profiles:", error);
+    return [];
+  }
+};
+
+export const saveAudienceProfileAsync = async (userId, profileData) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/audience-profiles`, { userId, profileData });
+    return data.success ? data.profile : null;
+  } catch (error) {
+    console.error("Error saving audience profile:", error);
+    throw error;
+  }
+};
+
+export const deleteAudienceProfileAsync = async (userId, profileId) => {
+  try {
+    const { data } = await axios.delete(`${API_BASE_URL}/audience-profiles/${userId}/${profileId}`);
+    return data.success;
+  } catch (error) {
+    console.error("Error deleting audience profile:", error);
+    return false;
+  }
+};
+
 

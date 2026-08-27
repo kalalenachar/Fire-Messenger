@@ -385,6 +385,193 @@ function toggleMessageReaction({ chatId, messageId, emoji }) {
   return updatedMsgs;
 }
 
+// --- STATUS & AUDIENCE PROFILE METHODS ---
+
+function getAudienceProfiles(userId) {
+  const db = readDb();
+  const profiles = (db.audienceProfiles || []).filter((p) => p.userId === userId);
+  if (profiles.length === 0) {
+    // Provide default profiles for best initial UX
+    const defaultProfiles = [
+      { _id: `prof_all_${userId}`, userId, name: "All Contacts", mode: "whitelist", isDefault: true, memberIds: [] },
+      { _id: `prof_school_${userId}`, userId, name: "School Friends", mode: "whitelist", isDefault: false, memberIds: ["user_sarah"] },
+      { _id: `prof_no_office_${userId}`, userId, name: "No Office People", mode: "blacklist", isDefault: false, memberIds: ["user_marcus"] },
+    ];
+    db.audienceProfiles = [...(db.audienceProfiles || []), ...defaultProfiles];
+    writeDb(db);
+    return defaultProfiles;
+  }
+  return profiles;
+}
+
+function saveAudienceProfile(userId, profileData) {
+  const db = readDb();
+  if (!db.audienceProfiles) db.audienceProfiles = [];
+
+  let profile;
+  if (profileData._id) {
+    const idx = db.audienceProfiles.findIndex((p) => p._id === profileData._id && p.userId === userId);
+    if (idx !== -1) {
+      db.audienceProfiles[idx] = { ...db.audienceProfiles[idx], ...profileData };
+      profile = db.audienceProfiles[idx];
+    }
+  }
+
+  if (!profile) {
+    profile = {
+      _id: `prof_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      userId,
+      name: profileData.name || "Custom Group",
+      mode: profileData.mode || "whitelist", // 'whitelist' (include) | 'blacklist' (exclude / hide from)
+      memberIds: profileData.memberIds || [],
+      isDefault: false,
+    };
+    db.audienceProfiles.push(profile);
+  }
+
+  writeDb(db);
+  return profile;
+}
+
+function deleteAudienceProfile(userId, profileId) {
+  const db = readDb();
+  if (!db.audienceProfiles) db.audienceProfiles = [];
+  db.audienceProfiles = db.audienceProfiles.filter((p) => !(p._id === profileId && p.userId === userId));
+  writeDb(db);
+  return true;
+}
+
+function createStatusPost(userId, postData) {
+  const db = readDb();
+  if (!db.statusPosts) db.statusPosts = [];
+
+  const author = db.users.find((u) => u._id === userId);
+  const now = new Date();
+  const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours expiry
+
+  const newPost = {
+    _id: `status_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    userId,
+    author: author ? { _id: author._id, name: author.name, pic: author.pic } : { _id: userId, name: "User", pic: "" },
+    type: postData.type || "text", // 'text' | 'image' | 'video'
+    content: postData.content || "",
+    caption: postData.caption || "",
+    bgColor: postData.bgColor || "linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)",
+    fontStyle: postData.fontStyle || "sans-serif",
+    createdAt: now.toISOString(),
+    expiresAt: expires.toISOString(),
+    audienceProfileIds: postData.audienceProfileIds || ["ALL"],
+    viewers: [],
+  };
+
+  db.statusPosts.push(newPost);
+  writeDb(db);
+  return newPost;
+}
+
+function getActiveStatusFeed(userId) {
+  const db = readDb();
+  const now = new Date().getTime();
+
+  // Filter out expired statuses
+  const activePosts = (db.statusPosts || []).filter((post) => {
+    const expTime = new Date(post.expiresAt).getTime();
+    return expTime > now;
+  });
+
+  // Filter visibility based on audience profiles
+  const userProfilesObjMap = {};
+  (db.audienceProfiles || []).forEach((p) => {
+    userProfilesObjMap[p._id] = p;
+  });
+
+  const visiblePosts = activePosts.filter((post) => {
+    if (post.userId === userId) return true;
+    if (!post.audienceProfileIds || post.audienceProfileIds.includes("ALL")) return true;
+
+    // Check if viewer's userId passes selected audience profile rules (whitelist vs blacklist)
+    return post.audienceProfileIds.some((profId) => {
+      const prof = userProfilesObjMap[profId];
+      if (!prof) return true;
+      const members = prof.memberIds || [];
+      if (prof.mode === "blacklist") {
+        // Exclude mode (Hide from): Visible to everyone EXCEPT selected members
+        return !members.includes(userId);
+      } else {
+        // Whitelist mode (Include only): Visible ONLY to selected members
+        return members.includes(userId);
+      }
+    });
+  });
+
+  // Group status posts by User
+  const feedByUserMap = {};
+  visiblePosts.forEach((post) => {
+    const uid = post.userId;
+    if (!feedByUserMap[uid]) {
+      feedByUserMap[uid] = {
+        user: post.author,
+        isOwn: uid === userId,
+        posts: [],
+        hasUnviewed: false,
+        latestUpdatedAt: post.createdAt,
+      };
+    }
+    feedByUserMap[uid].posts.push(post);
+
+    const isViewedByMe = post.viewers.some((v) => v.userId === userId);
+    if (!isViewedByMe && uid !== userId) {
+      feedByUserMap[uid].hasUnviewed = true;
+    }
+
+    if (new Date(post.createdAt).getTime() > new Date(feedByUserMap[uid].latestUpdatedAt).getTime()) {
+      feedByUserMap[uid].latestUpdatedAt = post.createdAt;
+    }
+  });
+
+  // Sort: Own user first, then by latest update time
+  const feedList = Object.values(feedByUserMap).sort((a, b) => {
+    if (a.isOwn) return -1;
+    if (b.isOwn) return 1;
+    return new Date(b.latestUpdatedAt) - new Date(a.latestUpdatedAt);
+  });
+
+  return feedList;
+}
+
+function recordStatusView(statusId, viewerUser) {
+  const db = readDb();
+  if (!db.statusPosts) return null;
+
+  const postIndex = db.statusPosts.findIndex((p) => p._id === statusId);
+  if (postIndex === -1) return null;
+
+  const post = db.statusPosts[postIndex];
+  const alreadyViewed = (post.viewers || []).some((v) => v.userId === viewerUser._id);
+
+  if (!alreadyViewed) {
+    const viewerObj = {
+      userId: viewerUser._id,
+      name: viewerUser.name,
+      pic: viewerUser.pic,
+      viewedAt: new Date().toISOString(),
+    };
+    db.statusPosts[postIndex].viewers = [...(db.statusPosts[postIndex].viewers || []), viewerObj];
+    writeDb(db);
+  }
+
+  return db.statusPosts[postIndex];
+}
+
+function deleteStatusPost(userId, statusId) {
+  const db = readDb();
+  if (!db.statusPosts) return false;
+
+  db.statusPosts = db.statusPosts.filter((p) => !(p._id === statusId && p.userId === userId));
+  writeDb(db);
+  return true;
+}
+
 module.exports = {
   readDb,
   loginUser,
@@ -398,4 +585,12 @@ module.exports = {
   addMessage,
   toggleMessageReaction,
   fireBotUser,
+  getAudienceProfiles,
+  saveAudienceProfile,
+  deleteAudienceProfile,
+  createStatusPost,
+  getActiveStatusFeed,
+  recordStatusView,
+  deleteStatusPost,
 };
+

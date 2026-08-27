@@ -12,6 +12,13 @@ import {
   notifySyncEvent,
   subscribeSyncEvent,
   fireBotUser,
+  fetchStatusFeedAsync,
+  createStatusPostAsync,
+  recordStatusViewAsync,
+  deleteStatusPostAsync,
+  fetchAudienceProfilesAsync,
+  saveAudienceProfileAsync,
+  deleteAudienceProfileAsync,
 } from "../data/fireStorage";
 import { getBotReply } from "../data/fireMockData";
 import CallModal from "../components/miscellaneous/CallModal";
@@ -30,6 +37,13 @@ const ChatProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => localStorage.getItem("fire_messenger_theme") || "dark");
   const [activeFilter, setActiveFilter] = useState("All");
   const [isTypingMap, setIsTypingMap] = useState({});
+
+  // Status & Story States
+  const [statusFeed, setStatusFeed] = useState([]);
+  const [audienceProfiles, setAudienceProfiles] = useState([]);
+  const [activeStatusUser, setActiveStatusUser] = useState(null);
+  const [isStatusComposerOpen, setIsStatusComposerOpen] = useState(false);
+  const [isAudienceModalOpen, setIsAudienceModalOpen] = useState(false);
 
   // WebRTC Audio / Video Call States
   const [callData, setCallData] = useState(null);
@@ -50,6 +64,47 @@ const ChatProvider = ({ children }) => {
     document.documentElement.setAttribute("data-theme", activeTheme);
   }, [theme]);
 
+  // Load status feed & audience profiles
+  const loadStatusData = useCallback(async (currentUser) => {
+    if (!currentUser || !currentUser._id) return;
+    const feed = await fetchStatusFeedAsync(currentUser._id);
+    setStatusFeed(feed);
+    const profiles = await fetchAudienceProfilesAsync(currentUser._id);
+    setAudienceProfiles(profiles);
+  }, []);
+
+  const postNewStatus = async (postData) => {
+    if (!user || !user._id) return;
+    const newPost = await createStatusPostAsync(user._id, postData);
+    await loadStatusData(user);
+    return newPost;
+  };
+
+  const viewStatusSlide = async (statusId) => {
+    if (!user || !user._id) return;
+    await recordStatusViewAsync(statusId, user);
+    await loadStatusData(user);
+  };
+
+  const deleteStatusSlide = async (statusId) => {
+    if (!user || !user._id) return;
+    await deleteStatusPostAsync(user._id, statusId);
+    await loadStatusData(user);
+  };
+
+  const saveAudienceProfile = async (profileData) => {
+    if (!user || !user._id) return;
+    const saved = await saveAudienceProfileAsync(user._id, profileData);
+    await loadStatusData(user);
+    return saved;
+  };
+
+  const removeAudienceProfile = async (profileId) => {
+    if (!user || !user._id) return;
+    await deleteAudienceProfileAsync(user._id, profileId);
+    await loadStatusData(user);
+  };
+
   // Load chats for user from backend server DB
   const loadUserData = useCallback(async (currentUser) => {
     if (!currentUser) return;
@@ -59,7 +114,8 @@ const ChatProvider = ({ children }) => {
     if (userChats.length > 0 && !selectedChatRef.current) {
       setSelectedChat(userChats[0]);
     }
-  }, []);
+    loadStatusData(currentUser);
+  }, [loadStatusData]);
 
   // When selectedChat changes, load its messages from backend server DB & join socket room
   useEffect(() => {
@@ -159,6 +215,18 @@ const ChatProvider = ({ children }) => {
 
     socket.on("user profile updated", (updatedUser) => {
       handleUserProfileUpdated(updatedUser);
+    });
+
+    socket.on("new_status_posted", () => {
+      if (user) loadStatusData(user);
+    });
+
+    socket.on("status_viewed", () => {
+      if (user) loadStatusData(user);
+    });
+
+    socket.on("status_deleted", () => {
+      if (user) loadStatusData(user);
     });
 
     socket.on("message received", (newMessage) => {
@@ -693,6 +761,23 @@ const ChatProvider = ({ children }) => {
         addOrSelectChat,
         loadUserData,
         startCall,
+        // Status & Story Context Values
+        statusFeed,
+        setStatusFeed,
+        audienceProfiles,
+        setAudienceProfiles,
+        activeStatusUser,
+        setActiveStatusUser,
+        isStatusComposerOpen,
+        setIsStatusComposerOpen,
+        isAudienceModalOpen,
+        setIsAudienceModalOpen,
+        postNewStatus,
+        viewStatusSlide,
+        deleteStatusSlide,
+        saveAudienceProfile,
+        removeAudienceProfile,
+        loadStatusData,
       }}
     >
       {children}

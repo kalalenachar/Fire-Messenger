@@ -3,12 +3,22 @@ import { Box, Stack, Text, Badge } from "@chakra-ui/layout";
 import { Avatar, Input, InputGroup, InputLeftElement } from "@chakra-ui/react";
 import { SearchIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
+import StatusSection from "./StatusSection";
 
 const MyChats = () => {
-  const { selectedChat, setSelectedChat, user, chats, activeFilter, setActiveFilter } = ChatState();
+  const {
+    selectedChat,
+    setSelectedChat,
+    user,
+    chats,
+    activeFilter,
+    setActiveFilter,
+    setIsStatusComposerOpen,
+    setIsAudienceModalOpen,
+  } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
 
-  const categories = ["All", "Personal", "Groups", "Channels", "Bots"];
+  const categories = ["All", "Status", "Personal", "Groups", "Channels", "Bots"];
 
   // Filter chats by category & search term
   const filteredChats = (chats || []).filter((chat) => {
@@ -104,89 +114,98 @@ const MyChats = () => {
         ))}
       </Box>
 
-      {/* Chat List Stream */}
-      <Box flex="1" overflowY="auto" px={2} py={1}>
-        {filteredChats.length > 0 ? (
-          <Stack spacing={1}>
-            {filteredChats.map((chat) => {
-              const isSelected = selectedChat?._id === chat._id;
-              const title = getChatTitle(chat);
-              const avatar = getChatAvatar(chat);
+      {/* Main Content Stream: Status Section or Chat List Stream */}
+      {activeFilter === "Status" ? (
+        <Box flex="1" overflow="hidden">
+          <StatusSection
+            onOpenComposer={() => setIsStatusComposerOpen(true)}
+            onOpenAudienceManager={() => setIsAudienceModalOpen(true)}
+          />
+        </Box>
+      ) : (
+        <Box flex="1" overflowY="auto" px={2} py={1}>
+          {filteredChats.length > 0 ? (
+            <Stack spacing={1}>
+              {filteredChats.map((chat) => {
+                const isSelected = selectedChat?._id === chat._id;
+                const title = getChatTitle(chat);
+                const avatar = getChatAvatar(chat);
 
-              return (
-                <Box
-                  key={chat._id}
-                  onClick={() => setSelectedChat(chat)}
-                  cursor="pointer"
-                  p={2.5}
-                  borderRadius="10px"
-                  bg={isSelected ? "var(--bg-active)" : "transparent"}
-                  _hover={{ bg: isSelected ? "var(--bg-active)" : "var(--bg-hover)" }}
-                  display="flex"
-                  alignItems="center"
-                  gap={3}
-                  transition="background 0.15s ease"
-                >
-                  {/* Avatar & Online Dot */}
-                  <Box position="relative">
-                    <Avatar size="md" name={title} src={avatar} />
-                    {!chat.isGroupChat && (
-                      <Box
-                        position="absolute"
-                        bottom="0"
-                        right="0"
-                        w="12px"
-                        h="12px"
-                        borderRadius="50%"
-                        bg="var(--color-online)"
-                        border="2px solid var(--bg-sidebar)"
-                      />
-                    )}
-                  </Box>
+                return (
+                  <Box
+                    key={chat._id}
+                    onClick={() => setSelectedChat(chat)}
+                    cursor="pointer"
+                    p={2.5}
+                    borderRadius="10px"
+                    bg={isSelected ? "var(--bg-active)" : "transparent"}
+                    _hover={{ bg: isSelected ? "var(--bg-active)" : "var(--bg-hover)" }}
+                    display="flex"
+                    alignItems="center"
+                    gap={3}
+                    transition="background 0.15s ease"
+                  >
+                    {/* Avatar & Online Dot */}
+                    <Box position="relative">
+                      <Avatar size="md" name={title} src={avatar} />
+                      {!chat.isGroupChat && (
+                        <Box
+                          position="absolute"
+                          bottom="0"
+                          right="0"
+                          w="12px"
+                          h="12px"
+                          borderRadius="50%"
+                          bg="var(--color-online)"
+                          border="2px solid var(--bg-sidebar)"
+                        />
+                      )}
+                    </Box>
 
-                  {/* Chat Info */}
-                  <Box flex="1" overflow="hidden">
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
-                      <Text fontWeight="600" fontSize="sm" color="var(--text-primary)" isTruncated>
-                        {title}
-                      </Text>
-                      {chat.latestMessage?.createdAt && (
-                        <Text fontSize="11px" color={chat.unread > 0 ? "var(--color-primary)" : "var(--text-secondary)"} fontWeight={chat.unread > 0 ? "bold" : "normal"}>
-                          {formatTime(chat.latestMessage.createdAt)}
+                    {/* Chat Info */}
+                    <Box flex="1" overflow="hidden">
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                        <Text fontWeight="600" fontSize="sm" color="var(--text-primary)" isTruncated>
+                          {title}
                         </Text>
-                      )}
-                    </Box>
+                        {chat.latestMessage?.createdAt && (
+                          <Text fontSize="11px" color={chat.unread > 0 ? "var(--color-primary)" : "var(--text-secondary)"} fontWeight={chat.unread > 0 ? "bold" : "normal"}>
+                            {formatTime(chat.latestMessage.createdAt)}
+                          </Text>
+                        )}
+                      </Box>
 
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Text fontSize="xs" color="var(--text-secondary)" isTruncated pr={2}>
-                        {chat.latestMessage?.sender?.name ? `${chat.latestMessage.sender.name}: ` : ""}
-                        {chat.latestMessage?.content || "No messages yet"}
-                      </Text>
+                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Text fontSize="xs" color="var(--text-secondary)" isTruncated pr={2}>
+                          {chat.latestMessage?.sender?.name ? `${chat.latestMessage.sender.name}: ` : ""}
+                          {chat.latestMessage?.content || "No messages yet"}
+                        </Text>
 
-                      {chat.unread > 0 && (
-                        <Badge
-                          borderRadius="full"
-                          bg="var(--color-primary)"
-                          color="#ffffff"
-                          fontSize="11px"
-                          px={2}
-                          py={0.5}
-                        >
-                          {chat.unread}
-                        </Badge>
-                      )}
+                        {chat.unread > 0 && (
+                          <Badge
+                            borderRadius="full"
+                            bg="var(--color-primary)"
+                            color="#ffffff"
+                            fontSize="11px"
+                            px={2}
+                            py={0.5}
+                          >
+                            {chat.unread}
+                          </Badge>
+                        )}
+                      </Box>
                     </Box>
                   </Box>
-                </Box>
-              );
-            })}
-          </Stack>
-        ) : (
-          <Box p={6} textAlign="center" color="var(--text-secondary)">
-            <Text fontSize="sm">No conversations found</Text>
-          </Box>
-        )}
-      </Box>
+                );
+              })}
+            </Stack>
+          ) : (
+            <Box p={6} textAlign="center" color="var(--text-secondary)">
+              <Text fontSize="sm">No conversations found</Text>
+            </Box>
+          )}
+        </Box>
+      )}
     </Box>
   );
 };
