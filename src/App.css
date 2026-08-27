@@ -141,19 +141,25 @@
    Voice Note Player & Recording Visualizer Styles
    ========================================================================== */
 
+.voice-player-container {
+  background: var(--vp-bg-sent);
+  border: 1px solid var(--vp-border);
+  backdrop-filter: blur(8px);
+}
+
 .voice-play-btn {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: var(--color-primary, #0ea5e9);
-  color: white;
+  background: var(--vp-play-btn-bg);
+  color: var(--vp-play-btn-icon);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
-  transition: transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 128, 105, 0.3);
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .voice-play-btn:hover {
@@ -171,6 +177,15 @@
   transition: height 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
 }
 
+.voice-wave-bar.played {
+  background-color: var(--vp-wave-active);
+  opacity: 1;
+}
+
+.voice-wave-bar.unplayed {
+  background-color: var(--vp-wave-inactive);
+}
+
 .voice-wave-bar.animating {
   animation: waveBarBounce 0.8s ease-in-out infinite alternate;
 }
@@ -185,19 +200,20 @@
 }
 
 .voice-speed-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: currentColor;
-  font-size: 10px;
+  background: var(--vp-speed-bg);
+  border: 1px solid var(--vp-border);
+  color: var(--vp-speed-text);
+  font-size: 11px;
   font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .voice-speed-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  filter: brightness(1.15);
+  transform: scale(1.05);
 }
 
 .voice-progress-slider {
@@ -213,17 +229,22 @@
 .voice-progress-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--vp-slider-thumb);
   cursor: pointer;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.voice-progress-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
 }
 
 .voice-download-btn {
-  color: currentColor;
-  opacity: 0.7;
+  color: var(--vp-text);
+  opacity: 0.75;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -233,6 +254,7 @@
 .voice-download-btn:hover {
   opacity: 1;
   transform: scale(1.15);
+  color: var(--vp-wave-active);
 }
 
 /* Dynamic Live Mic Spectrum Visualizer Bar */

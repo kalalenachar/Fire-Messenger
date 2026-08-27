@@ -28,6 +28,21 @@
   --color-online: #00a884;
   --color-border: #222d34;
 
+  /* Voice Note Player Variables - Dark Mode */
+  --vp-bg-sent: rgba(0, 0, 0, 0.25);
+  --vp-bg-received: rgba(0, 0, 0, 0.25);
+  --vp-text: #e9edef;
+  --vp-text-muted: #8696a0;
+  --vp-play-btn-bg: #00a884;
+  --vp-play-btn-icon: #ffffff;
+  --vp-wave-active: #00a884;
+  --vp-wave-inactive: rgba(233, 237, 239, 0.3);
+  --vp-slider-track: rgba(233, 237, 239, 0.2);
+  --vp-slider-thumb: #00a884;
+  --vp-speed-bg: rgba(255, 255, 255, 0.12);
+  --vp-speed-text: #e9edef;
+  --vp-border: rgba(255, 255, 255, 0.08);
+
   --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
@@ -60,6 +75,21 @@
   --color-accent: #ff5722;
   --color-online: #25d366;
   --color-border: #e9edef;
+
+  /* Voice Note Player Variables - Light Mode */
+  --vp-bg-sent: rgba(0, 128, 105, 0.08);
+  --vp-bg-received: rgba(0, 0, 0, 0.05);
+  --vp-text: #111b21;
+  --vp-text-muted: #54656f;
+  --vp-play-btn-bg: #008069;
+  --vp-play-btn-icon: #ffffff;
+  --vp-wave-active: #008069;
+  --vp-wave-inactive: rgba(0, 128, 105, 0.25);
+  --vp-slider-track: rgba(0, 128, 105, 0.18);
+  --vp-slider-thumb: #008069;
+  --vp-speed-bg: rgba(0, 128, 105, 0.12);
+  --vp-speed-text: #005c4b;
+  --vp-border: rgba(0, 128, 105, 0.15);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);

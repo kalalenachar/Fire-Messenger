@@ -104,15 +104,12 @@ const VoicePlayer = ({ audioUrl, fileName, isMe }) => {
   return (
     <Box
       className="voice-player-container"
-      bg={isMe ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.25)"}
       p={2.5}
       borderRadius="14px"
       w="260px"
       display="flex"
       flexDirection="column"
       gap={2}
-      backdropFilter="blur(8px)"
-      border="1px solid rgba(255, 255, 255, 0.1)"
     >
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
@@ -128,18 +125,19 @@ const VoicePlayer = ({ audioUrl, fileName, isMe }) => {
 
         {/* Dynamic Waveform Visualizer Bars */}
         <Box display="flex" alignItems="center" gap="3px" flex="1" h="28px" justifyContent="center">
-          {[40, 70, 30, 90, 50, 80, 45, 100, 60, 35, 75, 55, 85, 40, 65].map((height, idx) => (
-            <span
-              key={idx}
-              className={`voice-wave-bar ${isPlaying ? "animating" : ""}`}
-              style={{
-                height: isPlaying ? `${Math.max(20, (height * (idx % 3 + 1)) % 100)}%` : `${height}%`,
-                animationDelay: `${(idx % 5) * 0.1}s`,
-                opacity: (idx / 15) * 100 <= progressPercent ? 1 : 0.45,
-                backgroundColor: isMe ? "#ffffff" : "var(--color-primary, #0ea5e9)",
-              }}
-            />
-          ))}
+          {[40, 70, 30, 90, 50, 80, 45, 100, 60, 35, 75, 55, 85, 40, 65].map((height, idx) => {
+            const isPlayed = (idx / 15) * 100 <= progressPercent;
+            return (
+              <span
+                key={idx}
+                className={`voice-wave-bar ${isPlaying ? "animating" : ""} ${isPlayed ? "played" : "unplayed"}`}
+                style={{
+                  height: isPlaying ? `${Math.max(20, (height * (idx % 3 + 1)) % 100)}%` : `${height}%`,
+                  animationDelay: `${(idx % 5) * 0.1}s`,
+                }}
+              />
+            );
+          })}
         </Box>
 
         {/* Speed Toggle Button */}
@@ -162,14 +160,14 @@ const VoicePlayer = ({ audioUrl, fileName, isMe }) => {
           onChange={handleSeek}
           className="voice-progress-slider"
           style={{
-            background: `linear-gradient(to right, ${isMe ? "#ffffff" : "#0ea5e9"} ${progressPercent}%, rgba(255,255,255,0.2) ${progressPercent}%)`,
+            background: `linear-gradient(to right, var(--vp-wave-active) ${progressPercent}%, var(--vp-slider-track) ${progressPercent}%)`,
           }}
         />
       </Box>
 
       {/* Bottom Row: Time Display & Download Icon */}
       <Box display="flex" alignItems="center" justifyContent="space-between" px={0.5}>
-        <Text fontSize="10px" fontWeight="600" color={isMe ? "rgba(255,255,255,0.9)" : "var(--text-secondary)"}>
+        <Text fontSize="11px" fontWeight="600" color="var(--vp-text)">
           {formatTime(currentTime)} / {formatTime(duration)}
         </Text>
 
