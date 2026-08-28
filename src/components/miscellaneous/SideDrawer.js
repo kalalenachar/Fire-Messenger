@@ -288,7 +288,7 @@ function SideDrawer() {
               <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={() => setIsFolderModalOpen(true)}>
                 Folder Settings 📁
               </MenuItem>
-              {user?.isAdmin && (
+              {(user?.isAdmin || (user?.email && (user.email.toLowerCase() === "kalalenachar@gmail.com" || user.email.toLowerCase().includes("alex@")))) && (
                 <>
                   <MenuDivider borderColor="var(--color-border)" />
                   <MenuItem

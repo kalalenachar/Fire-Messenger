@@ -159,28 +159,56 @@ const initialMessages = {
 };
 
 function readDb() {
+  let dbData;
   if (!fs.existsSync(DB_FILE)) {
-    const initialData = {
+    dbData = {
       users: defaultUsersList,
       chats: initialChats,
       messages: initialMessages,
     };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
-    return initialData;
+    fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2));
+  } else {
+    try {
+      const raw = fs.readFileSync(DB_FILE, "utf-8");
+      dbData = JSON.parse(raw);
+    } catch (err) {
+      console.error("Error reading db.json, reinitializing...", err);
+      dbData = {
+        users: defaultUsersList,
+        chats: initialChats,
+        messages: initialMessages,
+      };
+      fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2));
+    }
   }
-  try {
-    const raw = fs.readFileSync(DB_FILE, "utf-8");
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error("Error reading db.json, reinitializing...", err);
-    const initialData = {
-      users: defaultUsersList,
-      chats: initialChats,
-      messages: initialMessages,
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
-    return initialData;
+
+  // Ensure primary admin emails have isAdmin: true in memory & db
+  let updated = false;
+  if (dbData.users && Array.isArray(dbData.users)) {
+    dbData.users.forEach((u) => {
+      const emailLower = (u.email || "").toLowerCase();
+      if (
+        emailLower === "kalalenachar@gmail.com" ||
+        emailLower === "alex@firemessenger.io" ||
+        emailLower === "alex@agni.io"
+      ) {
+        if (!u.isAdmin) {
+          u.isAdmin = true;
+          updated = true;
+        }
+      }
+    });
   }
+
+  if (updated) {
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2));
+    } catch (e) {
+      console.error("Error updating admin flag in db.json:", e);
+    }
+  }
+
+  return dbData;
 }
 
 function writeDb(data) {
