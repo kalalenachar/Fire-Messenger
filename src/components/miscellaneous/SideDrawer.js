@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@chakra-ui/button";
 import { useDisclosure } from "@chakra-ui/hooks";
 import { Input } from "@chakra-ui/input";
-import { Box, Text } from "@chakra-ui/layout";
+import { Box, Flex, Text } from "@chakra-ui/layout";
 import {
   Menu,
   MenuButton,
@@ -20,7 +20,7 @@ import {
 import { Tooltip } from "@chakra-ui/tooltip";
 import { SearchIcon, BellIcon, MoonIcon, SunIcon } from "@chakra-ui/icons";
 import { Avatar } from "@chakra-ui/avatar";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import NotificationBadge from "react-notification-badge";
 import { Effect } from "react-notification-badge";
 import ProfileModal from "./ProfileModal";
@@ -61,6 +61,14 @@ function SideDrawer() {
 
   const { isOpen, onOpen, onClose } = useDisclosure();
   const history = useHistory();
+  const location = useLocation();
+
+  const isAdminPath = location.pathname.startsWith("/admin");
+  const emailLower = (user?.email || "").toLowerCase();
+  const isSuperAdmin =
+    user?.isAdmin ||
+    emailLower === "kalalenachar@gmail.com" ||
+    emailLower.includes("alex@");
 
   const logoutHandler = () => {
     clearCurrentSession();
@@ -147,6 +155,52 @@ function SideDrawer() {
 
         {/* Action Controls */}
         <Box display="flex" alignItems="center" gap={{ base: 1, sm: 2 }} flexShrink={0}>
+          {/* Header Portal Switcher Toggle (Chat Portal vs Admin Portal) */}
+          {isSuperAdmin && (
+            <Flex
+              align="center"
+              bg="rgba(0, 0, 0, 0.25)"
+              p="3px"
+              borderRadius="full"
+              border="1px solid rgba(255, 255, 255, 0.2)"
+              boxShadow="0 2px 8px rgba(0,0,0,0.15)"
+              mr={{ base: 1, sm: 2 }}
+            >
+              <Button
+                size="xs"
+                borderRadius="full"
+                px={{ base: 2.5, sm: 3.5 }}
+                py={1.5}
+                fontWeight="700"
+                fontSize="xs"
+                bg={!isAdminPath ? "var(--color-primary)" : "transparent"}
+                color={!isAdminPath ? "#ffffff" : "var(--text-header)"}
+                opacity={!isAdminPath ? 1 : 0.8}
+                _hover={{ opacity: 1, bg: !isAdminPath ? "var(--color-primary-hover)" : "rgba(255,255,255,0.12)" }}
+                onClick={() => history.push("/chats")}
+                transition="all 0.2s ease"
+              >
+                💬 Chat Portal
+              </Button>
+              <Button
+                size="xs"
+                borderRadius="full"
+                px={{ base: 2.5, sm: 3.5 }}
+                py={1.5}
+                fontWeight="700"
+                fontSize="xs"
+                bg={isAdminPath ? "#805ad5" : "transparent"}
+                color={isAdminPath ? "#ffffff" : "var(--text-header)"}
+                opacity={isAdminPath ? 1 : 0.8}
+                _hover={{ opacity: 1, bg: isAdminPath ? "#6b46c1" : "rgba(255,255,255,0.12)" }}
+                onClick={() => history.push("/admin")}
+                transition="all 0.2s ease"
+              >
+                ⚡ Admin Portal
+              </Button>
+            </Flex>
+          )}
+
           {/* Search Button */}
           <Tooltip label="Search Contacts" placement="bottom">
             <Button
@@ -288,17 +342,17 @@ function SideDrawer() {
               <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={() => setIsFolderModalOpen(true)}>
                 Folder Settings 📁
               </MenuItem>
-              {(user?.isAdmin || (user?.email && (user.email.toLowerCase() === "kalalenachar@gmail.com" || user.email.toLowerCase().includes("alex@")))) && (
+              {isSuperAdmin && (
                 <>
                   <MenuDivider borderColor="var(--color-border)" />
                   <MenuItem
-                    bg="rgba(128, 90, 213, 0.15)"
-                    color="purple.300"
+                    bg={isAdminPath ? "rgba(0, 168, 132, 0.15)" : "rgba(128, 90, 213, 0.15)"}
+                    color={isAdminPath ? "teal.300" : "purple.300"}
                     fontWeight="bold"
-                    _hover={{ bg: "rgba(128, 90, 213, 0.25)" }}
-                    onClick={() => history.push("/admin")}
+                    _hover={{ bg: isAdminPath ? "rgba(0, 168, 132, 0.25)" : "rgba(128, 90, 213, 0.25)" }}
+                    onClick={() => history.push(isAdminPath ? "/chats" : "/admin")}
                   >
-                    ⚡ Admin Portal
+                    {isAdminPath ? "💬 Switch to Chat Portal" : "⚡ Switch to Admin Portal"}
                   </MenuItem>
                 </>
               )}
