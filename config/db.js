@@ -41,39 +41,6 @@ const defaultUsersList = [
       matchScore: 98.4,
     },
   },
-  {
-    _id: "user_sarah",
-    name: "Sarah Jenkins",
-    email: "sarah@agnimessenger.io",
-    password: "123",
-    pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-    status: "Designing the future ✨ | Online",
-    token: "token_sarah_12345",
-    isVerified: false,
-    verificationStatus: "none",
-  },
-  {
-    _id: "user_marcus",
-    name: "Marcus Vance",
-    email: "marcus@agnimessenger.io",
-    password: "123",
-    pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    status: "Coding late night 💻",
-    token: "token_marcus_12345",
-    isVerified: false,
-    verificationStatus: "none",
-  },
-  {
-    _id: "user_elena",
-    name: "Elena Rostova",
-    email: "elena@agnimessenger.io",
-    password: "123",
-    pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
-    status: "Building real-time apps 🚀",
-    token: "token_elena_12345",
-    isVerified: false,
-    verificationStatus: "none",
-  },
 ];
 
 const initialChats = [
@@ -90,35 +57,6 @@ const initialChats = [
     unread: 1,
     pinned: true,
     category: "Bots",
-  },
-  {
-    _id: "chat_fire_squad",
-    chatName: "Agni Squad 🔥 Core Team",
-    isGroupChat: true,
-    groupAdmin: defaultUsersList[0],
-    users: [defaultUsersList[0], defaultUsersList[1], defaultUsersList[2]],
-    latestMessage: {
-      content: "Welcome to the team! Real-time messaging is live 🔥",
-      sender: defaultUsersList[1],
-      createdAt: new Date(Date.now() - 300000).toISOString(),
-    },
-    unread: 2,
-    pinned: true,
-    category: "Groups",
-  },
-  {
-    _id: `chat_sarah_${defaultUsersList[0]._id}`,
-    chatName: "Sarah Jenkins",
-    isGroupChat: false,
-    users: [defaultUsersList[0], defaultUsersList[1]],
-    latestMessage: {
-      content: "Hey! Ready to test real-time chat?",
-      sender: defaultUsersList[1],
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-    unread: 0,
-    pinned: false,
-    category: "Personal",
   },
 ];
 
@@ -138,22 +76,6 @@ const initialMessages = [
     chat: "chat_fire_bot",
     createdAt: new Date(Date.now() - 60000),
     reactions: { "👍": 1 },
-  },
-  {
-    _id: "msg_squad_1",
-    sender: defaultUsersList[2],
-    content: "Hey team! Agni Messenger MongoDB production server is officially live!",
-    chat: "chat_fire_squad",
-    createdAt: new Date(Date.now() - 1800000),
-    reactions: { "🚀": 3 },
-  },
-  {
-    _id: "msg_squad_2",
-    sender: defaultUsersList[1],
-    content: "Welcome to the team! Real-time messaging is live 🔥",
-    chat: "chat_fire_squad",
-    createdAt: new Date(Date.now() - 300000),
-    reactions: { "❤️": 2, "🔥": 4 },
   },
 ];
 
@@ -238,6 +160,15 @@ async function ensureAdminPrivileges() {
       { email: { $in: adminEmails } },
       { $set: { isAdmin: true } }
     );
+    // Cleanup any legacy dummy users and chats from database
+    const dummyEmails = [
+      "sarah@agnimessenger.io",
+      "marcus@agnimessenger.io",
+      "elena@agnimessenger.io",
+    ];
+    await User.deleteMany({ email: { $in: dummyEmails } });
+    await Chat.deleteMany({ _id: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge"] } });
+    await Message.deleteMany({ chat: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge"] } });
   } catch (err) {
     console.error("Error ensuring admin privileges:", err);
   }

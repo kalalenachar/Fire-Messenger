@@ -34,78 +34,6 @@ export const initialFireChats = [
     pinned: true,
     category: "Bots",
   },
-  {
-    _id: "chat_fire_squad",
-    chatName: "Agni Squad 🔥 Core Team",
-    isGroupChat: true,
-    groupAdmin: { _id: "user_fire_01", name: "Alex Rivers" },
-    users: [
-      defaultUser,
-      {
-        _id: "user_sarah",
-        name: "Sarah Jenkins",
-        pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-        status: "Designing the future ✨",
-      },
-      {
-        _id: "user_marcus",
-        name: "Marcus Vance",
-        pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-        status: "Coding late night 💻",
-      },
-    ],
-    latestMessage: {
-      content: "The new WhatsApp emerald green UI looks incredible! 🔥",
-      sender: { name: "Sarah Jenkins" },
-      createdAt: new Date(Date.now() - 300000).toISOString(),
-    },
-    unread: 3,
-    pinned: true,
-    category: "Groups",
-  },
-  {
-    _id: "chat_sarah",
-    chatName: "Sarah Jenkins",
-    isGroupChat: false,
-    users: [
-      defaultUser,
-      {
-        _id: "user_sarah",
-        name: "Sarah Jenkins",
-        email: "sarah@agnimessenger.io",
-        pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-        status: "Designing the future ✨ | Online",
-      },
-    ],
-    latestMessage: {
-      content: "Did you review the custom theme tokens?",
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-    unread: 0,
-    pinned: false,
-    category: "Personal",
-  },
-  {
-    _id: "chat_tech_lounge",
-    chatName: "Tech Lounge & Announcements 🚀",
-    isGroupChat: true,
-    isChannel: true,
-    users: [
-      defaultUser,
-      {
-        _id: "user_elena",
-        name: "Elena Rostova",
-        pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
-      },
-    ],
-    latestMessage: {
-      content: "📢 Agni Messenger v2.0 update released with WebSockets & Voice Notes!",
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-    unread: 0,
-    pinned: false,
-    category: "Channels",
-  },
 ];
 
 export const initialFireMessages = {
@@ -125,42 +53,6 @@ export const initialFireMessages = {
       chat: "chat_fire_bot",
       createdAt: new Date(Date.now() - 60000).toISOString(),
       reactions: { "👍": 1 },
-    },
-  ],
-  chat_fire_squad: [
-    {
-      _id: "msg_squad_1",
-      sender: { _id: "user_marcus", name: "Marcus Vance", pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80" },
-      content: "Hey team! Ready to launch Agni Messenger today?",
-      chat: "chat_fire_squad",
-      createdAt: new Date(Date.now() - 1800000).toISOString(),
-      reactions: { "🚀": 3 },
-    },
-    {
-      _id: "msg_squad_2",
-      sender: { _id: "user_sarah", name: "Sarah Jenkins", pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80" },
-      content: "The new WhatsApp emerald green UI looks incredible! 🔥",
-      chat: "chat_fire_squad",
-      createdAt: new Date(Date.now() - 300000).toISOString(),
-      reactions: { "❤️": 2, "🔥": 4 },
-    },
-  ],
-  chat_sarah: [
-    {
-      _id: "msg_sarah_1",
-      sender: { _id: "user_sarah", name: "Sarah Jenkins", pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80" },
-      content: "Hey Alex! Did you review the custom theme tokens?",
-      chat: "chat_sarah",
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-  ],
-  chat_tech_lounge: [
-    {
-      _id: "msg_tech_1",
-      sender: { _id: "user_elena", name: "Elena Rostova", pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80" },
-      content: "📢 Agni Messenger v2.0 update released with WebSockets & Voice Notes!",
-      chat: "chat_tech_lounge",
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
     },
   ],
 };

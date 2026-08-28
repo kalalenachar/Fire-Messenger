@@ -149,8 +149,8 @@ const getAudienceProfiles = async (req, res) => {
     if (profiles.length === 0) {
       const defaultProfiles = [
         { _id: `prof_all_${userId}`, userId, name: "All Contacts", mode: "whitelist", isDefault: true, memberIds: [] },
-        { _id: `prof_school_${userId}`, userId, name: "Close Friends", mode: "whitelist", isDefault: false, memberIds: ["user_sarah"] },
-        { _id: `prof_no_office_${userId}`, userId, name: "Hide from Others", mode: "blacklist", isDefault: false, memberIds: ["user_marcus"] },
+        { _id: `prof_school_${userId}`, userId, name: "Close Friends", mode: "whitelist", isDefault: false, memberIds: [] },
+        { _id: `prof_no_office_${userId}`, userId, name: "Hide from Others", mode: "blacklist", isDefault: false, memberIds: [] },
       ];
       await AudienceProfile.insertMany(defaultProfiles);
       return res.json({ success: true, profiles: defaultProfiles });
