@@ -9,6 +9,22 @@
       name="description"
       content="Agni Messenger - Fast, Secure, Real-time Web Messaging Application"
     />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("fire_messenger_theme") || localStorage.getItem("chakra-ui-color-mode") || "dark";
+          document.documentElement.setAttribute("data-theme", saved);
+          document.documentElement.setAttribute("data-color-mode", saved);
+          document.documentElement.className = "chakra-ui-" + saved;
+          if (!localStorage.getItem("chakra-ui-color-mode")) {
+            localStorage.setItem("chakra-ui-color-mode", saved);
+          }
+          if (!localStorage.getItem("fire_messenger_theme")) {
+            localStorage.setItem("fire_messenger_theme", saved);
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">

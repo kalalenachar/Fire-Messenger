@@ -30,6 +30,7 @@ import {
   safeLocalStorageSetItem,
 } from "../data/fireStorage";
 import { getBotReplyAsync } from "../data/fireMockData";
+import { useColorMode } from "@chakra-ui/react";
 import CallModal from "../components/miscellaneous/CallModal";
 
 const ChatContext = createContext();
@@ -41,12 +42,16 @@ const ENDPOINT =
 let socket = null;
 
 const ChatProvider = ({ children }) => {
+  const { colorMode, setColorMode } = useColorMode();
   const [selectedChat, setSelectedChat] = useState(null);
   const [user, setUser] = useState(() => getCurrentSessionUser());
   const [notification, setNotification] = useState([]);
   const [chats, setChats] = useState([]);
   const [messagesMap, setMessagesMap] = useState({});
-  const [theme, setTheme] = useState(() => localStorage.getItem("fire_messenger_theme") || "dark");
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("fire_messenger_theme") || localStorage.getItem("chakra-ui-color-mode") || "dark";
+    return saved;
+  });
   const [activeFilter, setActiveFilter] = useState("All");
   const [isTypingMap, setIsTypingMap] = useState({});
 
@@ -292,11 +297,16 @@ const ChatProvider = ({ children }) => {
     selectedChatRef.current = selectedChat;
   }, [selectedChat]);
 
-  // Sync theme to DOM
+  // Sync theme to DOM & Chakra UI
   useEffect(() => {
     const activeTheme = localStorage.getItem("fire_messenger_theme") || theme || "dark";
     document.documentElement.setAttribute("data-theme", activeTheme);
-  }, [theme]);
+    document.documentElement.setAttribute("data-color-mode", activeTheme);
+    document.body.setAttribute("data-theme", activeTheme);
+    if (setColorMode && colorMode !== activeTheme) {
+      setColorMode(activeTheme);
+    }
+  }, [theme, colorMode, setColorMode]);
 
   // Load status feed & audience profiles
   const loadStatusData = useCallback(async (currentUser) => {
@@ -1159,7 +1169,13 @@ const ChatProvider = ({ children }) => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
     localStorage.setItem("fire_messenger_theme", nextTheme);
+    localStorage.setItem("chakra-ui-color-mode", nextTheme);
     document.documentElement.setAttribute("data-theme", nextTheme);
+    document.documentElement.setAttribute("data-color-mode", nextTheme);
+    document.body.setAttribute("data-theme", nextTheme);
+    if (setColorMode) {
+      setColorMode(nextTheme);
+    }
   };
 
   return (
