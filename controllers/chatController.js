@@ -55,7 +55,7 @@ const saveOrCreateChat = async (req, res) => {
     }
 
     const chatData = req.body.chat || req.body;
-    const saved = await Chat.findByIdAndUpdate(chatData._id, chatData, { upsert: true, new: true }).lean();
+    const saved = await Chat.findByIdAndUpdate(chatData._id, chatData, { upsert: true, returnDocument: "after" }).lean();
     res.json({ success: true, chat: saved });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -82,7 +82,7 @@ const saveUserFolders = async (req, res, io) => {
     const doc = await UserFolder.findByIdAndUpdate(
       userId,
       { _id: userId, folders },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     ).lean();
 
     if (io) {

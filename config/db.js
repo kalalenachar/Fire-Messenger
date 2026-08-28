@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { MongoMemoryServer } = require("mongodb-memory-server");
 const User = require("../models/User");
 const Chat = require("../models/Chat");
 const Message = require("../models/Message");
@@ -156,21 +157,59 @@ const initialMessages = [
   },
 ];
 
+const net = require("net");
+const { seedInMemoryStore } = require("../services/memoryDb");
+
 let isConnected = false;
+
+function checkMongoPort(uri) {
+  return new Promise((resolve) => {
+    let host = "127.0.0.1";
+    let port = 27017;
+    try {
+      const match = uri.match(/mongodb:\/\/(?:.*@)?([^:/]+)(?::(\d+))?/);
+      if (match) {
+        host = match[1] || "127.0.0.1";
+        port = parseInt(match[2] || "27017", 10);
+      }
+    } catch (e) {}
+
+    const socket = net.createConnection({ host, port, timeout: 1000 }, () => {
+      socket.end();
+      resolve(true);
+    });
+    socket.on("error", () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
+}
 
 async function connectDb() {
   if (isConnected) return;
-  try {
-    const conn = await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
-    });
-    isConnected = true;
-    console.log(`✅ MongoDB Connected successfully: ${conn.connection.host}`);
-    await seedDatabaseIfEmpty();
-    await ensureAdminPrivileges();
-  } catch (err) {
-    console.error("❌ MongoDB connection error:", err.message);
+  const isPortOpen = await checkMongoPort(MONGO_URI);
+  if (isPortOpen) {
+    try {
+      const conn = await mongoose.connect(MONGO_URI, {
+        serverSelectionTimeoutMS: 2000,
+      });
+      isConnected = true;
+      console.log(`✅ MongoDB Connected successfully: ${conn.connection.host}`);
+      await seedDatabaseIfEmpty();
+      await ensureAdminPrivileges();
+      return;
+    } catch (err) {
+      console.warn(`⚠️ MongoDB connection error (${err.message}). Activating In-Memory Fallback...`);
+    }
+  } else {
+    console.warn(`⚠️ Local MongoDB port (27017) not active. Activating instant In-Memory Data Engine fallback...`);
   }
+
+  seedInMemoryStore(defaultUsersList, initialChats, initialMessages, fireBotUser);
 }
 
 async function seedDatabaseIfEmpty() {

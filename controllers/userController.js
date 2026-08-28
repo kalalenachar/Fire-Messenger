@@ -97,7 +97,7 @@ const registerUser = async (req, res) => {
 const updateUserProfile = async (req, res, io) => {
   try {
     const { userId, updates } = req.body;
-    const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true });
+    const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { returnDocument: "after" });
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -169,7 +169,7 @@ const submitVerification = async (req, res, io) => {
           submittedAt: payload.submittedAt || new Date().toISOString(),
         },
       },
-      { new: true }
+      { returnDocument: "after" }
     )
       .select("-password")
       .lean();
@@ -208,7 +208,7 @@ const reviewVerification = async (req, res, io) => {
         isVerified: status === "verified",
         verificationDetails: details,
       },
-      { new: true }
+      { returnDocument: "after" }
     )
       .select("-password")
       .lean();

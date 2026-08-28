@@ -170,7 +170,7 @@ const saveAudienceProfile = async (req, res) => {
     const profile = await AudienceProfile.findByIdAndUpdate(
       profId,
       { ...profileData, _id: profId, userId },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     ).lean();
     res.json({ success: true, profile });
   } catch (err) {

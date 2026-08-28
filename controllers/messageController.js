@@ -37,7 +37,7 @@ const saveMessageDocument = async (message) => {
     chat: chatId,
   };
 
-  const savedMsg = await Message.findByIdAndUpdate(msgId, msgToSave, { upsert: true, new: true }).lean();
+  const savedMsg = await Message.findByIdAndUpdate(msgId, msgToSave, { upsert: true, returnDocument: "after" }).lean();
 
   const displayContent =
     savedMsg.type === "voice"

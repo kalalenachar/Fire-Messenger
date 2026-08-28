@@ -59,7 +59,7 @@ const updateUserRole = async (req, res, io) => {
   try {
     const { userId } = req.params;
     const { isAdmin } = req.body;
-    const updatedUser = await User.findByIdAndUpdate(userId, { isAdmin: Boolean(isAdmin) }, { new: true })
+    const updatedUser = await User.findByIdAndUpdate(userId, { isAdmin: Boolean(isAdmin) }, { returnDocument: "after" })
       .select("-password")
       .lean();
 
@@ -78,7 +78,7 @@ const toggleUserBan = async (req, res, io) => {
   try {
     const { userId } = req.params;
     const { isBanned } = req.body;
-    const updatedUser = await User.findByIdAndUpdate(userId, { isBanned: Boolean(isBanned) }, { new: true })
+    const updatedUser = await User.findByIdAndUpdate(userId, { isBanned: Boolean(isBanned) }, { returnDocument: "after" })
       .select("-password")
       .lean();
 
@@ -173,7 +173,7 @@ const updateReportStatus = async (req, res) => {
     const updatedReport = await Report.findByIdAndUpdate(
       reportId,
       { status, adminNotes, reviewedAt: new Date() },
-      { new: true }
+      { returnDocument: "after" }
     ).lean();
     res.json({ success: true, report: updatedReport });
   } catch (err) {
