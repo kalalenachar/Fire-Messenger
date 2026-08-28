@@ -63,6 +63,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Global exception handlers to prevent server process crashes on production
+process.on("uncaughtException", (err) => {
+  console.error("🔥 Uncaught Exception caught:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 Unhandled Promise Rejection:", reason);
+});
+
 // Initialize MongoDB on startup
 connectDb().catch((err) => {
   console.error("⚠️ Initial database connection error:", err.message);
@@ -260,7 +269,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.BACKEND_PORT || process.env.SERVER_PORT || 5000;
+const PORT = process.env.BACKEND_PORT || process.env.SERVER_PORT || process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🔥 Agni Messenger Server running on http://localhost:${PORT} with MongoDB MVC Architecture!`);
 });

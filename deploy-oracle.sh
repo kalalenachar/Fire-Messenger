@@ -74,7 +74,7 @@ npm run build
 echo "🔄 Step 4: Starting Node.js backend & Socket.IO server with PM2..."
 pm2 stop agni-messenger || true
 pm2 delete agni-messenger || true
-pm2 start server.js --name "agni-messenger"
+pm2 start server.js --name "agni-messenger" --update-env
 pm2 save
 sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $USER --hp /home/$USER || true
 
@@ -122,6 +122,15 @@ else
 fi
 
 sudo systemctl reload nginx
+
+# 6. Backend Response Check
+echo "🔍 Verifying local port 5000 server status..."
+sleep 2
+if curl -s http://localhost:5000 | grep -iq "status"; then
+    echo "✅ Local backend server on port 5000 is active and responding!"
+else
+    echo "⚠️ Backend check on port 5000 pending. Run 'pm2 logs agni-messenger' to view output."
+fi
 
 echo "================================================================="
 echo "🎉 AGNI MESSENGER IS DEPLOYED & RUNNING WITH NATIVE MONGODB!"
