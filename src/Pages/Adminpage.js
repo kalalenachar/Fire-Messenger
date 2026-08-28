@@ -43,7 +43,7 @@ const Adminpage = () => {
   if (!activeUser || !isSuperAdmin) return null;
 
   return (
-    <Box w="100vw" h="100dvh" maxH="100vh" display="flex" flexDirection="column" bg="var(--bg-app)" overflow="hidden">
+    <Box position="fixed" top={0} left={0} right={0} bottom={0} w="100vw" h="100dvh" display="flex" flexDirection="column" bg="var(--bg-app)" overflow="hidden">
       {/* Top Messenger Navigation Drawer Header */}
       <SideDrawer />
 

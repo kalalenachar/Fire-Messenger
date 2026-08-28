@@ -115,7 +115,7 @@ const GroupChatModal = ({ children }) => {
     <>
       <span onClick={onOpen}>{children}</span>
 
-      <Modal onClose={onClose} isOpen={isOpen} isCentered size="md">
+      <Modal onClose={onClose} isOpen={isOpen} isCentered size="md" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="xl" border="1px solid var(--color-border)">
           <ModalHeader textAlign="center" fontSize="xl" fontWeight="bold">
