@@ -9,9 +9,18 @@ echo "🔥 Starting Agni Messenger Deployment on Oracle Cloud Ubuntu..."
 
 # 1. Update System & Firewall Rules
 echo "🔓 Step 1: Setting up Linux Firewall Rules (ports 80, 443, 5000)..."
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT || true
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT || true
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 5000 -j ACCEPT || true
+if command -v ufw &> /dev/null; then
+    sudo ufw allow 80/tcp || true
+    sudo ufw allow 443/tcp || true
+    sudo ufw allow 5000/tcp || true
+    sudo ufw disable || true
+fi
+
+sudo iptables -F || true
+sudo iptables -X || true
+sudo iptables -P INPUT ACCEPT || true
+sudo iptables -P FORWARD ACCEPT || true
+sudo iptables -P OUTPUT ACCEPT || true
 
 if command -v netfilter-persistent &> /dev/null; then
     sudo netfilter-persistent save || true
