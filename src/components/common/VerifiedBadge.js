@@ -25,20 +25,17 @@ const VerifiedBadge = ({
     return null;
   }
 
-  let badgeColor = "#3897f0"; // Default Blue
   let bgGradient = "linear-gradient(135deg, #3897f0 0%, #0066ff 100%)";
   let iconComponent = CheckCircleIcon;
   let label = "Verified Individual";
   let tooltipText = "Identity Verified via Aadhaar & Live Face Match";
 
   if (verifyStatus === "pending") {
-    badgeColor = "#ed8936";
     bgGradient = "linear-gradient(135deg, #ed8936 0%, #dd6b20 100%)";
     iconComponent = TimeIcon;
     label = "Under Review";
     tooltipText = "Verification Application is Currently Under Background Review ⏳";
   } else if (verifyType === "business" || user?._id === "bot_fire_ai") {
-    badgeColor = "#eab308"; // Gold
     bgGradient = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)";
     iconComponent = StarIcon;
     label = "Official Business";

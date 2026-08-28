@@ -21,21 +21,18 @@ import {
   Flex,
   Icon,
   Image,
-  Divider,
 } from "@chakra-ui/react";
 import {
-  CheckCircleIcon,
   LockIcon,
   AttachmentIcon,
   TimeIcon,
-  StarIcon,
   RepeatIcon,
 } from "@chakra-ui/icons";
 import { ChatState } from "../../Context/ChatProvider";
 import VerifiedBadge from "../common/VerifiedBadge";
 
 const VerificationModal = ({ isOpen, onClose }) => {
-  const { user, submitVerificationApplication, reviewVerificationApplication } = ChatState();
+  const { user, submitVerificationApplication } = ChatState();
   const toast = useToast();
 
   const [step, setStep] = useState(1);
@@ -51,7 +48,6 @@ const VerificationModal = ({ isOpen, onClose }) => {
   const [businessDoc, setBusinessDoc] = useState(null);
 
   // Webcam & Face Capture state
-  const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [faceImage, setFaceImage] = useState(null);
   const [isProcessingFace, setIsProcessingFace] = useState(false);
@@ -229,25 +225,6 @@ const VerificationModal = ({ isOpen, onClose }) => {
         status: "error",
         duration: 3000,
       });
-    }
-  };
-
-  // Demo Admin Action: Instant Approval
-  const handleFastTrackApprove = async () => {
-    try {
-      await reviewVerificationApplication("verified");
-      toast({
-        title: "Account Verified! 🎉",
-        description: `Congratulations! Your ${
-          verificationType === "business" ? "Official Business (Gold)" : "Individual (Blue)"
-        } Verified Tag is now live!`,
-        status: "success",
-        duration: 4000,
-        position: "bottom",
-      });
-      onClose();
-    } catch (err) {
-      toast({ title: "Error approving verification", status: "error" });
     }
   };
 
@@ -716,28 +693,6 @@ const VerificationModal = ({ isOpen, onClose }) => {
                     </Text>
                   </Flex>
                 </VStack>
-              </Box>
-
-              <Divider />
-
-              {/* DEMO / ADMIN FAST-TRACK TOGGLE FOR IMMEDIATE TESTING */}
-              <Box p={3} borderRadius="xl" bg="rgba(56, 151, 240, 0.08)" border="1px dashed var(--color-primary)" textAlign="center">
-                <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" mb={2}>
-                  ⚡ DEMO ADMIN CONTROLLER
-                </Text>
-                <Text fontSize="xs" color="var(--text-secondary)" mb={3}>
-                  Fast-track and instantly approve this application for demo/testing purposes:
-                </Text>
-                <Button
-                  size="sm"
-                  leftIcon={<CheckCircleIcon />}
-                  bg="var(--color-primary)"
-                  color="white"
-                  _hover={{ opacity: 0.9 }}
-                  onClick={handleFastTrackApprove}
-                >
-                  Instantly Approve Verification
-                </Button>
               </Box>
 
               <Button w="100%" variant="ghost" onClick={onClose}>

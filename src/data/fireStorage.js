@@ -7,44 +7,7 @@ export const API_BASE_URL =
     : `${window.location.protocol}//${window.location.host}/api`;
 const CURRENT_USER_KEY = "userInfo";
 
-export const defaultUsersList = [
-  {
-    _id: "user_agni_01",
-    name: "Alex Rivers",
-    email: "alex@agnimessenger.io",
-    password: "123",
-    pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    status: "Available | 🔥 Burning with Passion",
-    token: "token_alex_12345",
-  },
-  {
-    _id: "user_sarah",
-    name: "Sarah Jenkins",
-    email: "sarah@agnimessenger.io",
-    password: "123",
-    pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-    status: "Designing the future ✨ | Online",
-    token: "token_sarah_12345",
-  },
-  {
-    _id: "user_marcus",
-    name: "Marcus Vance",
-    email: "marcus@agnimessenger.io",
-    password: "123",
-    pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    status: "Coding late night 💻",
-    token: "token_marcus_12345",
-  },
-  {
-    _id: "user_elena",
-    name: "Elena Rostova",
-    email: "elena@agnimessenger.io",
-    password: "123",
-    pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
-    status: "Building real-time apps 🚀",
-    token: "token_elena_12345",
-  },
-];
+export const defaultUsersList = [];
 
 export const fireBotUser = {
   _id: "bot_fire_ai",
@@ -153,20 +116,10 @@ export const searchUsersAsync = async (searchQuery, currentUserId) => {
     if (data.success && Array.isArray(data.users)) {
       return data.users.map(sanitizeUser);
     }
-    return defaultUsersList.map(sanitizeUser).filter(
-      (u) =>
-        u._id !== currentUserId &&
-        (u.name.toLowerCase().includes((searchQuery || "").toLowerCase()) ||
-          u.email.toLowerCase().includes((searchQuery || "").toLowerCase()))
-    );
+    return [];
   } catch (error) {
     console.warn("Error searching users:", error);
-    return defaultUsersList.map(sanitizeUser).filter(
-      (u) =>
-        u._id !== currentUserId &&
-        (u.name.toLowerCase().includes((searchQuery || "").toLowerCase()) ||
-          u.email.toLowerCase().includes((searchQuery || "").toLowerCase()))
-    );
+    return [];
   }
 };
 

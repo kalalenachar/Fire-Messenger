@@ -50,7 +50,7 @@ const LocationShareModal = ({ isOpen, onClose, onSendLocation }) => {
       },
       (err) => {
         console.warn("Geolocation error:", err);
-        // Fallback demo coordinates if permission denied or unavailable
+        // Default approximate coordinates fallback if GPS permission is denied or unavailable
         setCoords({ lat: 28.6139, lng: 77.209, accuracy: 15 });
         setLocationName("New Delhi, India (Approximate Location)");
         setErrorMsg("Unable to retrieve precise GPS. Showing fallback location.");

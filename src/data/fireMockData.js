@@ -27,7 +27,7 @@ export const initialFireChats = [
       },
     ],
     latestMessage: {
-      content: "Welcome to Agni Messenger! Type /help or send a message to test.",
+      content: "Welcome to Agni Messenger! Type /help for available options.",
       createdAt: new Date(Date.now() - 60000).toISOString(),
     },
     unread: 1,
