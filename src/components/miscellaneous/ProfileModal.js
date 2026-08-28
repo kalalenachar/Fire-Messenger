@@ -204,12 +204,14 @@ const ProfileModal = ({ user: targetUser, children }) => {
                     @{activeUser.username}
                   </Text>
                 )}
-                <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
-                  {(activeUser?.email || "user@agnimessenger.io")
-                    .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
-                    .replace(/@fire\.io$/i, "@agnimessenger.io")
-                    .replace(/@agni\.io$/i, "@agnimessenger.io")}
-                </Text>
+                {activeUser?.email && (
+                  <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
+                    {activeUser.email
+                      .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
+                      .replace(/@fire\.io$/i, "@agnimessenger.io")
+                      .replace(/@agni\.io$/i, "@agnimessenger.io")}
+                  </Text>
+                )}
 
                 <Box mt={3} p={3} bg="var(--bg-search)" borderRadius="lg" w="100%">
                   <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase" mb={1}>

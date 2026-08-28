@@ -4,8 +4,8 @@ const userSchema = new mongoose.Schema(
   {
     _id: { type: String, required: true },
     name: { type: String, required: true, trim: true },
-    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    username: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     pic: {
       type: String,
@@ -31,8 +31,8 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
+userSchema.index({ email: 1 }, { sparse: true });
+userSchema.index({ username: 1 }, { sparse: true });
 userSchema.index({ name: "text", email: "text", username: "text" });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);

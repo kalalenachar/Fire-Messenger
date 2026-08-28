@@ -66,49 +66,59 @@ const checkUsernameAvailability = async (req, res) => {
 const registerUser = async (req, res) => {
   try {
     const { name, username, email, password, pic, status } = req.body;
-    const cleanEmail = (email || "").toLowerCase().trim();
-    const cleanUsername = (username || "").toLowerCase().trim();
+    const cleanEmail = email && email.trim() ? email.toLowerCase().trim() : undefined;
+    const cleanUsername = username && username.trim() ? username.toLowerCase().trim() : undefined;
 
-    if (!cleanUsername) {
-      return res.status(400).json({ success: false, message: "Username is required." });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: "Full Name is required." });
     }
 
-    const usernameRegex = /^[a-z0-9_.]{3,20}$/;
-    if (!usernameRegex.test(cleanUsername)) {
-      return res.status(400).json({
-        success: false,
-        message: "Username must be 3-20 characters using letters, numbers, dots, or underscores.",
-      });
+    if (!cleanUsername && !cleanEmail) {
+      return res.status(400).json({ success: false, message: "Please provide either a Username or an Email Address." });
     }
 
-    const existingUsername = await User.findOne({ username: cleanUsername });
-    if (existingUsername) {
-      return res.status(400).json({ success: false, message: "Username is already taken." });
+    if (cleanUsername) {
+      const usernameRegex = /^[a-z0-9_.]{3,20}$/;
+      if (!usernameRegex.test(cleanUsername)) {
+        return res.status(400).json({
+          success: false,
+          message: "Username must be 3-20 characters using letters, numbers, dots, or underscores.",
+        });
+      }
+
+      const existingUsername = await User.findOne({ username: cleanUsername });
+      if (existingUsername) {
+        return res.status(400).json({ success: false, message: "Username is already taken." });
+      }
     }
 
-    const existingEmail = await User.findOne({ email: cleanEmail });
-    if (existingEmail) {
-      return res.status(400).json({ success: false, message: "An account with this email address already exists." });
+    if (cleanEmail) {
+      const existingEmail = await User.findOne({ email: cleanEmail });
+      if (existingEmail) {
+        return res.status(400).json({ success: false, message: "An account with this email address already exists." });
+      }
     }
 
     const userCount = await User.countDocuments();
     const shouldBeAdmin =
       userCount === 0 ||
-      cleanEmail === "kalalenachar@gmail.com" ||
-      cleanEmail === "alex@agnimessenger.io" ||
-      cleanEmail === "alex@agni.io";
+      (cleanEmail && (cleanEmail === "kalalenachar@gmail.com" || cleanEmail === "alex@agnimessenger.io" || cleanEmail === "alex@agni.io")) ||
+      (cleanUsername && (cleanUsername === "kalalenachar" || cleanUsername === "alex"));
 
-    const newUser = await User.create({
+    const newUserObj = {
       _id: `user_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       name: name.trim(),
-      username: cleanUsername,
-      email: cleanEmail,
       password,
       isAdmin: shouldBeAdmin,
       pic: pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
       status: status || "Available | 🔥 Agni Messenger",
       token: `token_${Date.now()}`,
-    });
+    };
+
+    if (cleanUsername) newUserObj.username = cleanUsername;
+    if (cleanEmail) newUserObj.email = cleanEmail;
+
+    const newUser = await User.create(newUserObj);
 
     // Auto create bot chat for new user
     const userBotChat = await Chat.create({

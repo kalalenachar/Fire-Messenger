@@ -24,7 +24,7 @@ const Login = () => {
     if (!email || !password) {
       toast({
         title: "Missing Fields",
-        description: "Please fill in both email and password.",
+        description: "Please enter your username or email address and password.",
         status: "warning",
         duration: 3000,
         isClosable: true,

@@ -72,10 +72,36 @@ const Signup = () => {
   const submitHandler = async () => {
     setLoading(true);
 
-    if (!name.trim() || !username.trim() || !email.trim() || !password || !confirmpassword) {
+    if (!name.trim()) {
       toast({
-        title: "Missing Fields",
-        description: "Please fill in all required fields.",
+        title: "Missing Name",
+        description: "Please enter your full name.",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+        position: "bottom",
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (!username.trim() && !email.trim()) {
+      toast({
+        title: "Missing Identity",
+        description: "Please provide either a Username or an Email Address.",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+        position: "bottom",
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (!password || !confirmpassword) {
+      toast({
+        title: "Missing Password",
+        description: "Please enter and confirm your password.",
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -86,8 +112,7 @@ const Signup = () => {
     }
 
     // Only hard-block if we KNOW username is taken/invalid (available === false)
-    // If server was unreachable (available === null), let submit proceed — server validates
-    if (usernameStatus.available === false) {
+    if (username.trim() && usernameStatus.available === false) {
       toast({
         title: "Username Unavailable",
         description: usernameStatus.message || "Please choose a different username.",
@@ -115,9 +140,9 @@ const Signup = () => {
 
     try {
       const newUser = await registerUser({
-        name,
-        username: username.trim().toLowerCase(),
-        email,
+        name: name.trim(),
+        username: username.trim() ? username.trim().toLowerCase() : undefined,
+        email: email.trim() ? email.trim().toLowerCase() : undefined,
         password,
       });
 
@@ -164,9 +189,12 @@ const Signup = () => {
         />
       </FormControl>
 
-      <FormControl id="signup-username" isRequired isInvalid={usernameStatus.available === false}>
-        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
-          Username
+      <FormControl id="signup-username" isInvalid={Boolean(username.trim()) && usernameStatus.available === false}>
+        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)" display="flex" justifyContent="space-between" alignItems="center">
+          <span>Username</span>
+          <Text as="span" fontSize="xs" color="var(--text-secondary)" fontWeight="normal">
+            (Optional if Email is provided)
+          </Text>
         </FormLabel>
         <InputGroup size="md">
           <InputLeftElement pointerEvents="none" color="var(--text-secondary)" fontSize="sm">
@@ -179,21 +207,21 @@ const Signup = () => {
             bg="var(--bg-search)"
             color="var(--text-primary)"
             borderColor={
-              usernameStatus.available === true
+              username.trim() && usernameStatus.available === true
                 ? "green.400"
-                : usernameStatus.available === false
+                : username.trim() && usernameStatus.available === false
                 ? "red.400"
-                : usernameStatus.serverError
+                : username.trim() && usernameStatus.serverError
                 ? "orange.400"
                 : "var(--color-border)"
             }
             _focus={{
               borderColor:
-                usernameStatus.available === true
+                username.trim() && usernameStatus.available === true
                   ? "green.400"
-                  : usernameStatus.available === false
+                  : username.trim() && usernameStatus.available === false
                   ? "red.400"
-                  : usernameStatus.serverError
+                  : username.trim() && usernameStatus.serverError
                   ? "orange.400"
                   : "var(--color-primary)",
             }}
@@ -201,16 +229,16 @@ const Signup = () => {
           <InputRightElement>
             {isCheckingUsername ? (
               <Spinner size="sm" color="var(--color-primary)" />
-            ) : usernameStatus.available === true ? (
+            ) : username.trim() && usernameStatus.available === true ? (
               <CheckCircleIcon color="green.400" />
-            ) : usernameStatus.available === false ? (
+            ) : username.trim() && usernameStatus.available === false ? (
               <WarningIcon color="red.400" />
-            ) : usernameStatus.serverError ? (
+            ) : username.trim() && usernameStatus.serverError ? (
               <WarningIcon color="orange.400" />
             ) : null}
           </InputRightElement>
         </InputGroup>
-        {usernameStatus.message && (
+        {username.trim() && usernameStatus.message && (
           <Text
             fontSize="xs"
             mt={1}
@@ -230,9 +258,12 @@ const Signup = () => {
         )}
       </FormControl>
 
-      <FormControl id="signup-email" isRequired>
-        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
-          Email Address
+      <FormControl id="signup-email">
+        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)" display="flex" justifyContent="space-between" alignItems="center">
+          <span>Email Address</span>
+          <Text as="span" fontSize="xs" color="var(--text-secondary)" fontWeight="normal">
+            (Optional if Username is provided)
+          </Text>
         </FormLabel>
         <Input
           type="email"
