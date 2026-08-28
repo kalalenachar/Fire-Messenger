@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { MongoMemoryServer } = require("mongodb-memory-server");
 const User = require("../models/User");
 const Chat = require("../models/Chat");
 const Message = require("../models/Message");
