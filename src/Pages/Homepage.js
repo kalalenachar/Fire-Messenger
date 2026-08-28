@@ -8,30 +8,21 @@ import {
   TabPanels,
   Tabs,
   Text,
-  Button,
 } from "@chakra-ui/react";
 import { useHistory } from "react-router-dom";
 import Login from "../components/Authentication/Login";
 import Signup from "../components/Authentication/Signup";
-import { defaultUsersList, setCurrentSessionUser } from "../data/fireStorage";
 import { ChatState } from "../Context/ChatProvider";
 
 function Homepage() {
   const history = useHistory();
-  const { user, setUser } = ChatState();
+  const { user } = ChatState();
 
   useEffect(() => {
     if (user) {
       history.push("/chats");
     }
   }, [user, history]);
-
-  const handleGuestLogin = () => {
-    const guestUser = defaultUsersList[0];
-    setCurrentSessionUser(guestUser);
-    setUser(guestUser);
-    history.push("/chats");
-  };
 
   return (
     <Box minH="100vh" w="100vw" bg="var(--bg-app)" display="flex" alignItems="center" justifyContent="center" p={4}>
@@ -58,12 +49,12 @@ function Homepage() {
             alignItems="center"
             justifyContent="center"
             fontSize="32px"
-            mb={2}
-            boxShadow="0 4px 14px rgba(0,168,132,0.4)"
+            boxShadow="0 4px 12px rgba(0, 168, 132, 0.4)"
+            mb={3}
           >
             🔥
           </Box>
-          <Text fontSize="3xl" fontWeight="800" color="var(--text-primary)" letterSpacing="-0.5px">
+          <Text fontSize="2xl" fontWeight="800" color="var(--text-primary)" letterSpacing="-0.5px">
             Agni Messenger
           </Text>
           <Text fontSize="sm" color="var(--color-primary)" fontWeight="600" mt={1}>
@@ -71,22 +62,27 @@ function Homepage() {
           </Text>
         </Box>
 
-        {/* Auth Box */}
-        <Box bg="var(--bg-card)" w="100%" p={6} borderRadius="xl" boxShadow="var(--shadow-md)" border="1px solid var(--color-border)">
-          <Tabs isFitted variant="soft-rounded">
-            <TabList mb={4} bg="var(--bg-app)" p={1} borderRadius="lg">
+        {/* Authentication Form Card */}
+        <Box
+          bg="var(--bg-card)"
+          w="100%"
+          p={6}
+          borderRadius="xl"
+          boxShadow="var(--shadow-md)"
+          border="1px solid var(--color-border)"
+        >
+          <Tabs isFitted variant="soft-rounded" colorScheme="green">
+            <TabList mb="1.5em" bg="var(--bg-search)" p={1} borderRadius="lg">
               <Tab
-                fontWeight="600"
                 color="var(--text-secondary)"
-                _selected={{ color: "white", bg: "var(--color-primary)" }}
+                _selected={{ color: "white", bg: "var(--color-primary)", fontWeight: "bold" }}
                 borderRadius="md"
               >
                 Login
               </Tab>
               <Tab
-                fontWeight="600"
                 color="var(--text-secondary)"
-                _selected={{ color: "white", bg: "var(--color-primary)" }}
+                _selected={{ color: "white", bg: "var(--color-primary)", fontWeight: "bold" }}
                 borderRadius="md"
               >
                 Sign Up
@@ -101,21 +97,6 @@ function Homepage() {
               </TabPanel>
             </TabPanels>
           </Tabs>
-
-          <Button
-            mt={5}
-            w="100%"
-            variant="outline"
-            borderColor="var(--color-primary)"
-            color="var(--color-primary)"
-            fontWeight="bold"
-            _hover={{ bg: "var(--color-primary)", color: "white" }}
-            onClick={handleGuestLogin}
-            size="lg"
-            borderRadius="lg"
-          >
-            🚀 Continue as Guest Demo User
-          </Button>
         </Box>
       </Container>
     </Box>

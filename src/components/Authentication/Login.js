@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { Button } from "@chakra-ui/button";
 import { FormControl, FormLabel } from "@chakra-ui/form-control";
 import { Input, InputGroup, InputRightElement } from "@chakra-ui/input";
-import { VStack, Box, Text, Badge, Wrap, WrapItem } from "@chakra-ui/layout";
+import { VStack } from "@chakra-ui/layout";
 import { useToast } from "@chakra-ui/react";
 import { useHistory } from "react-router-dom";
-import { loginUser, defaultUsersList, setCurrentSessionUser } from "../../data/fireStorage";
+import { loginUser, setCurrentSessionUser } from "../../data/fireStorage";
 import { ChatState } from "../../Context/ChatProvider";
 
 const Login = () => {
@@ -37,7 +37,7 @@ const Login = () => {
     try {
       const loggedInUser = await loginUser(email, password);
       setCurrentSessionUser(loggedInUser);
-      setUser(loggedInUser); // Update Context state immediately!
+      setUser(loggedInUser);
 
       toast({
         title: `Welcome back, ${loggedInUser.name}! 🔥`,
@@ -63,13 +63,8 @@ const Login = () => {
     }
   };
 
-  const fillQuickUser = (userEmail, userPassword) => {
-    setEmail(userEmail);
-    setPassword(userPassword);
-  };
-
   return (
-    <VStack spacing="12px" align="stretch">
+    <VStack spacing="14px" align="stretch">
       <FormControl id="login-email" isRequired>
         <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
           Email Address
@@ -77,7 +72,7 @@ const Login = () => {
         <Input
           value={email}
           type="email"
-          placeholder="e.g. alex@agnimessenger.io"
+          placeholder="Enter your registered email"
           onChange={(e) => setEmail(e.target.value)}
           bg="var(--bg-search)"
           color="var(--text-primary)"
@@ -114,7 +109,7 @@ const Login = () => {
         color="white"
         _hover={{ bg: "var(--color-primary-hover)" }}
         width="100%"
-        mt={2}
+        mt={3}
         onClick={submitHandler}
         isLoading={loading}
         size="lg"
@@ -124,32 +119,6 @@ const Login = () => {
       >
         Sign In 🔥
       </Button>
-
-      {/* Quick Test Login Accounts */}
-      <Box pt={3} borderTop="1px border var(--color-border)">
-        <Text fontSize="xs" color="var(--text-muted)" fontWeight="bold" mb={2}>
-          QUICK ONE-CLICK TEST ACCOUNTS (Password: 123):
-        </Text>
-        <Wrap spacing={2}>
-          {defaultUsersList.map((u) => (
-            <WrapItem key={u._id}>
-              <Badge
-                px={2.5}
-                py={1}
-                borderRadius="full"
-                cursor="pointer"
-                bg="var(--bg-search)"
-                color="var(--text-primary)"
-                border="1px solid var(--color-border)"
-                _hover={{ bg: "var(--color-primary)", color: "white" }}
-                onClick={() => fillQuickUser(u.email, u.password)}
-              >
-                👤 {u.name.split(" ")[0]}
-              </Badge>
-            </WrapItem>
-          ))}
-        </Wrap>
-      </Box>
     </VStack>
   );
 };
