@@ -116,6 +116,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handler: Toggle Admin Role
