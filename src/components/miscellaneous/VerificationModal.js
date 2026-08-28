@@ -48,6 +48,8 @@ const VerificationModal = ({ isOpen, onClose }) => {
   const [businessDoc, setBusinessDoc] = useState(null);
 
   // Webcam & Face Capture state
+  // eslint-disable-next-line no-unused-vars
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [faceImage, setFaceImage] = useState(null);
   const [isProcessingFace, setIsProcessingFace] = useState(false);
