@@ -1,7 +1,10 @@
 // Agni Messenger - Real Persistent Data Layer & REST API Client Engine
 import axios from "axios";
 
-export const API_BASE_URL = `http://${window.location.hostname}:5000/api`;
+export const API_BASE_URL =
+  window.location.port === "3000"
+    ? `http://${window.location.hostname}:5000/api`
+    : `${window.location.protocol}//${window.location.host}/api`;
 const CURRENT_USER_KEY = "userInfo";
 
 export const defaultUsersList = [

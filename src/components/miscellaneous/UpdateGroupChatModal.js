@@ -19,6 +19,7 @@ import {
 import axios from "axios";
 import { useState } from "react";
 import { ChatState } from "../../Context/ChatProvider";
+import { API_BASE_URL } from "../../data/fireStorage";
 import UserBadgeItem from "../userAvatar/UserBadgeItem";
 import UserListItem from "../userAvatar/UserListItem";
 
@@ -47,7 +48,7 @@ const UpdateGroupChatModal = ({ fetchMessages, fetchAgain, setFetchAgain }) => {
         },
       };
       const { data } = await axios.get(
-        `https://lazy-pear-sea-lion-tam.cyclic.app/api/user?search=${search}`,
+        `${API_BASE_URL}/user?search=${search}`,
         config
       );
       console.log(data);
@@ -77,7 +78,7 @@ const UpdateGroupChatModal = ({ fetchMessages, fetchAgain, setFetchAgain }) => {
         },
       };
       const { data } = await axios.put(
-        `https://lazy-pear-sea-lion-tam.cyclic.app/api/chat/rename`,
+        `${API_BASE_URL}/chat/rename`,
         {
           chatId: selectedChat._id,
           chatName: groupChatName,
@@ -135,7 +136,7 @@ const UpdateGroupChatModal = ({ fetchMessages, fetchAgain, setFetchAgain }) => {
         },
       };
       const { data } = await axios.put(
-        `https://lazy-pear-sea-lion-tam.cyclic.app/api/chat/groupadd`,
+        `${API_BASE_URL}/chat/groupadd`,
         {
           chatId: selectedChat._id,
           userId: user1._id,
@@ -180,7 +181,7 @@ const UpdateGroupChatModal = ({ fetchMessages, fetchAgain, setFetchAgain }) => {
         },
       };
       const { data } = await axios.put(
-        `https://lazy-pear-sea-lion-tam.cyclic.app/api/chat/groupremove`,
+        `${API_BASE_URL}/chat/groupremove`,
         {
           chatId: selectedChat._id,
           userId: user1._id,

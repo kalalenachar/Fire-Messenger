@@ -41,9 +41,11 @@ const io = new Server(server, {
 // Initialize database on startup
 db.readDb();
 
-app.get("/", (req, res) => {
-  res.send({ status: "online", message: "🔥 Agni Messenger Real-Time API & Persistent DB Server is Running!" });
-});
+// --- SERVE REACT FRONTEND STATIC ASSETS ---
+const buildPath = path.join(__dirname, "build");
+if (fs.existsSync(buildPath)) {
+  app.use(express.static(buildPath));
+}
 
 // --- REST API ENDPOINTS ---
 
@@ -548,6 +550,17 @@ app.delete("/api/audience-profiles/:userId/:profileId", (req, res) => {
     res.status(400).json({ success: false, message: err.message });
   }
 });
+
+// Fallback route for React SPA or API health check
+if (fs.existsSync(buildPath)) {
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(buildPath, "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.send({ status: "online", message: "🔥 Agni Messenger Real-Time API & Persistent DB Server is Running!" });
+  });
+}
 
 // --- SOCKET.IO REAL-TIME ENGINE ---
 

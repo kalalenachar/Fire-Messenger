@@ -33,7 +33,10 @@ import { getBotReplyAsync } from "../data/fireMockData";
 import CallModal from "../components/miscellaneous/CallModal";
 
 const ChatContext = createContext();
-const ENDPOINT = `http://${window.location.hostname}:5000`;
+const ENDPOINT =
+  window.location.port === "3000"
+    ? `http://${window.location.hostname}:5000`
+    : `${window.location.protocol}//${window.location.host}`;
 
 let socket = null;
 
