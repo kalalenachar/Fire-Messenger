@@ -77,7 +77,7 @@ const Login = () => {
         <Input
           value={email}
           type="email"
-          placeholder="e.g. alex@firemessenger.io"
+          placeholder="e.g. alex@agnimessenger.io"
           onChange={(e) => setEmail(e.target.value)}
           bg="var(--bg-search)"
           color="var(--text-primary)"

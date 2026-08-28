@@ -72,7 +72,7 @@ export const initialFireChats = [
       {
         _id: "user_sarah",
         name: "Sarah Jenkins",
-        email: "sarah@agni.io",
+        email: "sarah@agnimessenger.io",
         pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
         status: "Designing the future ✨ | Online",
       },

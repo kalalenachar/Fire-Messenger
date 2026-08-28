@@ -119,7 +119,7 @@ const GroupChatModal = ({ children }) => {
         <ModalOverlay />
         <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="xl" border="1px solid var(--color-border)">
           <ModalHeader textAlign="center" fontSize="xl" fontWeight="bold">
-            Create Fire Group Chat 🔥
+            Create Agni Group Chat 🔥
           </ModalHeader>
           <ModalCloseButton />
 

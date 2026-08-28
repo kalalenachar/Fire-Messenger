@@ -1,0 +1,27 @@
+const mongoose = require("mongoose");
+
+const chatSchema = new mongoose.Schema(
+  {
+    _id: { type: String, required: true },
+    chatName: { type: String, trim: true },
+    isGroupChat: { type: Boolean, default: false },
+    users: [{ type: mongoose.Schema.Types.Mixed }],
+    latestMessage: { type: mongoose.Schema.Types.Mixed, default: null },
+    groupAdmin: { type: mongoose.Schema.Types.Mixed, default: null },
+    pinned: { type: Boolean, default: false },
+    isArchived: { type: Boolean, default: false },
+    isHidden: { type: Boolean, default: false },
+    unread: { type: Number, default: 0 },
+    category: { type: String, default: "Personal" },
+  },
+  {
+    timestamps: true,
+    _id: false,
+  }
+);
+
+chatSchema.index({ "users._id": 1 });
+chatSchema.index({ updatedAt: -1 });
+
+const Chat = mongoose.models.Chat || mongoose.model("Chat", chatSchema);
+module.exports = Chat;

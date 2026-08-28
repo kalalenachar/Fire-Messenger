@@ -341,7 +341,12 @@ const AudienceProfileModal = ({ isOpen, onClose }) => {
                               {u.name}
                             </Text>
                             <Text fontSize="xs" color="var(--text-muted)">
-                              {u.email}
+                              {u.email
+                                ? u.email
+                                    .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
+                                    .replace(/@fire\.io$/i, "@agnimessenger.io")
+                                    .replace(/@agni\.io$/i, "@agnimessenger.io")
+                                : ""}
                             </Text>
                           </Box>
                         </Flex>

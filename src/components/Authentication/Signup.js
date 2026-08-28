@@ -146,7 +146,7 @@ const Signup = () => {
         </FormLabel>
         <Input
           type="email"
-          placeholder="e.g. alex@firemessenger.io"
+          placeholder="e.g. alex@agnimessenger.io"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           bg="var(--bg-search)"

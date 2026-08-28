@@ -463,7 +463,12 @@ const AdminDashboard = () => {
                             </Box>
                           </Flex>
                         </Td>
-                        <Td fontSize="sm">{userItem.email}</Td>
+                        <Td fontSize="sm">
+                          {(userItem.email || "")
+                            .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
+                            .replace(/@fire\.io$/i, "@agnimessenger.io")
+                            .replace(/@agni\.io$/i, "@agnimessenger.io")}
+                        </Td>
                         <Td>
                           <VerifiedBadge user={userItem} size="sm" />
                         </Td>
@@ -564,7 +569,10 @@ const AdminDashboard = () => {
                             <Box>
                               <Text fontWeight="bold">{item.name}</Text>
                               <Text fontSize="xs" color="var(--text-secondary)">
-                                {item.email}
+                                {(item.email || "")
+                                  .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
+                                  .replace(/@fire\.io$/i, "@agnimessenger.io")
+                                  .replace(/@agni\.io$/i, "@agnimessenger.io")}
                               </Text>
                             </Box>
                           </Flex>

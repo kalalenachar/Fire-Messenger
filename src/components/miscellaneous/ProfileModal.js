@@ -192,7 +192,10 @@ const ProfileModal = ({ user: targetUser, children }) => {
             ) : (
               <Box textAlign="center" w="100%">
                 <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
-                  {activeUser?.email || "user@agnimessenger.io"}
+                  {(activeUser?.email || "user@agnimessenger.io")
+                    .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
+                    .replace(/@fire\.io$/i, "@agnimessenger.io")
+                    .replace(/@agni\.io$/i, "@agnimessenger.io")}
                 </Text>
 
                 <Box mt={3} p={3} bg="var(--bg-search)" borderRadius="lg" w="100%">

@@ -53,7 +53,7 @@ const ReportModal = ({ isOpen, onClose, targetObj }) => {
     setIsSubmitting(false);
     toast({
       title: "🚨 Report Logged & Email Dispatched",
-      description: `Report for "${targetTitle}" was recorded in database and an instant email alert was sent to Admin (${res.adminEmail || "admin@firemessenger.io"}).`,
+      description: `Report for "${targetTitle}" was recorded in database and an instant email alert was sent to Admin (${res.adminEmail || "admin@agnimessenger.io"}).`,
       status: "success",
       duration: 5000,
       isClosable: true,

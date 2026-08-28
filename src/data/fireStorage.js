@@ -9,7 +9,7 @@ const CURRENT_USER_KEY = "userInfo";
 
 export const defaultUsersList = [
   {
-    _id: "user_fire_01",
+    _id: "user_agni_01",
     name: "Alex Rivers",
     email: "alex@agnimessenger.io",
     password: "123",
@@ -20,7 +20,7 @@ export const defaultUsersList = [
   {
     _id: "user_sarah",
     name: "Sarah Jenkins",
-    email: "sarah@agni.io",
+    email: "sarah@agnimessenger.io",
     password: "123",
     pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
     status: "Designing the future ✨ | Online",
@@ -29,7 +29,7 @@ export const defaultUsersList = [
   {
     _id: "user_marcus",
     name: "Marcus Vance",
-    email: "marcus@agni.io",
+    email: "marcus@agnimessenger.io",
     password: "123",
     pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
     status: "Coding late night 💻",
@@ -38,7 +38,7 @@ export const defaultUsersList = [
   {
     _id: "user_elena",
     name: "Elena Rostova",
-    email: "elena@agni.io",
+    email: "elena@agnimessenger.io",
     password: "123",
     pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
     status: "Building real-time apps 🚀",
@@ -133,15 +133,40 @@ export const reviewVerificationApplicationAsync = async (userId, status, rejecti
   }
 };
 
+export const sanitizeUser = (user) => {
+  if (!user || typeof user !== "object") return user;
+  const updated = { ...user };
+  if (updated.email && typeof updated.email === "string") {
+    updated.email = updated.email
+      .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
+      .replace(/@fire\.io$/i, "@agnimessenger.io")
+      .replace(/@agni\.io$/i, "@agnimessenger.io");
+  }
+  return updated;
+};
+
 export const searchUsersAsync = async (searchQuery, currentUserId) => {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/user/search`, {
       params: { search: searchQuery, userId: currentUserId },
     });
-    return data.success ? data.users : [];
+    if (data.success && Array.isArray(data.users)) {
+      return data.users.map(sanitizeUser);
+    }
+    return defaultUsersList.map(sanitizeUser).filter(
+      (u) =>
+        u._id !== currentUserId &&
+        (u.name.toLowerCase().includes((searchQuery || "").toLowerCase()) ||
+          u.email.toLowerCase().includes((searchQuery || "").toLowerCase()))
+    );
   } catch (error) {
     console.warn("Error searching users:", error);
-    return [];
+    return defaultUsersList.map(sanitizeUser).filter(
+      (u) =>
+        u._id !== currentUserId &&
+        (u.name.toLowerCase().includes((searchQuery || "").toLowerCase()) ||
+          u.email.toLowerCase().includes((searchQuery || "").toLowerCase()))
+    );
   }
 };
 
@@ -194,21 +219,25 @@ export const saveUserFoldersAsync = async (userId, folders) => {
   }
 };
 
-
-
 // Session Management
 export const getCurrentSessionUser = () => {
   const data = localStorage.getItem(CURRENT_USER_KEY);
   if (!data) return null;
   try {
-    return JSON.parse(data);
+    const raw = JSON.parse(data);
+    const sanitized = sanitizeUser(raw);
+    if (sanitized.email !== raw.email) {
+      safeLocalStorageSetItem(CURRENT_USER_KEY, JSON.stringify(sanitized));
+    }
+    return sanitized;
   } catch (e) {
     return null;
   }
 };
 
 export const setCurrentSessionUser = (user) => {
-  safeLocalStorageSetItem(CURRENT_USER_KEY, JSON.stringify(user));
+  const sanitized = sanitizeUser(user);
+  safeLocalStorageSetItem(CURRENT_USER_KEY, JSON.stringify(sanitized));
 };
 
 export const clearCurrentSession = () => {
