@@ -33,7 +33,7 @@ fi
 
 # 3. Install NPM Dependencies & Build React Bundle
 echo "🔨 Step 3: Installing project dependencies & building production bundle..."
-npm install
+npm install --legacy-peer-deps
 npm run build
 
 # 4. Configure PM2 Process Manager
