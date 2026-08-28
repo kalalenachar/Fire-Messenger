@@ -260,7 +260,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.BACKEND_PORT || process.env.SERVER_PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🔥 Agni Messenger Server running on http://localhost:${PORT} with MongoDB MVC Architecture!`);
 });
