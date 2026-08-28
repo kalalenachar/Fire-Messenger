@@ -44,12 +44,15 @@ pm2 start server.js --name "agni-messenger"
 pm2 save
 sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $USER --hp /home/$USER || true
 
-# 5. Configure Nginx Reverse Proxy
-echo "🌐 Step 5: Configuring Nginx Reverse Proxy with WebSockets support..."
+# 5. Configure Nginx Reverse Proxy for agni.run.place & Public IP
+echo "🌐 Step 5: Configuring Nginx Reverse Proxy with WebSockets & SSL support..."
+sudo apt install -y certbot python3-certbot-nginx
+
 cat << 'NGINX_CONF' | sudo tee /etc/nginx/sites-available/agni-messenger
 server {
     listen 80;
-    server_name _;
+    listen [::]:80;
+    server_name agni.run.place 140.245.245.37 _;
 
     client_max_body_size 100M;
 
@@ -75,7 +78,19 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 
+# Automatically run Certbot for agni.run.place if requested
+if [ -d "/etc/letsencrypt/live/agni.run.place" ]; then
+    echo "🔒 Existing SSL Certificate found for agni.run.place! Re-applying Certbot SSL..."
+    sudo certbot --nginx -d agni.run.place --non-interactive --reinstall || true
+else
+    echo "🔒 Configuring Certbot SSL for agni.run.place..."
+    sudo certbot --nginx -d agni.run.place --non-interactive --agree-tos --register-unsafely-without-email || true
+fi
+
+sudo systemctl reload nginx
+
 echo "================================================================="
 echo "🎉 AGNI MESSENGER IS DEPLOYED & RUNNING SUCCESSFULLY!"
-echo "👉 Access your app via browser: http://$(curl -s ifconfig.me)"
+echo "👉 Domain HTTPS URL: https://agni.run.place"
+echo "👉 Direct IP URL:    http://140.245.245.37"
 echo "================================================================="
