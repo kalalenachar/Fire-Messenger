@@ -1,20 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@chakra-ui/button";
 import { FormControl, FormLabel } from "@chakra-ui/form-control";
-import { Input, InputGroup, InputRightElement } from "@chakra-ui/input";
-import { VStack, Box, Wrap, WrapItem } from "@chakra-ui/layout";
-import { Avatar, useToast } from "@chakra-ui/react";
+import { Input, InputGroup, InputLeftElement, InputRightElement } from "@chakra-ui/input";
+import { VStack, Text } from "@chakra-ui/layout";
+import { Spinner, useToast } from "@chakra-ui/react";
+import { CheckCircleIcon, WarningIcon } from "@chakra-ui/icons";
 import { useHistory } from "react-router-dom";
-import { registerUser, setCurrentSessionUser } from "../../data/fireStorage";
+import { registerUser, checkUsernameAvailabilityAsync, setCurrentSessionUser } from "../../data/fireStorage";
 import { ChatState } from "../../Context/ChatProvider";
-
-const defaultAvatarPresets = [
-  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-];
 
 const Signup = () => {
   const [show, setShow] = useState(false);
@@ -24,49 +17,81 @@ const Signup = () => {
   const { setUser } = ChatState();
 
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState({ available: null, message: "" });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmpassword, setConfirmpassword] = useState("");
-  const [status, setStatus] = useState("Available | 🔥 Agni Messenger");
-  const [pic, setPic] = useState(defaultAvatarPresets[0]);
   const [loading, setLoading] = useState(false);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
+  // Debounced Username availability check
+  useEffect(() => {
+    const clean = username.trim().toLowerCase();
+    if (!clean) {
+      setUsernameStatus({ available: null, message: "" });
+      setIsCheckingUsername(false);
+      return;
+    }
+
+    const regex = /^[a-z0-9_.]{3,20}$/;
+    if (!regex.test(clean)) {
+      setUsernameStatus({
+        available: false,
+        message: "Must be 3-20 characters: letters, numbers, dots & underscores.",
+      });
+      setIsCheckingUsername(false);
+      return;
+    }
+
+    setIsCheckingUsername(true);
+    setUsernameStatus({ available: null, message: "Checking availability..." });
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await checkUsernameAvailabilityAsync(clean);
+        setIsCheckingUsername(false);
+        if (res.serverError) {
+          // Server unreachable — don't block the user, just warn
+          setUsernameStatus({ available: null, serverError: true, message: "⚠️ Server unreachable — username check skipped." });
+        } else if (res.available === true) {
+          setUsernameStatus({ available: true, serverError: false, message: "Username is available! ✓" });
+        } else {
+          setUsernameStatus({ available: false, serverError: false, message: res.message || "Username is already taken." });
+        }
+      } catch (err) {
+        setIsCheckingUsername(false);
+        // Network error — don't block with red; show neutral warning
+        setUsernameStatus({ available: null, serverError: true, message: "⚠️ Could not verify username — will be checked on submit." });
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  const submitHandler = async () => {
+    setLoading(true);
+
+    if (!name.trim() || !username.trim() || !email.trim() || !password || !confirmpassword) {
       toast({
-        title: "File Too Large",
-        description: "Please choose an image under 2MB.",
+        title: "Missing Fields",
+        description: "Please fill in all required fields.",
         status: "warning",
         duration: 3000,
         isClosable: true,
         position: "bottom",
       });
+      setLoading(false);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPic(reader.result);
+    // Only hard-block if we KNOW username is taken/invalid (available === false)
+    // If server was unreachable (available === null), let submit proceed — server validates
+    if (usernameStatus.available === false) {
       toast({
-        title: "Avatar Uploaded! 📸",
-        status: "success",
-        duration: 2000,
-        position: "bottom",
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const submitHandler = async () => {
-    setLoading(true);
-
-    if (!name.trim() || !email.trim() || !password || !confirmpassword) {
-      toast({
-        title: "Missing Fields",
-        description: "Please fill in all required fields.",
-        status: "warning",
+        title: "Username Unavailable",
+        description: usernameStatus.message || "Please choose a different username.",
+        status: "error",
         duration: 3000,
         isClosable: true,
         position: "bottom",
@@ -91,10 +116,9 @@ const Signup = () => {
     try {
       const newUser = await registerUser({
         name,
+        username: username.trim().toLowerCase(),
         email,
         password,
-        pic,
-        status,
       });
 
       setCurrentSessionUser(newUser);
@@ -138,6 +162,72 @@ const Signup = () => {
           color="var(--text-primary)"
           borderColor="var(--color-border)"
         />
+      </FormControl>
+
+      <FormControl id="signup-username" isRequired isInvalid={usernameStatus.available === false}>
+        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
+          Username
+        </FormLabel>
+        <InputGroup size="md">
+          <InputLeftElement pointerEvents="none" color="var(--text-secondary)" fontSize="sm">
+            @
+          </InputLeftElement>
+          <Input
+            placeholder="alex_rivers"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            bg="var(--bg-search)"
+            color="var(--text-primary)"
+            borderColor={
+              usernameStatus.available === true
+                ? "green.400"
+                : usernameStatus.available === false
+                ? "red.400"
+                : usernameStatus.serverError
+                ? "orange.400"
+                : "var(--color-border)"
+            }
+            _focus={{
+              borderColor:
+                usernameStatus.available === true
+                  ? "green.400"
+                  : usernameStatus.available === false
+                  ? "red.400"
+                  : usernameStatus.serverError
+                  ? "orange.400"
+                  : "var(--color-primary)",
+            }}
+          />
+          <InputRightElement>
+            {isCheckingUsername ? (
+              <Spinner size="sm" color="var(--color-primary)" />
+            ) : usernameStatus.available === true ? (
+              <CheckCircleIcon color="green.400" />
+            ) : usernameStatus.available === false ? (
+              <WarningIcon color="red.400" />
+            ) : usernameStatus.serverError ? (
+              <WarningIcon color="orange.400" />
+            ) : null}
+          </InputRightElement>
+        </InputGroup>
+        {usernameStatus.message && (
+          <Text
+            fontSize="xs"
+            mt={1}
+            color={
+              usernameStatus.available === true
+                ? "green.400"
+                : usernameStatus.available === false
+                ? "red.400"
+                : usernameStatus.serverError
+                ? "orange.400"
+                : "var(--text-secondary)"
+            }
+            fontWeight="500"
+          >
+            {usernameStatus.message}
+          </Text>
+        )}
       </FormControl>
 
       <FormControl id="signup-email" isRequired>
@@ -198,46 +288,6 @@ const Signup = () => {
           </InputRightElement>
         </InputGroup>
       </FormControl>
-
-      <FormControl id="signup-status">
-        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
-          Status / Tagline
-        </FormLabel>
-        <Input
-          placeholder="e.g. 🔥 Burning with Passion"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          bg="var(--bg-search)"
-          color="var(--text-primary)"
-          borderColor="var(--color-border)"
-        />
-      </FormControl>
-
-      {/* Avatar Picker & File Upload */}
-      <Box pt={2}>
-        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)" mb={2}>
-          Choose Avatar or Upload Photo
-        </FormLabel>
-        <Box display="flex" alignItems="center" gap={3}>
-          <Avatar size="lg" src={pic} name={name || "User"} border="2px solid var(--color-primary)" />
-          <Box flex="1">
-            <Wrap spacing={2} mb={2}>
-              {defaultAvatarPresets.map((img, idx) => (
-                <WrapItem key={idx}>
-                  <Avatar
-                    size="sm"
-                    src={img}
-                    cursor="pointer"
-                    border={pic === img ? "2px solid var(--color-primary)" : "none"}
-                    onClick={() => setPic(img)}
-                  />
-                </WrapItem>
-              ))}
-            </Wrap>
-            <Input type="file" accept="image/*" size="xs" onChange={handleImageUpload} color="var(--text-secondary)" />
-          </Box>
-        </Box>
-      </Box>
 
       <Button
         bg="var(--color-primary)"

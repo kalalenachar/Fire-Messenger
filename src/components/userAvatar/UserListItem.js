@@ -38,7 +38,9 @@ const UserListItem = ({ user, handleFunction }) => {
           <VerifiedBadge user={user} size="xs" />
         </Flex>
         <Text fontSize="xs" opacity={0.8} isTruncated>
-          {user.email
+          {user.username
+            ? `@${user.username}`
+            : user.email
             ? user.email
                 .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
                 .replace(/@fire\.io$/i, "@agnimessenger.io")

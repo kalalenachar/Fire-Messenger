@@ -3,16 +3,18 @@ const Chat = require("../models/Chat");
 const Message = require("../models/Message");
 const { fireBotUser } = require("../config/db");
 
-// @desc    Auth user & get token
+// @desc    Auth user & get token (supports email or username)
 // @route   POST /api/user/login
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const cleanEmail = (email || "").toLowerCase().trim();
+    const cleanInput = (email || "").toLowerCase().trim();
 
-    const user = await User.findOne({ email: cleanEmail });
+    const user = await User.findOne({
+      $or: [{ email: cleanInput }, { username: cleanInput }],
+    });
     if (!user) {
-      return res.status(400).json({ success: false, message: "No account found with this email address." });
+      return res.status(400).json({ success: false, message: "No account found with this email or username." });
     }
     if (user.password !== password) {
       return res.status(400).json({ success: false, message: "Invalid password. Please check your credentials." });
@@ -29,15 +31,63 @@ const loginUser = async (req, res) => {
   }
 };
 
+// @desc    Check username availability
+// @route   GET /api/user/check-username
+const checkUsernameAvailability = async (req, res) => {
+  try {
+    const { username } = req.query;
+    if (!username) {
+      return res.status(400).json({ success: false, available: false, message: "Username is required." });
+    }
+
+    const clean = username.toLowerCase().trim();
+    const regex = /^[a-z0-9_.]{3,20}$/;
+    if (!regex.test(clean)) {
+      return res.status(400).json({
+        success: false,
+        available: false,
+        message: "Must be 3-20 characters: letters, numbers, dots & underscores allowed.",
+      });
+    }
+
+    const existing = await User.findOne({ username: clean });
+    if (existing) {
+      return res.json({ success: true, available: false, message: "Username is already taken." });
+    }
+
+    return res.json({ success: true, available: true, message: "Username is available!" });
+  } catch (err) {
+    res.status(500).json({ success: false, available: false, message: err.message });
+  }
+};
+
 // @desc    Register a new user
 // @route   POST /api/user/signup
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, pic, status } = req.body;
+    const { name, username, email, password, pic, status } = req.body;
     const cleanEmail = (email || "").toLowerCase().trim();
+    const cleanUsername = (username || "").toLowerCase().trim();
 
-    const existing = await User.findOne({ email: cleanEmail });
-    if (existing) {
+    if (!cleanUsername) {
+      return res.status(400).json({ success: false, message: "Username is required." });
+    }
+
+    const usernameRegex = /^[a-z0-9_.]{3,20}$/;
+    if (!usernameRegex.test(cleanUsername)) {
+      return res.status(400).json({
+        success: false,
+        message: "Username must be 3-20 characters using letters, numbers, dots, or underscores.",
+      });
+    }
+
+    const existingUsername = await User.findOne({ username: cleanUsername });
+    if (existingUsername) {
+      return res.status(400).json({ success: false, message: "Username is already taken." });
+    }
+
+    const existingEmail = await User.findOne({ email: cleanEmail });
+    if (existingEmail) {
       return res.status(400).json({ success: false, message: "An account with this email address already exists." });
     }
 
@@ -51,6 +101,7 @@ const registerUser = async (req, res) => {
     const newUser = await User.create({
       _id: `user_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       name: name.trim(),
+      username: cleanUsername,
       email: cleanEmail,
       password,
       isAdmin: shouldBeAdmin,
@@ -108,6 +159,7 @@ const updateUserProfile = async (req, res, io) => {
       {
         $set: {
           "users.$[elem].name": updatedUser.name,
+          "users.$[elem].username": updatedUser.username,
           "users.$[elem].pic": updatedUser.pic,
           "users.$[elem].status": updatedUser.status,
         },
@@ -142,6 +194,7 @@ const searchUsers = async (req, res) => {
     if (q) {
       filter.$or = [
         { name: { $regex: q, $options: "i" } },
+        { username: { $regex: q, $options: "i" } },
         { email: { $regex: q, $options: "i" } },
       ];
     }
@@ -225,6 +278,7 @@ const reviewVerification = async (req, res, io) => {
 module.exports = {
   loginUser,
   registerUser,
+  checkUsernameAvailability,
   updateUserProfile,
   searchUsers,
   submitVerification,

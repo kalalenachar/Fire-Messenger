@@ -67,12 +67,11 @@ const Login = () => {
     <VStack spacing="14px" align="stretch">
       <FormControl id="login-email" isRequired>
         <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
-          Email Address
+          Email Address or Username
         </FormLabel>
         <Input
           value={email}
-          type="email"
-          placeholder="Enter your registered email"
+          placeholder="Enter registered email or username"
           onChange={(e) => setEmail(e.target.value)}
           bg="var(--bg-search)"
           color="var(--text-primary)"

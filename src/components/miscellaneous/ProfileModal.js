@@ -199,6 +199,11 @@ const ProfileModal = ({ user: targetUser, children }) => {
               </VStack>
             ) : (
               <Box textAlign="center" w="100%">
+                {activeUser?.username && (
+                  <Text fontSize="sm" color="var(--color-primary)" fontWeight="bold" mb={1}>
+                    @{activeUser.username}
+                  </Text>
+                )}
                 <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
                   {(activeUser?.email || "user@agnimessenger.io")
                     .replace(/@firemessenger\.io$/i, "@agnimessenger.io")

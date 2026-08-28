@@ -8,6 +8,7 @@ const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/agni";
 const fireBotUser = {
   _id: "bot_fire_ai",
   name: "Agni Bot 🔥",
+  username: "agni_bot",
   email: "bot@agnimessenger.io",
   pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
   status: "Official Automated Assistant | Online 24/7",
@@ -25,6 +26,7 @@ const defaultUsersList = [
   {
     _id: "user_agni_01",
     name: "Alex Rivers",
+    username: "alex",
     email: "alex@agnimessenger.io",
     password: "123",
     isAdmin: true,

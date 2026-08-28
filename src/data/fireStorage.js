@@ -33,9 +33,30 @@ export const loginUserAsync = async (email, password) => {
   }
 };
 
-export const registerUserAsync = async ({ name, email, password, pic, status }) => {
+export const checkUsernameAvailabilityAsync = async (username) => {
   try {
-    const { data } = await axios.post(`${API_BASE_URL}/user/signup`, { name, email, password, pic, status });
+    const { data } = await axios.get(`${API_BASE_URL}/user/check-username`, {
+      params: { username },
+    });
+    // Validate it's a proper response object
+    if (data && typeof data === "object" && "available" in data) {
+      return data;
+    }
+    return { success: false, available: null, serverError: true, message: "⚠️ Unexpected server response — will be checked on submit." };
+  } catch (error) {
+    // If server responded with a structured JSON error (e.g. 400 invalid format), use that
+    const serverData = error.response?.data;
+    if (serverData && typeof serverData === "object" && "available" in serverData) {
+      return serverData;
+    }
+    // 404 (route not found), HTML responses, network failures — don't block the user
+    return { success: false, available: null, serverError: true, message: "⚠️ Server unreachable — username will be verified on submit." };
+  }
+};
+
+export const registerUserAsync = async ({ name, username, email, password, pic, status }) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/user/signup`, { name, username, email, password, pic, status });
     if (data.success) {
       setCurrentSessionUser(data.user);
       return data.user;

@@ -5,6 +5,7 @@ import { API_BASE_URL } from "./fireStorage";
 export const defaultUser = {
   _id: "user_fire_01",
   name: "Alex Rivers",
+  username: "alex",
   email: "alex@agnimessenger.io",
   pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
   status: "Available | 🔥 Burning with Passion",
@@ -21,6 +22,7 @@ export const initialFireChats = [
       {
         _id: "bot_fire_ai",
         name: "Agni Bot 🔥",
+        username: "agni_bot",
         email: "bot@agnimessenger.io",
         pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
         status: "Official Automated Assistant | Online 24/7",

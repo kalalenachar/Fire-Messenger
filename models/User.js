@@ -4,6 +4,7 @@ const userSchema = new mongoose.Schema(
   {
     _id: { type: String, required: true },
     name: { type: String, required: true, trim: true },
+    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     pic: {
@@ -31,7 +32,8 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ email: 1 });
-userSchema.index({ name: "text", email: "text" });
+userSchema.index({ username: 1 });
+userSchema.index({ name: "text", email: "text", username: "text" });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 module.exports = User;
