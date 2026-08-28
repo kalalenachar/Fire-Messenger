@@ -288,6 +288,20 @@ function SideDrawer() {
               <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={() => setIsFolderModalOpen(true)}>
                 Folder Settings 📁
               </MenuItem>
+              {user?.isAdmin && (
+                <>
+                  <MenuDivider borderColor="var(--color-border)" />
+                  <MenuItem
+                    bg="rgba(128, 90, 213, 0.15)"
+                    color="purple.300"
+                    fontWeight="bold"
+                    _hover={{ bg: "rgba(128, 90, 213, 0.25)" }}
+                    onClick={() => history.push("/admin")}
+                  >
+                    ⚡ Admin Portal
+                  </MenuItem>
+                </>
+              )}
               <MenuDivider borderColor="var(--color-border)" />
               <MenuItem bg="transparent" color="#f44336" fontWeight="bold" _hover={{ bg: "var(--bg-hover)" }} onClick={logoutHandler}>
                 Logout

@@ -551,6 +551,113 @@ app.delete("/api/audience-profiles/:userId/:profileId", (req, res) => {
   }
 });
 
+// --- ADMIN CONTROL CENTER ENDPOINTS ---
+
+// Get Admin System Stats
+app.get("/api/admin/stats", (req, res) => {
+  try {
+    const stats = db.getAdminStats();
+    res.json({ success: true, stats });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Get All Users (Admin)
+app.get("/api/admin/users", (req, res) => {
+  try {
+    const users = db.getAllUsersAdmin();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Update User Role (Admin)
+app.put("/api/admin/users/:userId/role", (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { isAdmin } = req.body;
+    const updatedUser = db.updateUserRole(userId, isAdmin);
+    io.emit("user profile updated", updatedUser);
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Toggle User Ban Status (Admin)
+app.put("/api/admin/users/:userId/ban", (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { isBanned } = req.body;
+    const updatedUser = db.toggleUserBan(userId, isBanned);
+    io.emit("user profile updated", updatedUser);
+    if (isBanned) {
+      io.emit("user_banned", { userId });
+    }
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Delete User Account (Admin)
+app.delete("/api/admin/users/:userId", (req, res) => {
+  try {
+    const { userId } = req.params;
+    const deletedUser = db.deleteUserAccount(userId);
+    res.json({ success: true, user: deletedUser });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Get All Verification Applications (Admin)
+app.get("/api/admin/verifications", (req, res) => {
+  try {
+    const users = db.getAllUsersAdmin();
+    const verifications = users.filter((u) => u.verificationStatus && u.verificationStatus !== "none");
+    res.json({ success: true, verifications });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Get All Reports (Admin)
+app.get("/api/admin/reports", (req, res) => {
+  try {
+    const reports = db.getReports();
+    res.json({ success: true, reports });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Update Report Status (Admin)
+app.put("/api/admin/reports/:reportId", (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const { status, adminNotes } = req.body;
+    const updatedReport = db.updateReportStatus(reportId, status, adminNotes);
+    res.json({ success: true, report: updatedReport });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Dispatch System Broadcast (Admin)
+app.post("/api/admin/broadcast", (req, res) => {
+  try {
+    const { content } = req.body;
+    const result = db.sendAdminBroadcast(content);
+    io.emit("system_broadcast", result.broadcastMessage);
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
 // Fallback route for React SPA or API health check
 if (fs.existsSync(buildPath)) {
   app.get("*", (req, res) => {

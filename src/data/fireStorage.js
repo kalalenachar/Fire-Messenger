@@ -523,5 +523,98 @@ export const submitReportAsync = async (reporterUser, targetObj, reason, details
   }
 };
 
+// --- ADMIN REST API FUNCTIONS ---
+
+export const getAdminStatsAsync = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/admin/stats`);
+    return data.success ? data.stats : null;
+  } catch (error) {
+    console.error("Error fetching admin stats:", error);
+    return null;
+  }
+};
+
+export const getAllUsersAdminAsync = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/admin/users`);
+    return data.success ? data.users : [];
+  } catch (error) {
+    console.error("Error fetching admin users list:", error);
+    return [];
+  }
+};
+
+export const updateUserRoleAdminAsync = async (userId, isAdmin) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/admin/users/${userId}/role`, { isAdmin });
+    return data.success ? data.user : null;
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    throw new Error(error.response?.data?.message || "Failed to update user role");
+  }
+};
+
+export const toggleUserBanAdminAsync = async (userId, isBanned) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/admin/users/${userId}/ban`, { isBanned });
+    return data.success ? data.user : null;
+  } catch (error) {
+    console.error("Error updating user ban state:", error);
+    throw new Error(error.response?.data?.message || "Failed to update ban status");
+  }
+};
+
+export const deleteUserAdminAsync = async (userId) => {
+  try {
+    const { data } = await axios.delete(`${API_BASE_URL}/admin/users/${userId}`);
+    return data.success ? data.user : null;
+  } catch (error) {
+    console.error("Error deleting user account:", error);
+    throw new Error(error.response?.data?.message || "Failed to delete user");
+  }
+};
+
+export const getAdminVerificationsAsync = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/admin/verifications`);
+    return data.success ? data.verifications : [];
+  } catch (error) {
+    console.error("Error fetching verification requests:", error);
+    return [];
+  }
+};
+
+export const getAdminReportsAsync = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/admin/reports`);
+    return data.success ? data.reports : [];
+  } catch (error) {
+    console.error("Error fetching admin reports:", error);
+    return [];
+  }
+};
+
+export const updateReportStatusAsync = async (reportId, status, adminNotes) => {
+  try {
+    const { data } = await axios.put(`${API_BASE_URL}/admin/reports/${reportId}`, { status, adminNotes });
+    return data.success ? data.report : null;
+  } catch (error) {
+    console.error("Error updating report status:", error);
+    throw new Error(error.response?.data?.message || "Failed to update report status");
+  }
+};
+
+export const sendAdminBroadcastAsync = async (content) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/admin/broadcast`, { content });
+    return data;
+  } catch (error) {
+    console.error("Error sending admin broadcast:", error);
+    throw new Error(error.response?.data?.message || "Failed to dispatch broadcast");
+  }
+};
+
+
 
 

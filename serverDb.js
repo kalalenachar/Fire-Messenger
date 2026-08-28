@@ -9,6 +9,7 @@ const defaultUsersList = [
     name: "Alex Rivers",
     email: "alex@firemessenger.io",
     password: "123",
+    isAdmin: true,
     pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     status: "Available | 🔥 Burning with Passion",
     token: "token_alex_12345",
@@ -826,6 +827,115 @@ function reviewVerificationApplication(userId, status, rejectionReason = null) {
   return user;
 }
 
+function getAdminStats() {
+  const db = readDb();
+  const users = db.users || [];
+  const chats = db.chats || [];
+  const reports = db.reports || [];
+  
+  let totalMessages = 0;
+  if (db.messages) {
+    Object.values(db.messages).forEach((msgArray) => {
+      if (Array.isArray(msgArray)) totalMessages += msgArray.length;
+    });
+  }
+
+  const verifiedUsers = users.filter((u) => u.isVerified || u.verificationStatus === "verified").length;
+  const pendingVerifications = users.filter((u) => u.verificationStatus === "pending").length;
+  const bannedUsers = users.filter((u) => u.isBanned).length;
+  const pendingReports = reports.filter((r) => r.status === "pending" || !r.status).length;
+
+  return {
+    totalUsers: users.length,
+    verifiedUsers,
+    pendingVerifications,
+    bannedUsers,
+    totalChats: chats.length,
+    totalMessages,
+    pendingReports,
+    totalReports: reports.length,
+  };
+}
+
+function getAllUsersAdmin() {
+  const db = readDb();
+  return (db.users || []).map((u) => {
+    const { password, ...userWithoutPassword } = u;
+    return userWithoutPassword;
+  });
+}
+
+function updateUserRole(userId, isAdmin) {
+  const db = readDb();
+  const index = db.users.findIndex((u) => u._id === userId);
+  if (index === -1) throw new Error("User not found");
+
+  db.users[index].isAdmin = Boolean(isAdmin);
+  writeDb(db);
+  return db.users[index];
+}
+
+function toggleUserBan(userId, isBanned) {
+  const db = readDb();
+  const index = db.users.findIndex((u) => u._id === userId);
+  if (index === -1) throw new Error("User not found");
+
+  db.users[index].isBanned = Boolean(isBanned);
+  writeDb(db);
+  return db.users[index];
+}
+
+function deleteUserAccount(userId) {
+  const db = readDb();
+  const index = db.users.findIndex((u) => u._id === userId);
+  if (index === -1) throw new Error("User not found");
+
+  const deletedUser = db.users.splice(index, 1)[0];
+  writeDb(db);
+  return deletedUser;
+}
+
+function updateReportStatus(reportId, status, adminNotes = null) {
+  const db = readDb();
+  if (!db.reports) db.reports = [];
+  const index = db.reports.findIndex((r) => r._id === reportId);
+  if (index === -1) throw new Error("Report ticket not found");
+
+  db.reports[index].status = status; // 'resolved' | 'dismissed' | 'pending'
+  if (adminNotes) db.reports[index].adminNotes = adminNotes;
+  db.reports[index].updatedAt = new Date().toISOString();
+
+  writeDb(db);
+  return db.reports[index];
+}
+
+function sendAdminBroadcast(content) {
+  const db = readDb();
+  if (!content) throw new Error("Broadcast message content is required");
+
+  const broadcastMessage = {
+    _id: `msg_broadcast_${Date.now()}`,
+    sender: fireBotUser,
+    content: `📢 **AGNI SYSTEM BROADCAST** 📢\n\n${content}`,
+    chat: null,
+    createdAt: new Date().toISOString(),
+    reactions: { "📢": 1 },
+    isBroadcast: true,
+  };
+
+  let count = 0;
+  (db.chats || []).forEach((c) => {
+    if (!db.messages[c._id]) db.messages[c._id] = [];
+    const chatMsg = { ...broadcastMessage, chat: c._id };
+    db.messages[c._id].push(chatMsg);
+    c.latestMessage = chatMsg;
+    count++;
+  });
+
+  writeDb(db);
+  return { success: true, count, broadcastMessage };
+}
+
 module.exports = {
   readDb,
   loginUser,
@@ -856,7 +966,15 @@ module.exports = {
   getReports,
   submitVerificationApplication,
   reviewVerificationApplication,
+  getAdminStats,
+  getAllUsersAdmin,
+  updateUserRole,
+  toggleUserBan,
+  deleteUserAccount,
+  updateReportStatus,
+  sendAdminBroadcast,
 };
+
 
 
 
