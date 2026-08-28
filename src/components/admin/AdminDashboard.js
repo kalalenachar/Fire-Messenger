@@ -473,7 +473,11 @@ const AdminDashboard = () => {
                           <VerifiedBadge user={userItem} size="sm" />
                         </Td>
                         <Td>
-                          {userItem.isAdmin ? (
+                          {userItem._id === "bot_fire_ai" || userItem.isBot ? (
+                            <Tag colorScheme="cyan" size="sm">
+                              System Bot 🤖
+                            </Tag>
+                          ) : userItem.isAdmin ? (
                             <Tag colorScheme="purple" size="sm">
                               Admin ⚡
                             </Tag>
@@ -495,38 +499,44 @@ const AdminDashboard = () => {
                           )}
                         </Td>
                         <Td textAlign="right">
-                          <Flex justify="flex-end" gap={2}>
-                            <Tooltip label={userItem.isAdmin ? "Revoke Admin" : "Make Admin"}>
-                              <Button
-                                size="xs"
-                                colorScheme={userItem.isAdmin ? "purple" : "gray"}
-                                onClick={() => handleToggleRole(userItem)}
-                              >
-                                {userItem.isAdmin ? "Admin" : "+ Admin"}
-                              </Button>
-                            </Tooltip>
+                          {userItem._id === "bot_fire_ai" || userItem.isBot ? (
+                            <Tag colorScheme="cyan" variant="subtle" size="sm">
+                              Official AI Bot 🤖
+                            </Tag>
+                          ) : (
+                            <Flex justify="flex-end" gap={2}>
+                              <Tooltip label={userItem.isAdmin ? "Revoke Admin" : "Make Admin"}>
+                                <Button
+                                  size="xs"
+                                  colorScheme={userItem.isAdmin ? "purple" : "gray"}
+                                  onClick={() => handleToggleRole(userItem)}
+                                >
+                                  {userItem.isAdmin ? "Admin" : "+ Admin"}
+                                </Button>
+                              </Tooltip>
 
-                            <Tooltip label={userItem.isBanned ? "Unban Account" : "Ban Account"}>
-                              <IconButton
-                                size="xs"
-                                icon={userItem.isBanned ? <UnlockIcon /> : <LockIcon />}
-                                colorScheme={userItem.isBanned ? "green" : "orange"}
-                                onClick={() => handleToggleBan(userItem)}
-                                aria-label="Toggle Ban"
-                              />
-                            </Tooltip>
+                              <Tooltip label={userItem.isBanned ? "Unban Account" : "Ban Account"}>
+                                <IconButton
+                                  size="xs"
+                                  icon={userItem.isBanned ? <UnlockIcon /> : <LockIcon />}
+                                  colorScheme={userItem.isBanned ? "green" : "orange"}
+                                  onClick={() => handleToggleBan(userItem)}
+                                  aria-label="Toggle Ban"
+                                />
+                              </Tooltip>
 
-                            <Tooltip label="Delete Account">
-                              <IconButton
-                                size="xs"
-                                icon={<DeleteIcon />}
-                                colorScheme="red"
-                                variant="ghost"
-                                onClick={() => handleDeleteUser(userItem._id, userItem.name)}
-                                aria-label="Delete User"
-                              />
-                            </Tooltip>
-                          </Flex>
+                              <Tooltip label="Delete Account">
+                                <IconButton
+                                  size="xs"
+                                  icon={<DeleteIcon />}
+                                  colorScheme="red"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteUser(userItem._id, userItem.name)}
+                                  aria-label="Delete User"
+                                />
+                              </Tooltip>
+                            </Flex>
+                          )}
                         </Td>
                       </Tr>
                     ))

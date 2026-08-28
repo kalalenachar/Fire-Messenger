@@ -10,6 +10,7 @@ const fireBotUser = {
   name: "Agni Bot 🔥",
   username: "agni_bot",
   email: "bot@agnimessenger.io",
+  password: "bot_system_protected_no_login",
   pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
   status: "Official Automated Assistant | Online 24/7",
   isVerified: true,
@@ -20,9 +21,11 @@ const fireBotUser = {
     businessName: "Agni Messenger Inc.",
     verifiedAt: "2026-08-01T12:00:00Z",
   },
+  isBot: true,
 };
 
 const defaultUsersList = [
+  fireBotUser,
   {
     _id: "user_agni_01",
     name: "Alex Rivers",
@@ -152,6 +155,10 @@ async function seedDatabaseIfEmpty() {
 
 async function ensureAdminPrivileges() {
   try {
+    const existingBot = await User.findById(fireBotUser._id);
+    if (!existingBot) {
+      await User.create(fireBotUser);
+    }
     const adminEmails = [
       "kalalenachar@gmail.com",
       "alex@agnimessenger.io",

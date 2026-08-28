@@ -46,7 +46,14 @@ const getAdminStats = async (req, res) => {
 // @route   GET /api/admin/users
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password").lean();
+    let users = await User.find().select("-password").lean();
+    const hasBot = users.some((u) => u._id === fireBotUser._id || u._id === "bot_fire_ai");
+    if (!hasBot) {
+      users.unshift({
+        ...fireBotUser,
+        isBot: true,
+      });
+    }
     res.json({ success: true, users });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -59,6 +66,10 @@ const updateUserRole = async (req, res, io) => {
   try {
     const { userId } = req.params;
     const { isAdmin } = req.body;
+
+    if (userId === fireBotUser._id || userId === "bot_fire_ai") {
+      return res.status(400).json({ success: false, message: "Cannot modify role for system AI bot account." });
+    }
 
     if (!isAdmin) {
       const targetUser = await User.findById(userId);
@@ -92,6 +103,10 @@ const toggleUserBan = async (req, res, io) => {
   try {
     const { userId } = req.params;
     const { isBanned } = req.body;
+
+    if (userId === fireBotUser._id || userId === "bot_fire_ai") {
+      return res.status(400).json({ success: false, message: "Cannot ban official system AI bot account." });
+    }
 
     if (isBanned) {
       const targetUser = await User.findById(userId);
@@ -127,6 +142,9 @@ const toggleUserBan = async (req, res, io) => {
 const deleteUserAccount = async (req, res) => {
   try {
     const { userId } = req.params;
+    if (userId === fireBotUser._id || userId === "bot_fire_ai") {
+      return res.status(400).json({ success: false, message: "Cannot delete official system AI bot account." });
+    }
     const targetUser = await User.findById(userId);
     if (!targetUser) {
       return res.status(404).json({ success: false, message: "User not found" });
