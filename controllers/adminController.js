@@ -59,6 +59,20 @@ const updateUserRole = async (req, res, io) => {
   try {
     const { userId } = req.params;
     const { isAdmin } = req.body;
+
+    if (!isAdmin) {
+      const targetUser = await User.findById(userId);
+      if (targetUser && targetUser.isAdmin) {
+        const adminCount = await User.countDocuments({ isAdmin: true });
+        if (adminCount <= 1) {
+          return res.status(400).json({
+            success: false,
+            message: "Cannot revoke Admin role from the last remaining Admin account! At least one admin must exist.",
+          });
+        }
+      }
+    }
+
     const updatedUser = await User.findByIdAndUpdate(userId, { isAdmin: Boolean(isAdmin) }, { returnDocument: "after" })
       .select("-password")
       .lean();
@@ -78,6 +92,20 @@ const toggleUserBan = async (req, res, io) => {
   try {
     const { userId } = req.params;
     const { isBanned } = req.body;
+
+    if (isBanned) {
+      const targetUser = await User.findById(userId);
+      if (targetUser && targetUser.isAdmin) {
+        const activeAdminCount = await User.countDocuments({ isAdmin: true, isBanned: { $ne: true } });
+        if (activeAdminCount <= 1) {
+          return res.status(400).json({
+            success: false,
+            message: "Cannot ban the last remaining active Admin account!",
+          });
+        }
+      }
+    }
+
     const updatedUser = await User.findByIdAndUpdate(userId, { isBanned: Boolean(isBanned) }, { returnDocument: "after" })
       .select("-password")
       .lean();
