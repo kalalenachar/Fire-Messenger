@@ -613,6 +613,16 @@ app.delete("/api/admin/users/:userId", (req, res) => {
   }
 });
 
+// Emergency Database Reset (Restores Default Admin & Initial Users)
+app.post("/api/admin/reset-database", (req, res) => {
+  try {
+    const data = db.resetDatabase();
+    res.json({ success: true, message: "Database reset to default admin and users successfully!", data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Get All Verification Applications (Admin)
 app.get("/api/admin/verifications", (req, res) => {
   try {

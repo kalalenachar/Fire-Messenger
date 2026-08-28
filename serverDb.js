@@ -182,6 +182,15 @@ function readDb() {
     }
   }
 
+  // Fallback: If users list is missing or empty, auto-reseed default users & admins so system is never locked out
+  if (!dbData.users || !Array.isArray(dbData.users) || dbData.users.length === 0) {
+    console.log("⚠️ No users found in database! Auto-restoring default admin and initial users...");
+    dbData.users = defaultUsersList;
+    if (!dbData.chats || dbData.chats.length === 0) dbData.chats = initialChats;
+    if (!dbData.messages || Object.keys(dbData.messages).length === 0) dbData.messages = initialMessages;
+    fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2));
+  }
+
   // Ensure primary admin emails have isAdmin: true in memory & db
   let updated = false;
   if (dbData.users && Array.isArray(dbData.users)) {
@@ -227,14 +236,23 @@ function loginUser(email, password) {
 
 function registerUser({ name, email, password, pic, status }) {
   const db = readDb();
-  const existing = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
+  const emailLower = email.toLowerCase().trim();
+  const existing = db.users.find((u) => u.email.toLowerCase() === emailLower);
   if (existing) throw new Error("An account with this email address already exists.");
+
+  const isFirstUser = db.users.length === 0;
+  const shouldBeAdmin =
+    isFirstUser ||
+    emailLower === "kalalenachar@gmail.com" ||
+    emailLower === "alex@firemessenger.io" ||
+    emailLower === "alex@agni.io";
 
   const newUser = {
     _id: `user_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     name: name.trim(),
-    email: email.toLowerCase().trim(),
+    email: emailLower,
     password: password,
+    isAdmin: shouldBeAdmin,
     pic: pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
     status: status || "Available | 🔥 Agni Messenger",
     token: `token_${Date.now()}`,
@@ -918,6 +936,12 @@ function deleteUserAccount(userId) {
   const index = db.users.findIndex((u) => u._id === userId);
   if (index === -1) throw new Error("User not found");
 
+  const targetUser = db.users[index];
+  const adminCount = db.users.filter((u) => u.isAdmin).length;
+  if (targetUser.isAdmin && adminCount <= 1) {
+    throw new Error("Cannot delete the last remaining Admin account! At least one admin account must exist.");
+  }
+
   const deletedUser = db.users.splice(index, 1)[0];
   writeDb(db);
   return deletedUser;
@@ -964,8 +988,20 @@ function sendAdminBroadcast(content) {
   return { success: true, count, broadcastMessage };
 }
 
+function resetDatabase() {
+  const dbData = {
+    users: defaultUsersList,
+    chats: initialChats,
+    messages: initialMessages,
+  };
+  writeDb(dbData);
+  return dbData;
+}
+
 module.exports = {
   readDb,
+  writeDb,
+  resetDatabase,
   loginUser,
   registerUser,
   updateUserProfile,
