@@ -1,0 +1,10 @@
+{
+  "appId": "com.agnimessenger.app",
+  "appName": "Agni Messenger",
+  "webDir": "build",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://agni.run.place",
+    "cleartext": true
+  }
+}

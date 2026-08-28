@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Agni Messenger</string>
+    <string name="title_activity_main">Agni Messenger</string>
+    <string name="package_name">com.agnimessenger.app</string>
+    <string name="custom_url_scheme">com.agnimessenger.app</string>
+</resources>
