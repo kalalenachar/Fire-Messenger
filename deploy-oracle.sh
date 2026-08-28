@@ -74,8 +74,9 @@ if ! grep -q "MONGO_URI" .env; then
     echo "MONGO_URI=mongodb://127.0.0.1:27017/agni" >> .env
 fi
 
-# 3. Install NPM Dependencies & Build React Bundle
-echo "🔨 Step 3: Installing project dependencies & building production bundle..."
+# 3. Pull Latest Code & Install NPM Dependencies & Build React Bundle
+echo "🔨 Step 3: Pulling latest code & installing dependencies & building production bundle..."
+git pull origin main || true
 npm install --legacy-peer-deps
 npm run build
 
