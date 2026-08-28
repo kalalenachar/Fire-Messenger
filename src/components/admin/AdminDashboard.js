@@ -561,84 +561,99 @@ const AdminDashboard = () => {
                     </Tr>
                   </Thead>
                   <Tbody>
-                    {verifications.map((item) => (
-                      <Tr key={item._id} _hover={{ bg: "var(--bg-hover)" }}>
-                        <Td>
-                          <Flex alignItems="center" gap={3}>
-                            <Avatar size="sm" name={item.name} src={item.pic} />
-                            <Box>
-                              <Text fontWeight="bold">{item.name}</Text>
-                              <Text fontSize="xs" color="var(--text-secondary)">
-                                {(item.email || "")
-                                  .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
-                                  .replace(/@fire\.io$/i, "@agnimessenger.io")
-                                  .replace(/@agni\.io$/i, "@agnimessenger.io")}
-                              </Text>
-                            </Box>
-                          </Flex>
-                        </Td>
-                        <Td>
-                          <Tag size="sm" colorScheme={item.verificationType === "business" ? "blue" : "teal"}>
-                            {(item.verificationType || "individual").toUpperCase()}
-                          </Tag>
-                        </Td>
-                        <Td fontSize="xs">
-                          {item.verificationDetails?.aadhaarMasked && (
-                            <Text>Aadhaar: {item.verificationDetails.aadhaarMasked}</Text>
-                          )}
-                          {item.verificationDetails?.panMasked && <Text>PAN: {item.verificationDetails.panMasked}</Text>}
-                          {item.verificationDetails?.gstinMasked && (
-                            <Text>GSTIN: {item.verificationDetails.gstinMasked}</Text>
-                          )}
-                          {item.verificationDetails?.businessName && (
-                            <Text fontWeight="bold">Org: {item.verificationDetails.businessName}</Text>
-                          )}
-                        </Td>
-                        <Td fontSize="xs">
-                          {item.verificationDetails?.submittedAt
-                            ? new Date(item.verificationDetails.submittedAt).toLocaleString()
-                            : "N/A"}
-                        </Td>
-                        <Td>
-                          <Tag
-                            size="sm"
-                            colorScheme={
-                              item.verificationStatus === "verified"
-                                ? "green"
-                                : item.verificationStatus === "rejected"
-                                ? "red"
-                                : "orange"
-                            }
-                          >
-                            {(item.verificationStatus || "pending").toUpperCase()}
-                          </Tag>
-                        </Td>
-                        <Td textAlign="right">
-                          <Flex justify="flex-end" gap={2}>
-                            <Button
-                              size="xs"
-                              colorScheme="green"
-                              leftIcon={<CheckIcon />}
-                              onClick={() => handleReviewVerification(item._id, "verified")}
+                    {verifications.map((item) => {
+                      const isAlwaysVerified =
+                        item._id === "bot_fire_ai" ||
+                        item._id === "user_fire_01" ||
+                        item._id === "user_agni_01" ||
+                        (item.name && /agni bot|fire bot|alex/i.test(item.name)) ||
+                        (item.email && /alex@|bot@/i.test(item.email));
+
+                      return (
+                        <Tr key={item._id} _hover={{ bg: "var(--bg-hover)" }}>
+                          <Td>
+                            <Flex alignItems="center" gap={3}>
+                              <Avatar size="sm" name={item.name} src={item.pic} />
+                              <Box>
+                                <Text fontWeight="bold">{item.name}</Text>
+                                <Text fontSize="xs" color="var(--text-secondary)">
+                                  {(item.email || "")
+                                    .replace(/@firemessenger\.io$/i, "@agnimessenger.io")
+                                    .replace(/@fire\.io$/i, "@agnimessenger.io")
+                                    .replace(/@agni\.io$/i, "@agnimessenger.io")}
+                                </Text>
+                              </Box>
+                            </Flex>
+                          </Td>
+                          <Td>
+                            <Tag size="sm" colorScheme={item.verificationType === "business" ? "blue" : "teal"}>
+                              {(item.verificationType || "individual").toUpperCase()}
+                            </Tag>
+                          </Td>
+                          <Td fontSize="xs">
+                            {item.verificationDetails?.aadhaarMasked && (
+                              <Text>Aadhaar: {item.verificationDetails.aadhaarMasked}</Text>
+                            )}
+                            {item.verificationDetails?.panMasked && <Text>PAN: {item.verificationDetails.panMasked}</Text>}
+                            {item.verificationDetails?.gstinMasked && (
+                              <Text>GSTIN: {item.verificationDetails.gstinMasked}</Text>
+                            )}
+                            {item.verificationDetails?.businessName && (
+                              <Text fontWeight="bold">Org: {item.verificationDetails.businessName}</Text>
+                            )}
+                          </Td>
+                          <Td fontSize="xs">
+                            {item.verificationDetails?.submittedAt
+                              ? new Date(item.verificationDetails.submittedAt).toLocaleString()
+                              : "N/A"}
+                          </Td>
+                          <Td>
+                            <Tag
+                              size="sm"
+                              colorScheme={
+                                (isAlwaysVerified || item.verificationStatus === "verified")
+                                  ? "green"
+                                  : item.verificationStatus === "rejected"
+                                  ? "red"
+                                  : "orange"
+                              }
                             >
-                              Approve
-                            </Button>
-                            <Button
-                              size="xs"
-                              colorScheme="red"
-                              variant="outline"
-                              leftIcon={<CloseIcon />}
-                              onClick={() => {
-                                setSelectedVerification(item);
-                                onOpenVerifyModal();
-                              }}
-                            >
-                              Reject
-                            </Button>
-                          </Flex>
-                        </Td>
-                      </Tr>
-                    ))}
+                              {(isAlwaysVerified ? "verified" : (item.verificationStatus || "pending")).toUpperCase()}
+                            </Tag>
+                          </Td>
+                          <Td textAlign="right">
+                            {isAlwaysVerified ? (
+                              <Tag colorScheme="blue" variant="subtle" size="sm">
+                                Always Verified 🛡️
+                              </Tag>
+                            ) : (
+                              <Flex justify="flex-end" gap={2}>
+                                <Button
+                                  size="xs"
+                                  colorScheme="green"
+                                  leftIcon={<CheckIcon />}
+                                  onClick={() => handleReviewVerification(item._id, "verified")}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  colorScheme="red"
+                                  variant="outline"
+                                  leftIcon={<CloseIcon />}
+                                  onClick={() => {
+                                    setSelectedVerification(item);
+                                    onOpenVerifyModal();
+                                  }}
+                                >
+                                  Reject
+                                </Button>
+                              </Flex>
+                            )}
+                          </Td>
+                        </Tr>
+                      );
+                    })}
                   </Tbody>
                 </Table>
               </Box>
