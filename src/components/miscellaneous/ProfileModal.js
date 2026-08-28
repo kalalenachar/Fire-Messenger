@@ -33,6 +33,14 @@ const ProfileModal = ({ user: targetUser, children }) => {
   // Pick active user data for target (if viewing logged-in user, use latest currentUser state)
   const activeUser = currentUser?._id === targetUser?._id ? currentUser : targetUser;
   const isMe = currentUser?._id === activeUser?._id;
+  const emailLower = (activeUser?.email || "").toLowerCase();
+  const isAdminUser =
+    activeUser?.isAdmin ||
+    activeUser?.role === "admin" ||
+    emailLower === "kalalenachar@gmail.com" ||
+    emailLower.includes("alex@") ||
+    emailLower.includes("admin") ||
+    activeUser?._id === "bot_fire_ai";
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(activeUser?.name || "");
@@ -207,71 +215,73 @@ const ProfileModal = ({ user: targetUser, children }) => {
                   </Text>
                 </Box>
 
-                {/* VERIFICATION BADGE & IDENTITY CARD */}
-                <Box mt={3} p={3.5} borderRadius="xl" border="1px solid var(--color-border)" bg="var(--bg-search)" textAlign="left">
-                  <Flex justify="space-between" align="center" mb={1.5}>
-                    <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase">
-                      Identity Verification
-                    </Text>
-                    {verifyStatus === "verified" ? (
-                      <Badge colorScheme={verifyType === "business" ? "yellow" : "blue"} fontSize="xs">
-                        {verifyType === "business" ? "🟡 Official Business" : "🔵 Verified Individual"}
-                      </Badge>
-                    ) : verifyStatus === "pending" ? (
-                      <Badge colorScheme="orange" fontSize="xs">
-                        ⏳ Under Review
-                      </Badge>
-                    ) : (
-                      <Badge colorScheme="gray" fontSize="xs">
-                        Unverified
-                      </Badge>
-                    )}
-                  </Flex>
+                {/* VERIFICATION BADGE & IDENTITY CARD (Hidden for Admins) */}
+                {!isAdminUser && (
+                  <Box mt={3} p={3.5} borderRadius="xl" border="1px solid var(--color-border)" bg="var(--bg-search)" textAlign="left">
+                    <Flex justify="space-between" align="center" mb={1.5}>
+                      <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase">
+                        Identity Verification
+                      </Text>
+                      {verifyStatus === "verified" ? (
+                        <Badge colorScheme={verifyType === "business" ? "yellow" : "blue"} fontSize="xs">
+                          {verifyType === "business" ? "🟡 Official Business" : "🔵 Verified Individual"}
+                        </Badge>
+                      ) : verifyStatus === "pending" ? (
+                        <Badge colorScheme="orange" fontSize="xs">
+                          ⏳ Under Review
+                        </Badge>
+                      ) : (
+                        <Badge colorScheme="gray" fontSize="xs">
+                          Unverified
+                        </Badge>
+                      )}
+                    </Flex>
 
-                  {verifyStatus === "verified" ? (
-                    <VStack align="stretch" spacing={1} fontSize="xs">
-                      <Text color="var(--text-secondary)">
-                        {verifyType === "business"
-                          ? `Official Business Identity via ${activeUser?.verificationDetails?.gstinMasked || "GSTIN Registration"}`
-                          : `Identity Verified via Aadhaar (${activeUser?.verificationDetails?.aadhaarMasked || "XXXX-XXXX-4812"}) & Live Face Match`}
-                      </Text>
-                      {activeUser?.verificationDetails?.verifiedAt && (
-                        <Text fontSize="10px" color="var(--text-secondary)" opacity={0.8}>
-                          Verified on: {new Date(activeUser.verificationDetails.verifiedAt).toLocaleDateString()}
+                    {verifyStatus === "verified" ? (
+                      <VStack align="stretch" spacing={1} fontSize="xs">
+                        <Text color="var(--text-secondary)">
+                          {verifyType === "business"
+                            ? `Official Business Identity via ${activeUser?.verificationDetails?.gstinMasked || "GSTIN Registration"}`
+                            : `Identity Verified via Aadhaar (${activeUser?.verificationDetails?.aadhaarMasked || "XXXX-XXXX-4812"}) & Live Face Match`}
                         </Text>
-                      )}
-                    </VStack>
-                  ) : verifyStatus === "pending" ? (
-                    <VStack align="stretch" spacing={2} fontSize="xs">
-                      <Text color="orange.400">
-                        Verification Application is undergoing background manual review.
-                      </Text>
-                      {isMe && (
-                        <Button size="xs" colorScheme="orange" variant="outline" onClick={onVerifyOpen}>
-                          View Application & Fast-Track
-                        </Button>
-                      )}
-                    </VStack>
-                  ) : (
-                    <VStack align="stretch" spacing={2} fontSize="xs">
-                      <Text color="var(--text-secondary)">
-                        Get the blue or gold verified tag on your profile by verifying your Aadhaar or Business GSTIN with Live Face capture.
-                      </Text>
-                      {isMe && (
-                        <Button
-                          size="sm"
-                          leftIcon={<CheckCircleIcon />}
-                          bg="linear-gradient(135deg, #3897f0 0%, #0066ff 100%)"
-                          color="white"
-                          _hover={{ opacity: 0.9 }}
-                          onClick={onVerifyOpen}
-                        >
-                          Get Verified Tag Now
-                        </Button>
-                      )}
-                    </VStack>
-                  )}
-                </Box>
+                        {activeUser?.verificationDetails?.verifiedAt && (
+                          <Text fontSize="10px" color="var(--text-secondary)" opacity={0.8}>
+                            Verified on: {new Date(activeUser.verificationDetails.verifiedAt).toLocaleDateString()}
+                          </Text>
+                        )}
+                      </VStack>
+                    ) : verifyStatus === "pending" ? (
+                      <VStack align="stretch" spacing={2} fontSize="xs">
+                        <Text color="orange.400">
+                          Verification Application is undergoing background manual review.
+                        </Text>
+                        {isMe && (
+                          <Button size="xs" colorScheme="orange" variant="outline" onClick={onVerifyOpen}>
+                            View Application & Fast-Track
+                          </Button>
+                        )}
+                      </VStack>
+                    ) : (
+                      <VStack align="stretch" spacing={2} fontSize="xs">
+                        <Text color="var(--text-secondary)">
+                          Get the blue or gold verified tag on your profile by verifying your Aadhaar or Business GSTIN with Live Face capture.
+                        </Text>
+                        {isMe && (
+                          <Button
+                            size="sm"
+                            leftIcon={<CheckCircleIcon />}
+                            bg="linear-gradient(135deg, #3897f0 0%, #0066ff 100%)"
+                            color="white"
+                            _hover={{ opacity: 0.9 }}
+                            onClick={onVerifyOpen}
+                          >
+                            Get Verified Tag Now
+                          </Button>
+                        )}
+                      </VStack>
+                    )}
+                  </Box>
+                )}
 
                 {(activeUser?._id === "bot_fire_ai" || activeUser?.name?.includes("Fire Bot") || activeUser?.name?.includes("Agni Bot")) && (
                   <Box mt={3} p={3} bg="rgba(239, 68, 68, 0.1)" border="1px solid var(--color-primary)" borderRadius="lg" w="100%" textAlign="left">

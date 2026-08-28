@@ -342,20 +342,6 @@ function SideDrawer() {
               <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={() => setIsFolderModalOpen(true)}>
                 Folder Settings 📁
               </MenuItem>
-              {isSuperAdmin && (
-                <>
-                  <MenuDivider borderColor="var(--color-border)" />
-                  <MenuItem
-                    bg={isAdminPath ? "rgba(0, 168, 132, 0.15)" : "rgba(128, 90, 213, 0.15)"}
-                    color={isAdminPath ? "teal.300" : "purple.300"}
-                    fontWeight="bold"
-                    _hover={{ bg: isAdminPath ? "rgba(0, 168, 132, 0.25)" : "rgba(128, 90, 213, 0.25)" }}
-                    onClick={() => history.push(isAdminPath ? "/chats" : "/admin")}
-                  >
-                    {isAdminPath ? "💬 Switch to Chat Portal" : "⚡ Switch to Admin Portal"}
-                  </MenuItem>
-                </>
-              )}
               <MenuDivider borderColor="var(--color-border)" />
               <MenuItem bg="transparent" color="#f44336" fontWeight="bold" _hover={{ bg: "var(--bg-hover)" }} onClick={logoutHandler}>
                 Logout
