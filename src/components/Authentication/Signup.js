@@ -27,7 +27,7 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmpassword, setConfirmpassword] = useState("");
-  const [status, setStatus] = useState("Available | 🔥 Fire Messenger");
+  const [status, setStatus] = useState("Available | 🔥 Agni Messenger");
   const [pic, setPic] = useState(defaultAvatarPresets[0]);
   const [loading, setLoading] = useState(false);
 
@@ -102,7 +102,7 @@ const Signup = () => {
 
       toast({
         title: "Account Created Successfully! 🔥",
-        description: `Welcome to Fire Messenger, ${newUser.name}!`,
+        description: `Welcome to Agni Messenger, ${newUser.name}!`,
         status: "success",
         duration: 3000,
         isClosable: true,

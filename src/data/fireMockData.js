@@ -1,11 +1,11 @@
-// Fire Messenger Initial Mock Dataset & Bot Logic
+// Agni Messenger Initial Mock Dataset & Bot Logic
 import axios from "axios";
 import { API_BASE_URL } from "./fireStorage";
 
 export const defaultUser = {
   _id: "user_fire_01",
   name: "Alex Rivers",
-  email: "alex@firemessenger.io",
+  email: "alex@agnimessenger.io",
   pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
   status: "Available | 🔥 Burning with Passion",
   token: "fire_token_12345",
@@ -14,20 +14,20 @@ export const defaultUser = {
 export const initialFireChats = [
   {
     _id: "chat_fire_bot",
-    chatName: "Fire Bot 🔥",
+    chatName: "Agni Bot 🔥",
     isGroupChat: false,
     users: [
       defaultUser,
       {
         _id: "bot_fire_ai",
-        name: "Fire Bot 🔥",
-        email: "bot@firemessenger.io",
+        name: "Agni Bot 🔥",
+        email: "bot@agnimessenger.io",
         pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
         status: "Official Automated Assistant | Online 24/7",
       },
     ],
     latestMessage: {
-      content: "Welcome to Fire Messenger! Type /help or send a message to test.",
+      content: "Welcome to Agni Messenger! Type /help or send a message to test.",
       createdAt: new Date(Date.now() - 60000).toISOString(),
     },
     unread: 1,
@@ -36,7 +36,7 @@ export const initialFireChats = [
   },
   {
     _id: "chat_fire_squad",
-    chatName: "Fire Squad 🔥 Core Team",
+    chatName: "Agni Squad 🔥 Core Team",
     isGroupChat: true,
     groupAdmin: { _id: "user_fire_01", name: "Alex Rivers" },
     users: [
@@ -72,7 +72,7 @@ export const initialFireChats = [
       {
         _id: "user_sarah",
         name: "Sarah Jenkins",
-        email: "sarah@fire.io",
+        email: "sarah@agni.io",
         pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
         status: "Designing the future ✨ | Online",
       },
@@ -99,7 +99,7 @@ export const initialFireChats = [
       },
     ],
     latestMessage: {
-      content: "📢 Fire Messenger v2.0 update released with WebSockets & Voice Notes!",
+      content: "📢 Agni Messenger v2.0 update released with WebSockets & Voice Notes!",
       createdAt: new Date(Date.now() - 86400000).toISOString(),
     },
     unread: 0,
@@ -112,15 +112,15 @@ export const initialFireMessages = {
   chat_fire_bot: [
     {
       _id: "msg_bot_1",
-      sender: { _id: "bot_fire_ai", name: "Fire Bot 🔥", pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80" },
-      content: "Greetings! Welcome to **Fire Messenger 🔥**.",
+      sender: { _id: "bot_fire_ai", name: "Agni Bot 🔥", pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80" },
+      content: "Greetings! Welcome to **Agni Messenger 🔥**.",
       chat: "chat_fire_bot",
       createdAt: new Date(Date.now() - 360000).toISOString(),
       reactions: { "🔥": 2 },
     },
     {
       _id: "msg_bot_2",
-      sender: { _id: "bot_fire_ai", name: "Fire Bot 🔥", pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80" },
+      sender: { _id: "bot_fire_ai", name: "Agni Bot 🔥", pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80" },
       content: "You can send text, emoji reactions, simulated voice notes, or try commands like `/help`, `/quote`, `/joke`, or `/fire`!",
       chat: "chat_fire_bot",
       createdAt: new Date(Date.now() - 60000).toISOString(),
@@ -131,7 +131,7 @@ export const initialFireMessages = {
     {
       _id: "msg_squad_1",
       sender: { _id: "user_marcus", name: "Marcus Vance", pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80" },
-      content: "Hey team! Ready to launch Fire Messenger today?",
+      content: "Hey team! Ready to launch Agni Messenger today?",
       chat: "chat_fire_squad",
       createdAt: new Date(Date.now() - 1800000).toISOString(),
       reactions: { "🚀": 3 },
@@ -158,7 +158,7 @@ export const initialFireMessages = {
     {
       _id: "msg_tech_1",
       sender: { _id: "user_elena", name: "Elena Rostova", pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80" },
-      content: "📢 Fire Messenger v2.0 update released with WebSockets & Voice Notes!",
+      content: "📢 Agni Messenger v2.0 update released with WebSockets & Voice Notes!",
       chat: "chat_tech_lounge",
       createdAt: new Date(Date.now() - 86400000).toISOString(),
     },
@@ -170,7 +170,7 @@ export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiK
 
   // Instant preset commands
   if (text === "/help") {
-    return "🔥 **Fire Bot Commands & Groq AI**:\n- Ask me anything! Powered by **Groq AI** ⚡ (`llama-3.3-70b`)\n- `/fire`: Receive a motivational fire quote\n- `/joke`: Get a developer joke\n- `/weather`: Instant weather report\n- `/quote`: Daily wisdom quote";
+    return "🔥 **Agni Bot Commands & Groq AI**:\n- Ask me anything! Powered by **Groq AI** ⚡ (`llama-3.3-70b`)\n- `/fire`: Receive a motivational fire quote\n- `/joke`: Get a developer joke\n- `/weather`: Instant weather report\n- `/quote`: Daily wisdom quote";
   }
   if (text === "/fire") {
     return "🔥 *'Set your life on fire. Seek those who fan your flames.'* — Rumi";
@@ -179,7 +179,7 @@ export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiK
     return "Why do programmers prefer dark mode? Because light attracts bugs! 🐛💡";
   }
   if (text === "/weather") {
-    return "☀️ **Fire Messenger Forecast**: 24°C, Clear Skies & Ultra-Fast Groq AI Performance!";
+    return "☀️ **Agni Messenger Forecast**: 24°C, Clear Skies & Ultra-Fast Groq AI Performance!";
   }
   if (text === "/quote") {
     return "✨ *'Simplicity is the soul of efficiency.'* — Austin Freeman";
@@ -213,7 +213,7 @@ export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiK
       {
         role: "system",
         content:
-          "You are Fire Bot 🔥, an intelligent, energetic, and helpful AI assistant inside Fire Messenger. Provide concise, accurate, friendly responses using Markdown formatting and emojis.",
+          "You are Agni Bot 🔥, an intelligent, energetic, and helpful AI assistant inside Agni Messenger. Provide concise, accurate, friendly responses using Markdown formatting and emojis.",
       },
       ...chatHistory.slice(-10).map((msg) => ({
         role: msg.sender?._id === "bot_fire_ai" || msg.sender?._id?.includes("bot") ? "assistant" : "user",
@@ -248,7 +248,7 @@ export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiK
     }
   }
 
-  return "🤖 **Fire Bot AI Notice**: Please configure `GROQ_API_KEY` in your `.env` file or settings to chat with Groq AI!";
+  return "🤖 **Agni Bot AI Notice**: Please configure `GROQ_API_KEY` in your `.env` file or settings to chat with Groq AI!";
 };
 
 export const getBotReply = (userMessage) => {

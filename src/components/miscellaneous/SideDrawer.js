@@ -119,7 +119,7 @@ function SideDrawer() {
         zIndex="1000"
         flexShrink={0}
       >
-        {/* Fire Messenger Logo & Brand */}
+        {/* Agni Messenger Logo & Brand */}
         <Box display="flex" alignItems="center" gap={{ base: 2, sm: 3 }} flexShrink={0}>
           <Box
             w={{ base: "32px", sm: "38px" }}
@@ -137,10 +137,10 @@ function SideDrawer() {
           </Box>
           <Box display={{ base: "none", md: "block" }}>
             <Text fontWeight="bold" fontSize="lg" lineHeight="1.1" color="var(--text-header)">
-              Fire Messenger
+              Agni Messenger
             </Text>
             <Text fontSize="xs" color={theme === "light" ? "#e0f2fe" : "var(--color-primary)"} fontWeight="500">
-              Fire Real-Time Edition
+              Agni Real-Time Edition
             </Text>
           </Box>
         </Box>

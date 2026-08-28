@@ -482,7 +482,7 @@ const SingleChat = () => {
           🔥
         </Box>
         <Text fontSize="2xl" fontWeight="bold" color="var(--text-primary)" mb={2}>
-          Fire Messenger Web
+          Agni Messenger Web
         </Text>
         <Text fontSize="sm" color="var(--text-secondary)" maxW="400px">
           Real-time WebSockets messaging, live WebRTC Audio/Video calling, drag & drop file sharing, voice notes, and media attachments.

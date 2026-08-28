@@ -95,7 +95,7 @@ const ProfileModal = ({ user: targetUser, children }) => {
 
     updateUserProfile({
       name: name.trim(),
-      status: status.trim() || "🔥 Fire Messenger",
+      status: status.trim() || "🔥 Agni Messenger",
       pic,
     });
 
@@ -192,7 +192,7 @@ const ProfileModal = ({ user: targetUser, children }) => {
             ) : (
               <Box textAlign="center" w="100%">
                 <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
-                  {activeUser?.email || "user@firemessenger.io"}
+                  {activeUser?.email || "user@agnimessenger.io"}
                 </Text>
 
                 <Box mt={3} p={3} bg="var(--bg-search)" borderRadius="lg" w="100%">
@@ -200,7 +200,7 @@ const ProfileModal = ({ user: targetUser, children }) => {
                     Status / About
                   </Text>
                   <Text fontSize="sm" color="var(--text-primary)">
-                    {activeUser?.status || "🔥 Burning with Passion | Fire Messenger"}
+                    {activeUser?.status || "🔥 Burning with Passion | Agni Messenger"}
                   </Text>
                 </Box>
 
@@ -270,7 +270,7 @@ const ProfileModal = ({ user: targetUser, children }) => {
                   )}
                 </Box>
 
-                {(activeUser?._id === "bot_fire_ai" || activeUser?.name?.includes("Fire Bot")) && (
+                {(activeUser?._id === "bot_fire_ai" || activeUser?.name?.includes("Fire Bot") || activeUser?.name?.includes("Agni Bot")) && (
                   <Box mt={3} p={3} bg="rgba(239, 68, 68, 0.1)" border="1px solid var(--color-primary)" borderRadius="lg" w="100%" textAlign="left">
                     <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase" mb={1}>
                       ⚡ Groq AI Integration Active

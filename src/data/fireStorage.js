@@ -1,4 +1,4 @@
-// Fire Messenger - Real Persistent Data Layer & REST API Client Engine
+// Agni Messenger - Real Persistent Data Layer & REST API Client Engine
 import axios from "axios";
 
 export const API_BASE_URL = `http://${window.location.hostname}:5000/api`;
@@ -8,7 +8,7 @@ export const defaultUsersList = [
   {
     _id: "user_fire_01",
     name: "Alex Rivers",
-    email: "alex@firemessenger.io",
+    email: "alex@agnimessenger.io",
     password: "123",
     pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     status: "Available | 🔥 Burning with Passion",
@@ -17,7 +17,7 @@ export const defaultUsersList = [
   {
     _id: "user_sarah",
     name: "Sarah Jenkins",
-    email: "sarah@fire.io",
+    email: "sarah@agni.io",
     password: "123",
     pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
     status: "Designing the future ✨ | Online",
@@ -26,7 +26,7 @@ export const defaultUsersList = [
   {
     _id: "user_marcus",
     name: "Marcus Vance",
-    email: "marcus@fire.io",
+    email: "marcus@agni.io",
     password: "123",
     pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
     status: "Coding late night 💻",
@@ -35,7 +35,7 @@ export const defaultUsersList = [
   {
     _id: "user_elena",
     name: "Elena Rostova",
-    email: "elena@fire.io",
+    email: "elena@agni.io",
     password: "123",
     pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
     status: "Building real-time apps 🚀",
@@ -45,8 +45,8 @@ export const defaultUsersList = [
 
 export const fireBotUser = {
   _id: "bot_fire_ai",
-  name: "Fire Bot 🔥",
-  email: "bot@firemessenger.io",
+  name: "Agni Bot 🔥",
+  email: "bot@agnimessenger.io",
   pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
   status: "Official Automated Assistant | Online 24/7",
 };

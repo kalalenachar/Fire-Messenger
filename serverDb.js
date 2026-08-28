@@ -58,8 +58,8 @@ const defaultUsersList = [
 
 const fireBotUser = {
   _id: "bot_fire_ai",
-  name: "Fire Bot 🔥",
-  email: "bot@firemessenger.io",
+  name: "Agni Bot 🔥",
+  email: "bot@agnimessenger.io",
   pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
   status: "Official Automated Assistant | Online 24/7",
   isVerified: true,
@@ -67,7 +67,7 @@ const fireBotUser = {
   verificationType: "business",
   verificationDetails: {
     gstinMasked: "27AAACB2418Q1Z1",
-    businessName: "Fire Messenger Inc.",
+    businessName: "Agni Messenger Inc.",
     verifiedAt: "2026-08-01T12:00:00Z",
   },
 };
@@ -75,11 +75,11 @@ const fireBotUser = {
 const initialChats = [
   {
     _id: "chat_fire_bot",
-    chatName: "Fire Bot 🔥",
+    chatName: "Agni Bot 🔥",
     isGroupChat: false,
     users: [defaultUsersList[0], fireBotUser],
     latestMessage: {
-      content: "Welcome to Fire Messenger! Send a message or command like /help",
+      content: "Welcome to Agni Messenger! Send a message or command like /help",
       sender: fireBotUser,
       createdAt: new Date(Date.now() - 60000).toISOString(),
     },
@@ -89,7 +89,7 @@ const initialChats = [
   },
   {
     _id: "chat_fire_squad",
-    chatName: "Fire Squad 🔥 Core Team",
+    chatName: "Agni Squad 🔥 Core Team",
     isGroupChat: true,
     groupAdmin: defaultUsersList[0],
     users: [defaultUsersList[0], defaultUsersList[1], defaultUsersList[2]],
@@ -123,7 +123,7 @@ const initialMessages = {
     {
       _id: "msg_bot_1",
       sender: fireBotUser,
-      content: "Greetings! Welcome to **Fire Messenger 🔥**.",
+      content: "Greetings! Welcome to **Agni Messenger 🔥**.",
       chat: "chat_fire_bot",
       createdAt: new Date(Date.now() - 360000).toISOString(),
       reactions: { "🔥": 2 },
@@ -141,7 +141,7 @@ const initialMessages = {
     {
       _id: "msg_squad_1",
       sender: defaultUsersList[2],
-      content: "Hey team! Fire Messenger persistent server DB is officially online!",
+      content: "Hey team! Agni Messenger persistent server DB is officially online!",
       chat: "chat_fire_squad",
       createdAt: new Date(Date.now() - 1800000).toISOString(),
       reactions: { "🚀": 3 },
@@ -207,7 +207,7 @@ function registerUser({ name, email, password, pic, status }) {
     email: email.toLowerCase().trim(),
     password: password,
     pic: pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-    status: status || "Available | 🔥 Fire Messenger",
+    status: status || "Available | 🔥 Agni Messenger",
     token: `token_${Date.now()}`,
   };
 
@@ -216,11 +216,11 @@ function registerUser({ name, email, password, pic, status }) {
   // Auto create bot chat and squad chat for new user
   const userBotChat = {
     _id: `chat_bot_${newUser._id}`,
-    chatName: "Fire Bot 🔥",
+    chatName: "Agni Bot 🔥",
     isGroupChat: false,
     users: [newUser, fireBotUser],
     latestMessage: {
-      content: "Welcome to Fire Messenger! Send a message or command like /help",
+      content: "Welcome to Agni Messenger! Send a message or command like /help",
       sender: fireBotUser,
       createdAt: new Date().toISOString(),
     },
@@ -234,7 +234,7 @@ function registerUser({ name, email, password, pic, status }) {
     {
       _id: `msg_bot_${Date.now()}`,
       sender: fireBotUser,
-      content: `Greetings ${newUser.name}! Welcome to **Fire Messenger 🔥**. I am your automated AI assistant.`,
+      content: `Greetings ${newUser.name}! Welcome to **Agni Messenger 🔥**. I am your automated AI assistant.`,
       chat: userBotChat._id,
       createdAt: new Date().toISOString(),
       reactions: { "🔥": 1 },

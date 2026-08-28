@@ -19,7 +19,7 @@ const VerifiedBadge = ({
 }) => {
   // Extract parameters from user object if provided
   const verifyStatus = status || user?.verificationStatus || (user?.isVerified ? "verified" : "none");
-  const verifyType = type || user?.verificationType || (user?._id === "bot_fire_ai" || user?.name?.includes("Fire Bot") ? "business" : "individual");
+  const verifyType = type || user?.verificationType || (user?._id === "bot_fire_ai" || user?.name?.includes("Fire Bot") || user?.name?.includes("Agni Bot") ? "business" : "individual");
 
   if (verifyStatus === "none" || !verifyStatus) {
     return null;

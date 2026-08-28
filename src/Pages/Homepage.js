@@ -36,7 +36,7 @@ function Homepage() {
   return (
     <Box minH="100vh" w="100vw" bg="var(--bg-app)" display="flex" alignItems="center" justifyContent="center" p={4}>
       <Container maxW="md" centerContent>
-        {/* Fire Messenger Header Card */}
+        {/* Agni Messenger Header Card */}
         <Box
           display="flex"
           flexDirection="column"
@@ -64,7 +64,7 @@ function Homepage() {
             🔥
           </Box>
           <Text fontSize="3xl" fontWeight="800" color="var(--text-primary)" letterSpacing="-0.5px">
-            Fire Messenger
+            Agni Messenger
           </Text>
           <Text fontSize="sm" color="var(--color-primary)" fontWeight="600" mt={1}>
             Fast & Secure Real-Time Messaging

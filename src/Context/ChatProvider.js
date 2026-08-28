@@ -831,7 +831,7 @@ const ChatProvider = ({ children }) => {
 
           notifySyncEvent("NEW_MESSAGE", { chatId, message: botMessage });
         } catch (err) {
-          console.error("Error generating Fire Bot Groq reply:", err);
+          console.error("Error generating Agni Bot Groq reply:", err);
         }
       })();
     }

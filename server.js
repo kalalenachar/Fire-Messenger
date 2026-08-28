@@ -42,7 +42,7 @@ const io = new Server(server, {
 db.readDb();
 
 app.get("/", (req, res) => {
-  res.send({ status: "online", message: "🔥 Fire Messenger Real-Time API & Persistent DB Server is Running!" });
+  res.send({ status: "online", message: "🔥 Agni Messenger Real-Time API & Persistent DB Server is Running!" });
 });
 
 // --- REST API ENDPOINTS ---
@@ -276,7 +276,7 @@ async function sendAdminReportAlertEmail(reportData) {
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; background: #ffffff;">
       <div style="background: linear-gradient(135deg, #e11d48, #be123c); padding: 24px; color: #ffffff; text-align: center;">
-        <h1 style="margin: 0; font-size: 22px; font-weight: bold;">🚨 URGENT: Fire Messenger Safety Report</h1>
+        <h1 style="margin: 0; font-size: 22px; font-weight: bold;">🚨 URGENT: Agni Messenger Safety Report</h1>
         <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">High Priority Moderation Alert for Admin Review</p>
       </div>
 
@@ -284,7 +284,7 @@ async function sendAdminReportAlertEmail(reportData) {
         <p style="font-size: 15px; font-weight: bold; color: #111827; margin-top: 0;">
           Attention Admin,
         </p>
-        <p>A new user/content report was submitted on <strong>Fire Messenger</strong> and requires your immediate attention to react:</p>
+        <p>A new user/content report was submitted on <strong>Agni Messenger</strong> and requires your immediate attention to react:</p>
 
         <div style="background: #f8fafc; border-left: 4px solid #e11d48; padding: 16px; border-radius: 6px; margin: 20px 0;">
           <table style="width: 100%; border-collapse: collapse;">
@@ -316,20 +316,20 @@ async function sendAdminReportAlertEmail(reportData) {
 
         <div style="text-align: center;">
           <a href="http://localhost:3000" style="display: inline-block; background: #00a884; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; border-radius: 8px; font-size: 14px;">
-            Open Fire Messenger Admin Portal
+            Open Agni Messenger Admin Portal
           </a>
         </div>
       </div>
 
       <div style="background: #f1f5f9; padding: 16px; text-align: center; font-size: 12px; color: #64748b;">
-        Fire Messenger Real-Time Automated Safety System &bull; Admin Instant Alert Service
+        Agni Messenger Real-Time Automated Safety System &bull; Admin Instant Alert Service
       </div>
     </div>
   `;
 
   try {
     const info = await transporter.sendMail({
-      from: `"Fire Messenger Safety" <no-reply@firemessenger.io>`,
+      from: `"Agni Messenger Safety" <no-reply@agnimessenger.io>`,
       to: adminEmail,
       subject: `🚨 [URGENT REPORT] ${reasonText} reported by ${reporterName}`,
       text: `Urgent Report Alert:\n\nReporter: ${reporterName} (${reporterEmail})\nTarget: ${targetTitle}\nReason: ${reasonText}\nComments: ${detailsText}\nTime: ${timestamp}`,
@@ -348,7 +348,7 @@ async function sendAdminReportAlertEmail(reportData) {
         auth: { user: testAccount.user, pass: testAccount.pass },
       });
       const testInfo = await testTransporter.sendMail({
-        from: `"Fire Messenger Safety" <no-reply@firemessenger.io>`,
+        from: `"Agni Messenger Safety" <no-reply@agnimessenger.io>`,
         to: adminEmail,
         subject: `🚨 [URGENT REPORT] ${reasonText} reported by ${reporterName}`,
         html: htmlContent,
@@ -404,7 +404,7 @@ app.post("/api/bot/chat", async (req, res) => {
       {
         role: "system",
         content:
-          "You are Fire Bot 🔥, an intelligent, energetic, and helpful AI assistant built directly into the Fire Messenger platform. " +
+          "You are Agni Bot 🔥, an intelligent, energetic, and helpful AI assistant built directly into the Agni Messenger platform. " +
           "Provide concise, accurate, engaging, and friendly responses using clean Markdown formatting and expressive emojis.",
       },
       ...history.slice(-10).map((msg) => ({
@@ -697,7 +697,7 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🔥 Fire Messenger Server running on http://localhost:${PORT} with Persistent JSON Database!`);
+  console.log(`🔥 Agni Messenger Server running on http://localhost:${PORT} with Persistent JSON Database!`);
 });
 
 

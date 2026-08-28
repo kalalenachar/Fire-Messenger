@@ -247,7 +247,7 @@ const CallModal = ({
                 {user.name}
               </Text>
               <Text fontSize="xs" color="var(--text-secondary)">
-                {isVideoCall ? "Fire Messenger Video Call 📹" : "Fire Messenger HD Voice Call 🎤"}
+                {isVideoCall ? "Agni Messenger Video Call 📹" : "Agni Messenger HD Voice Call 🎤"}
               </Text>
             </Flex>
 
