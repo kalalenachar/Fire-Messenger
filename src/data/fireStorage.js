@@ -96,6 +96,40 @@ export const updateUserProfileInDb = async (userId, updates) => {
   }
 };
 
+export const submitVerificationApplicationAsync = async (userId, payload) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/user/verify/submit`, { userId, payload });
+    if (data.success) {
+      const current = getCurrentSessionUser();
+      if (current && current._id === userId) {
+        setCurrentSessionUser(data.user);
+      }
+      return data.user;
+    }
+    throw new Error(data.message || "Verification submission failed");
+  } catch (error) {
+    const msg = error.response?.data?.message || error.message || "Server connection error";
+    throw new Error(msg);
+  }
+};
+
+export const reviewVerificationApplicationAsync = async (userId, status, rejectionReason) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/user/verify/review`, { userId, status, rejectionReason });
+    if (data.success) {
+      const current = getCurrentSessionUser();
+      if (current && current._id === userId) {
+        setCurrentSessionUser(data.user);
+      }
+      return data.user;
+    }
+    throw new Error(data.message || "Verification review failed");
+  } catch (error) {
+    const msg = error.response?.data?.message || error.message || "Server connection error";
+    throw new Error(msg);
+  }
+};
+
 export const searchUsersAsync = async (searchQuery, currentUserId) => {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/user/search`, {

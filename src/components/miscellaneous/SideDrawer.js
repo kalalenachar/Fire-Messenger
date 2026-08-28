@@ -28,6 +28,7 @@ import GroupChatModal from "./GroupChatModal";
 import UserListItem from "../userAvatar/UserListItem";
 import StatusComposerModal from "./StatusComposerModal";
 import AudienceProfileModal from "./AudienceProfileModal";
+import VerifiedBadge from "../common/VerifiedBadge";
 import StatusViewerModal from "./StatusViewerModal";
 import { ChatState } from "../../Context/ChatProvider";
 import { searchUsersAsync, clearCurrentSession } from "../../data/fireStorage";
@@ -268,7 +269,12 @@ function SideDrawer() {
             </MenuButton>
             <MenuList color="var(--text-primary)" bg="var(--bg-menu)" borderColor="var(--color-border)" boxShadow="var(--shadow-md)" zIndex="2000">
               <ProfileModal user={user}>
-                <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }}>My Profile</MenuItem>
+                <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }}>
+                  <Box display="flex" alignItems="center" w="100%">
+                    <Text>My Profile</Text>
+                    <VerifiedBadge user={user} size="xs" />
+                  </Box>
+                </MenuItem>
               </ProfileModal>
               <MenuDivider borderColor="var(--color-border)" />
               <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={openSavedMessages}>

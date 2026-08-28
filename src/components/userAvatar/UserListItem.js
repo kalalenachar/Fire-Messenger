@@ -1,6 +1,7 @@
 import React from "react";
 import { Avatar } from "@chakra-ui/avatar";
-import { Box, Text } from "@chakra-ui/layout";
+import { Box, Text, Flex } from "@chakra-ui/react";
+import VerifiedBadge from "../common/VerifiedBadge";
 
 const UserListItem = ({ user, handleFunction }) => {
   return (
@@ -29,10 +30,13 @@ const UserListItem = ({ user, handleFunction }) => {
         name={user.name}
         src={user.pic}
       />
-      <Box overflow="hidden">
-        <Text fontWeight="600" fontSize="sm" isTruncated>
-          {user.name}
-        </Text>
+      <Box overflow="hidden" flex="1">
+        <Flex align="center">
+          <Text fontWeight="600" fontSize="sm" isTruncated>
+            {user.name}
+          </Text>
+          <VerifiedBadge user={user} size="xs" />
+        </Flex>
         <Text fontSize="xs" opacity={0.8} isTruncated>
           {user.email || user.status || "Fire Contact"}
         </Text>

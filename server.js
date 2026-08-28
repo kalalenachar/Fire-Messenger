@@ -82,6 +82,34 @@ app.put("/api/user/profile", (req, res) => {
   }
 });
 
+// Submit Identity Verification Application
+app.post("/api/user/verify/submit", (req, res) => {
+  try {
+    const { userId, payload } = req.body;
+    const updatedUser = db.submitVerificationApplication(userId, payload);
+    if (updatedUser) {
+      io.emit("user profile updated", updatedUser);
+    }
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Admin Review Verification Application
+app.post("/api/user/verify/review", (req, res) => {
+  try {
+    const { userId, status, rejectionReason } = req.body;
+    const updatedUser = db.reviewVerificationApplication(userId, status, rejectionReason);
+    if (updatedUser) {
+      io.emit("user profile updated", updatedUser);
+    }
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
 // Search Users
 app.get("/api/user/search", (req, res) => {
   try {

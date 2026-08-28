@@ -12,6 +12,14 @@ const defaultUsersList = [
     pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     status: "Available | 🔥 Burning with Passion",
     token: "token_alex_12345",
+    isVerified: true,
+    verificationStatus: "verified",
+    verificationType: "individual",
+    verificationDetails: {
+      aadhaarMasked: "XXXX-XXXX-4812",
+      verifiedAt: "2026-08-20T10:00:00Z",
+      matchScore: 98.4,
+    },
   },
   {
     _id: "user_sarah",
@@ -21,6 +29,8 @@ const defaultUsersList = [
     pic: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
     status: "Designing the future ✨ | Online",
     token: "token_sarah_12345",
+    isVerified: false,
+    verificationStatus: "none",
   },
   {
     _id: "user_marcus",
@@ -30,6 +40,8 @@ const defaultUsersList = [
     pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
     status: "Coding late night 💻",
     token: "token_marcus_12345",
+    isVerified: false,
+    verificationStatus: "none",
   },
   {
     _id: "user_elena",
@@ -39,6 +51,8 @@ const defaultUsersList = [
     pic: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
     status: "Building real-time apps 🚀",
     token: "token_elena_12345",
+    isVerified: false,
+    verificationStatus: "none",
   },
 ];
 
@@ -48,6 +62,14 @@ const fireBotUser = {
   email: "bot@firemessenger.io",
   pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
   status: "Official Automated Assistant | Online 24/7",
+  isVerified: true,
+  verificationStatus: "verified",
+  verificationType: "business",
+  verificationDetails: {
+    gstinMasked: "27AAACB2418Q1Z1",
+    businessName: "Fire Messenger Inc.",
+    verifiedAt: "2026-08-01T12:00:00Z",
+  },
 };
 
 const initialChats = [
@@ -761,6 +783,49 @@ function getReports() {
   return db.reports || [];
 }
 
+function submitVerificationApplication(userId, payload) {
+  const db = readDb();
+  const index = db.users.findIndex((u) => u._id === userId);
+  if (index === -1) throw new Error("User not found");
+
+  const user = db.users[index];
+  user.verificationStatus = "pending";
+  user.isVerified = false;
+  user.verificationType = payload.verificationType || "individual";
+  user.verificationDetails = {
+    ...payload,
+    submittedAt: payload.submittedAt || new Date().toISOString(),
+  };
+
+  writeDb(db);
+  return user;
+}
+
+function reviewVerificationApplication(userId, status, rejectionReason = null) {
+  const db = readDb();
+  const index = db.users.findIndex((u) => u._id === userId);
+  if (index === -1) throw new Error("User not found");
+
+  const user = db.users[index];
+  user.verificationStatus = status; // 'verified' | 'rejected' | 'pending' | 'none'
+  user.isVerified = status === "verified";
+  if (status === "verified") {
+    user.verificationDetails = {
+      ...(user.verificationDetails || {}),
+      verifiedAt: new Date().toISOString(),
+    };
+  } else if (status === "rejected") {
+    user.verificationDetails = {
+      ...(user.verificationDetails || {}),
+      rejectionReason: rejectionReason || "Document or Live Face Match criteria not met.",
+      rejectedAt: new Date().toISOString(),
+    };
+  }
+
+  writeDb(db);
+  return user;
+}
+
 module.exports = {
   readDb,
   loginUser,
@@ -789,6 +854,8 @@ module.exports = {
   saveUserFolders,
   saveReport,
   getReports,
+  submitVerificationApplication,
+  reviewVerificationApplication,
 };
 
 

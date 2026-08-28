@@ -18,6 +18,7 @@ import { ChatState } from "../Context/ChatProvider";
 import StatusSection from "./StatusSection";
 import FolderSettingsModal from "./miscellaneous/FolderSettingsModal";
 import ReportModal from "./miscellaneous/ReportModal";
+import VerifiedBadge from "./common/VerifiedBadge";
 
 const MyChats = () => {
   const {
@@ -275,6 +276,7 @@ const MyChats = () => {
                 const isSelected = selectedChat?._id === chat._id;
                 const title = getChatTitle(chat);
                 const isPinned = isChatPinned?.(chat._id);
+                const otherUser = !chat.isGroupChat ? chat.users?.find((u) => u._id !== user?._id) : null;
 
                 return (
                   <Box
@@ -301,10 +303,11 @@ const MyChats = () => {
                     {/* Chat Info */}
                     <Box flex="1" overflow="hidden">
                       <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
-                        <Box display="flex" alignItems="center" gap={1.5} flex="1" overflow="hidden" pr={1}>
+                        <Box display="flex" alignItems="center" gap={1} flex="1" overflow="hidden" pr={1}>
                           <Text fontWeight="600" fontSize="sm" color="var(--text-primary)" isTruncated>
                             {title}
                           </Text>
+                          {otherUser && <VerifiedBadge user={otherUser} size="xs" />}
                           {isPinned && (
                             <Text fontSize="xs" title="Pinned Chat" opacity={0.85}>
                               📌

@@ -4,6 +4,8 @@ import {
   getCurrentSessionUser,
   setCurrentSessionUser,
   updateUserProfileInDb,
+  submitVerificationApplicationAsync,
+  reviewVerificationApplicationAsync,
   fetchUserChatsAsync,
   saveChatAsync,
   fetchChatMessagesAsync,
@@ -1116,6 +1118,28 @@ const ChatProvider = ({ children }) => {
     handleUserProfileUpdated(updatedUser);
   };
 
+  const submitVerificationApplication = async (payload) => {
+    if (!user) return;
+    const updatedUser = await submitVerificationApplicationAsync(user._id, payload);
+    if (updatedUser) {
+      setUser(updatedUser);
+      setCurrentSessionUser(updatedUser);
+      handleUserProfileUpdated(updatedUser);
+    }
+    return updatedUser;
+  };
+
+  const reviewVerificationApplication = async (status, rejectionReason = null) => {
+    if (!user) return;
+    const updatedUser = await reviewVerificationApplicationAsync(user._id, status, rejectionReason);
+    if (updatedUser) {
+      setUser(updatedUser);
+      setCurrentSessionUser(updatedUser);
+      handleUserProfileUpdated(updatedUser);
+    }
+    return updatedUser;
+  };
+
   const addOrSelectChat = (newChat) => {
     if (!user) return;
     setChats((prev) => {
@@ -1156,6 +1180,8 @@ const ChatProvider = ({ children }) => {
         activeFilter,
         setActiveFilter,
         updateUserProfile,
+        submitVerificationApplication,
+        reviewVerificationApplication,
         addOrSelectChat,
         loadUserData,
         startCall,

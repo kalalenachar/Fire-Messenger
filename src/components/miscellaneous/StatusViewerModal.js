@@ -24,6 +24,7 @@ import {
 } from "@chakra-ui/react";
 import { CloseIcon, DeleteIcon } from "@chakra-ui/icons";
 import { ChatState } from "../../Context/ChatProvider";
+import VerifiedBadge from "../common/VerifiedBadge";
 
 const EMOJI_REACTIONS = ["🔥", "❤️", "😂", "😮", "👏", "🎉"];
 
@@ -203,9 +204,12 @@ const StatusViewerModal = ({ isOpen, onClose, userStatusStack }) => {
               <Flex align="center" gap={3}>
                 <Avatar size="sm" name={userStatusStack.user?.name} src={userStatusStack.user?.pic} />
                 <Box>
-                  <Text fontWeight="bold" fontSize="sm" color="white">
-                    {isOwnStatus ? "My Status" : userStatusStack.user?.name}
-                  </Text>
+                  <Flex align="center">
+                    <Text fontWeight="bold" fontSize="sm" color="white">
+                      {isOwnStatus ? "My Status" : userStatusStack.user?.name}
+                    </Text>
+                    <VerifiedBadge user={userStatusStack?.user} size="xs" />
+                  </Flex>
                   <Text fontSize="xs" color="rgba(255,255,255,0.7)">
                     {formatTime(currentPost?.createdAt)}
                   </Text>

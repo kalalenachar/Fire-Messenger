@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ViewIcon, EditIcon, CheckIcon } from "@chakra-ui/icons";
+import { ViewIcon, EditIcon, CheckIcon, CheckCircleIcon } from "@chakra-ui/icons";
 import {
   Modal,
   ModalOverlay,
@@ -17,26 +17,33 @@ import {
   Input,
   useToast,
   VStack,
+  Flex,
+  Badge,
 } from "@chakra-ui/react";
 import { ChatState } from "../../Context/ChatProvider";
+import VerifiedBadge from "../common/VerifiedBadge";
+import VerificationModal from "./VerificationModal";
 
 const ProfileModal = ({ user: targetUser, children }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isVerifyOpen, onOpen: onVerifyOpen, onClose: onVerifyClose } = useDisclosure();
   const { user: currentUser, updateUserProfile } = ChatState();
   const toast = useToast();
 
-  const isMe = currentUser?._id === targetUser?._id;
+  // Pick active user data for target (if viewing logged-in user, use latest currentUser state)
+  const activeUser = currentUser?._id === targetUser?._id ? currentUser : targetUser;
+  const isMe = currentUser?._id === activeUser?._id;
 
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(targetUser?.name || "");
-  const [status, setStatus] = useState(targetUser?.status || "");
-  const [pic, setPic] = useState(targetUser?.pic || "");
+  const [name, setName] = useState(activeUser?.name || "");
+  const [status, setStatus] = useState(activeUser?.status || "");
+  const [pic, setPic] = useState(activeUser?.pic || "");
 
   useEffect(() => {
-    setName(targetUser?.name || "");
-    setStatus(targetUser?.status || "");
-    setPic(targetUser?.pic || "");
-  }, [targetUser, isOpen]);
+    setName(activeUser?.name || "");
+    setStatus(activeUser?.status || "");
+    setPic(activeUser?.pic || "");
+  }, [activeUser, isOpen]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -101,6 +108,9 @@ const ProfileModal = ({ user: targetUser, children }) => {
     });
   };
 
+  const verifyStatus = activeUser?.verificationStatus || (activeUser?.isVerified ? "verified" : "none");
+  const verifyType = activeUser?.verificationType || (activeUser?._id === "bot_fire_ai" ? "business" : "individual");
+
   return (
     <>
       {children ? (
@@ -119,7 +129,10 @@ const ProfileModal = ({ user: targetUser, children }) => {
         <ModalOverlay />
         <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="xl" border="1px solid var(--color-border)" boxShadow="var(--shadow-md)">
           <ModalHeader textAlign="center" fontSize="2xl" fontWeight="bold" pt={6} display="flex" alignItems="center" justifyContent="center" gap={2}>
-            {isMe ? "My Profile" : targetUser?.name || "User Profile"}
+            <Flex align="center">
+              <Text>{isMe ? "My Profile" : activeUser?.name || "User Profile"}</Text>
+              <VerifiedBadge user={activeUser} size="md" />
+            </Flex>
             {isMe && !isEditing && (
               <IconButton
                 icon={<EditIcon />}
@@ -133,7 +146,12 @@ const ProfileModal = ({ user: targetUser, children }) => {
           <ModalCloseButton />
 
           <ModalBody display="flex" flexDirection="column" alignItems="center" py={4} gap={4}>
-            <Avatar size="2xl" name={isEditing ? name : targetUser?.name} src={isEditing ? pic : targetUser?.pic} border="3px solid var(--color-primary)" />
+            <Box position="relative">
+              <Avatar size="2xl" name={isEditing ? name : activeUser?.name} src={isEditing ? pic : activeUser?.pic} border="3px solid var(--color-primary)" />
+              <Box position="absolute" bottom="0" right="0">
+                <VerifiedBadge user={activeUser} size="lg" />
+              </Box>
+            </Box>
 
             {isMe && isEditing && (
               <Box>
@@ -174,7 +192,7 @@ const ProfileModal = ({ user: targetUser, children }) => {
             ) : (
               <Box textAlign="center" w="100%">
                 <Text fontSize="sm" color="var(--text-secondary)" mb={1}>
-                  {targetUser?.email || "user@firemessenger.io"}
+                  {activeUser?.email || "user@firemessenger.io"}
                 </Text>
 
                 <Box mt={3} p={3} bg="var(--bg-search)" borderRadius="lg" w="100%">
@@ -182,11 +200,77 @@ const ProfileModal = ({ user: targetUser, children }) => {
                     Status / About
                   </Text>
                   <Text fontSize="sm" color="var(--text-primary)">
-                    {targetUser?.status || "🔥 Burning with Passion | Fire Messenger"}
+                    {activeUser?.status || "🔥 Burning with Passion | Fire Messenger"}
                   </Text>
                 </Box>
 
-                {(targetUser?._id === "bot_fire_ai" || targetUser?.name?.includes("Fire Bot")) && (
+                {/* VERIFICATION BADGE & IDENTITY CARD */}
+                <Box mt={3} p={3.5} borderRadius="xl" border="1px solid var(--color-border)" bg="var(--bg-search)" textAlign="left">
+                  <Flex justify="space-between" align="center" mb={1.5}>
+                    <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase">
+                      Identity Verification
+                    </Text>
+                    {verifyStatus === "verified" ? (
+                      <Badge colorScheme={verifyType === "business" ? "yellow" : "blue"} fontSize="xs">
+                        {verifyType === "business" ? "🟡 Official Business" : "🔵 Verified Individual"}
+                      </Badge>
+                    ) : verifyStatus === "pending" ? (
+                      <Badge colorScheme="orange" fontSize="xs">
+                        ⏳ Under Review
+                      </Badge>
+                    ) : (
+                      <Badge colorScheme="gray" fontSize="xs">
+                        Unverified
+                      </Badge>
+                    )}
+                  </Flex>
+
+                  {verifyStatus === "verified" ? (
+                    <VStack align="stretch" spacing={1} fontSize="xs">
+                      <Text color="var(--text-secondary)">
+                        {verifyType === "business"
+                          ? `Official Business Identity via ${activeUser?.verificationDetails?.gstinMasked || "GSTIN Registration"}`
+                          : `Identity Verified via Aadhaar (${activeUser?.verificationDetails?.aadhaarMasked || "XXXX-XXXX-4812"}) & Live Face Match`}
+                      </Text>
+                      {activeUser?.verificationDetails?.verifiedAt && (
+                        <Text fontSize="10px" color="var(--text-secondary)" opacity={0.8}>
+                          Verified on: {new Date(activeUser.verificationDetails.verifiedAt).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </VStack>
+                  ) : verifyStatus === "pending" ? (
+                    <VStack align="stretch" spacing={2} fontSize="xs">
+                      <Text color="orange.400">
+                        Verification Application is undergoing background manual review.
+                      </Text>
+                      {isMe && (
+                        <Button size="xs" colorScheme="orange" variant="outline" onClick={onVerifyOpen}>
+                          View Application & Fast-Track
+                        </Button>
+                      )}
+                    </VStack>
+                  ) : (
+                    <VStack align="stretch" spacing={2} fontSize="xs">
+                      <Text color="var(--text-secondary)">
+                        Get the blue or gold verified tag on your profile by verifying your Aadhaar or Business GSTIN with Live Face capture.
+                      </Text>
+                      {isMe && (
+                        <Button
+                          size="sm"
+                          leftIcon={<CheckCircleIcon />}
+                          bg="linear-gradient(135deg, #3897f0 0%, #0066ff 100%)"
+                          color="white"
+                          _hover={{ opacity: 0.9 }}
+                          onClick={onVerifyOpen}
+                        >
+                          Get Verified Tag Now
+                        </Button>
+                      )}
+                    </VStack>
+                  )}
+                </Box>
+
+                {(activeUser?._id === "bot_fire_ai" || activeUser?.name?.includes("Fire Bot")) && (
                   <Box mt={3} p={3} bg="rgba(239, 68, 68, 0.1)" border="1px solid var(--color-primary)" borderRadius="lg" w="100%" textAlign="left">
                     <Text fontSize="xs" color="var(--color-primary)" fontWeight="bold" textTransform="uppercase" mb={1}>
                       ⚡ Groq AI Integration Active
@@ -218,8 +302,12 @@ const ProfileModal = ({ user: targetUser, children }) => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Verification Modal Flow */}
+      <VerificationModal isOpen={isVerifyOpen} onClose={onVerifyClose} />
     </>
   );
 };
 
 export default ProfileModal;
+

@@ -28,6 +28,7 @@ import VoicePlayer from "./VoicePlayer";
 import PollComposerModal from "./miscellaneous/PollComposerModal";
 import LocationShareModal from "./miscellaneous/LocationShareModal";
 import FormattedMarkdown from "./FormattedMarkdown";
+import VerifiedBadge from "./common/VerifiedBadge";
 import ReportModal from "./miscellaneous/ReportModal";
 
 const DoubleTickIcon = () => (
@@ -610,6 +611,7 @@ const SingleChat = () => {
               <Text fontWeight="600" fontSize="md" color="var(--text-header)" lineHeight="1.2">
                 {header.title}
               </Text>
+              {header.userObj && <VerifiedBadge user={header.userObj} size="sm" />}
               {isChatPinned?.(selectedChat._id) && (
                 <Text fontSize="xs" title="Pinned Chat" opacity={0.85}>
                   📌

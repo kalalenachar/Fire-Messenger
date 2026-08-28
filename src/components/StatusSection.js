@@ -12,6 +12,7 @@ import {
 } from "@chakra-ui/react";
 import { AddIcon, SettingsIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
+import VerifiedBadge from "./common/VerifiedBadge";
 
 const StatusSection = ({ onOpenComposer, onOpenAudienceManager }) => {
   const { user, statusFeed, setActiveStatusUser } = ChatState();
@@ -177,9 +178,12 @@ const StatusSection = ({ onOpenComposer, onOpenAudienceManager }) => {
                       <Avatar size="sm" name={stack.user?.name} src={stack.user?.pic} />
                     </Box>
                     <Box>
-                      <Text fontWeight="bold" fontSize="sm">
-                        {stack.user?.name}
-                      </Text>
+                      <Flex align="center">
+                        <Text fontWeight="bold" fontSize="sm">
+                          {stack.user?.name}
+                        </Text>
+                        <VerifiedBadge user={stack.user} size="xs" />
+                      </Flex>
                       <Text fontSize="xs" color="var(--text-muted)">
                         {formatRelativeTime(stack.latestUpdatedAt)}
                       </Text>
