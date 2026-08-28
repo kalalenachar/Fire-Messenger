@@ -27,10 +27,15 @@ if command -v netfilter-persistent &> /dev/null; then
     sudo netfilter-persistent save || true
 fi
 
+# Fix MongoDB repo for Ubuntu 24.04 (noble) if present
+if [ -f "/etc/apt/sources.list.d/mongodb-org-7.0.list" ]; then
+    sudo sed -i 's/noble/jammy/g' /etc/apt/sources.list.d/mongodb-org-7.0.list || true
+fi
+
 # 2. Install Dependencies (Node.js 20, Nginx, PM2, MongoDB)
 echo "📦 Step 2: Installing Node.js 20, Nginx, PM2, and MongoDB Community Server..."
-sudo apt update -y
-sudo apt install -y curl git build-essential nginx iptables-persistent gnupg lsb-release
+sudo apt update -y || true
+sudo apt install -y curl git build-essential nginx iptables-persistent gnupg lsb-release || true
 
 if ! command -v node &> /dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -44,10 +49,14 @@ fi
 # Install MongoDB Community Edition
 if ! command -v mongod &> /dev/null; then
     echo "🍃 Installing MongoDB Community Server..."
+    UBUNTU_CODENAME=$(lsb_release -cs 2>/dev/null || echo "jammy")
+    if [ "$UBUNTU_CODENAME" = "noble" ]; then
+        UBUNTU_CODENAME="jammy"
+    fi
     curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
        sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg \
        --dearmor --yes || true
-    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list || true
+    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu ${UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list || true
     sudo apt update -y || true
     sudo apt install -y mongodb-org || sudo apt install -y mongodb || true
 fi
