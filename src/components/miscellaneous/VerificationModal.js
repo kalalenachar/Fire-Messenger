@@ -66,11 +66,15 @@ const VerificationModal = ({ isOpen, onClose }) => {
     setAadhaarNumber(formatted);
   };
 
-  // Reset modal state on open
+  // Reset modal state on open & pre-fill previous application data
   useEffect(() => {
     if (isOpen) {
       setStep(user?.verificationStatus === "pending" ? 4 : 1);
       setVerificationType(user?.verificationType || "individual");
+      if (user?.verificationDetails) {
+        if (user.verificationDetails.businessName) setBusinessName(user.verificationDetails.businessName);
+        if (user.verificationDetails.gstinMasked) setGstinNumber(user.verificationDetails.gstinMasked);
+      }
       setFaceImage(null);
       setMatchScore(null);
       setIsCameraActive(false);
@@ -281,6 +285,20 @@ const VerificationModal = ({ isOpen, onClose }) => {
           {/* STEP 1: SELECT VERIFICATION TYPE */}
           {step === 1 && (
             <VStack spacing={4} align="stretch">
+              {user?.verificationStatus === "rejected" && (
+                <Box p={3} borderRadius="xl" bg="rgba(239, 68, 68, 0.12)" border="1px solid #ef4444" textStyle="xs">
+                  <Text fontWeight="bold" color="red.400" fontSize="xs">
+                    ⚠️ Previous Application Rejected
+                  </Text>
+                  <Text fontSize="xs" color="var(--text-secondary)" mt={1}>
+                    Reason: {user?.verificationDetails?.rejectionReason || "Verification criteria not met."}
+                  </Text>
+                  <Text fontSize="10px" color="var(--text-secondary)" mt={1} fontStyle="italic">
+                    Please correct your details and upload clear documentation before re-submitting.
+                  </Text>
+                </Box>
+              )}
+
               <Text fontSize="sm" color="var(--text-secondary)">
                 Choose the category of verified badge you are applying for:
               </Text>

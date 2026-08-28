@@ -50,6 +50,7 @@ const StatusViewerModal = ({ isOpen, onClose, userStatusStack }) => {
     if (isOpen && currentPost && !isOwnStatus) {
       viewStatusSlide(currentPost._id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentIndex, currentPost?._id]);
 
   // Reset index when modal opens
@@ -81,6 +82,7 @@ const StatusViewerModal = ({ isOpen, onClose, userStatusStack }) => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentIndex, isPaused, isViewersDrawerOpen, posts.length]);
 
   const handleNextSlide = () => {

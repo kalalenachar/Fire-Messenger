@@ -43,6 +43,7 @@ const AudienceProfileModal = ({ isOpen, onClose }) => {
       setActiveView("list");
       fetchUsers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const fetchUsers = async () => {

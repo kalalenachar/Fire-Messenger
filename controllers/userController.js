@@ -158,10 +158,50 @@ const registerUser = async (req, res) => {
 const updateUserProfile = async (req, res, io) => {
   try {
     const { userId, updates } = req.body;
-    const updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { returnDocument: "after" });
-    if (!updatedUser) {
+    const user = await User.findById(userId);
+    if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
+
+    const payload = { ...updates };
+
+    // Handle username update validation
+    if (payload.username) {
+      const cleanUsername = payload.username.toLowerCase().trim();
+      if (cleanUsername !== (user.username || "").toLowerCase()) {
+        const usernameRegex = /^[a-z0-9_.]{3,20}$/;
+        if (!usernameRegex.test(cleanUsername)) {
+          return res.status(400).json({
+            success: false,
+            message: "Username must be 3-20 characters using letters, numbers, dots, or underscores.",
+          });
+        }
+        const existing = await User.findOne({ username: cleanUsername, _id: { $ne: userId } });
+        if (existing) {
+          return res.status(400).json({ success: false, message: "Username is already taken by another user." });
+        }
+        payload.username = cleanUsername;
+      }
+    }
+
+    // Handle password update validation
+    if (payload.newPassword) {
+      if (!payload.currentPassword) {
+        return res.status(400).json({ success: false, message: "Current Password is required to set a new password." });
+      }
+      if (user.password !== payload.currentPassword) {
+        return res.status(400).json({ success: false, message: "Incorrect Current Password. Password not changed." });
+      }
+      if (payload.newPassword.length < 3) {
+        return res.status(400).json({ success: false, message: "New password must be at least 3 characters long." });
+      }
+      payload.password = payload.newPassword;
+    }
+
+    delete payload.currentPassword;
+    delete payload.newPassword;
+
+    const updatedUser = await User.findByIdAndUpdate(userId, { $set: payload }, { returnDocument: "after" });
 
     // Update user snippet in chats
     await Chat.updateMany(
@@ -259,6 +299,7 @@ const reviewVerification = async (req, res, io) => {
     const details = { ...(user.verificationDetails || {}) };
     if (status === "verified") {
       details.verifiedAt = new Date().toISOString();
+      delete details.rejectionReason;
     } else if (status === "rejected") {
       details.rejectionReason = rejectionReason || "Verification criteria not met.";
       details.rejectedAt = new Date().toISOString();
@@ -275,6 +316,53 @@ const reviewVerification = async (req, res, io) => {
     )
       .select("-password")
       .lean();
+
+    // Auto send notification message from Agni Bot 🔥 to user's chat box
+    try {
+      const botChatId = `chat_bot_${userId}`;
+      let botChat = await Chat.findById(botChatId);
+      if (!botChat) {
+        botChat = await Chat.findOne({ "users._id": userId, "users._id": fireBotUser._id });
+      }
+
+      if (botChat) {
+        const botContent =
+          status === "verified"
+            ? `🎉 **Congratulations ${updated.name}!** Your identity verification application for **${
+                updated.verificationType === "business" ? "Official Business" : "Individual Identity"
+              }** has been **APPROVED** by the administrator. You now have the verified badge!`
+            : `⚠️ **Identity Verification Update:** Your application was reviewed and **REJECTED** by the administrator.\n\n**Reason:** ${
+                rejectionReason || "Verification criteria not met."
+              }\n\nYou can review your details and re-apply from your Profile Settings anytime.`;
+
+        const botMsg = await Message.create({
+          _id: `msg_bot_${Date.now()}`,
+          sender: fireBotUser,
+          content: botContent,
+          chat: botChat._id,
+          createdAt: new Date(),
+          reactions: status === "verified" ? { "🎉": 1 } : { "⚠️": 1 },
+        });
+
+        await Chat.findByIdAndUpdate(botChat._id, {
+          latestMessage: {
+            content: botContent,
+            sender: fireBotUser,
+            createdAt: botMsg.createdAt.toISOString(),
+          },
+          $inc: { unread: 1 },
+        });
+
+        if (io) {
+          io.to(botChat._id).emit("message received", {
+            ...botMsg.toObject(),
+            chatObj: botChat.toObject(),
+          });
+        }
+      }
+    } catch (botErr) {
+      console.warn("Could not dispatch Agni Bot notification message:", botErr);
+    }
 
     if (io) {
       io.emit("user profile updated", updated);
