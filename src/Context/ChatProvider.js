@@ -1701,6 +1701,7 @@ const ChatProvider = ({ children }) => {
         callData={callData}
         localStream={localStream}
         remoteStream={remoteStream}
+        currentUser={user}
         onAcceptCall={acceptCall}
         onRejectCall={rejectCall}
         onEndCall={endCall}

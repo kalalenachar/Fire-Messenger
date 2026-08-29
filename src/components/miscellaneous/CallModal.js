@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Modal,
   ModalOverlay,
@@ -153,6 +153,7 @@ const CallModal = ({
   callData, // { caller, callType, status: 'calling' | 'incoming' | 'connected', isVideo }
   localStream,
   remoteStream,
+  currentUser,
   onAcceptCall,
   onRejectCall,
   onEndCall,
@@ -168,6 +169,7 @@ const CallModal = ({
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [hasRemoteVideoTrack, setHasRemoteVideoTrack] = useState(false);
+  const [hasLocalVideoTrack, setHasLocalVideoTrack] = useState(false);
 
   // Call Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -188,6 +190,7 @@ const CallModal = ({
       setRecordedBlob(null);
       setRecordedUrl(null);
       setHasRemoteVideoTrack(false);
+      setHasLocalVideoTrack(false);
       toneGenerator.stop();
     }
   }, [isOpen]);
@@ -238,18 +241,126 @@ const CallModal = ({
     return () => clearInterval(timer);
   }, [isRecording]);
 
-  // Bind local stream to self-preview video tag
+  // Track local video stream active tracks
+  useEffect(() => {
+    if (!localStream) {
+      setHasLocalVideoTrack(false);
+      return;
+    }
+
+    const checkLocalVideo = () => {
+      if (!localStream) {
+        setHasLocalVideoTrack(false);
+        return;
+      }
+      const vTracks = localStream.getVideoTracks();
+      const hasLive = vTracks.some((t) => t.readyState === "live" && t.enabled);
+      setHasLocalVideoTrack(hasLive);
+    };
+
+    checkLocalVideo();
+
+    const vTracks = localStream.getVideoTracks();
+    vTracks.forEach((t) => {
+      t.onunmute = checkLocalVideo;
+      t.onmute = checkLocalVideo;
+      t.onended = checkLocalVideo;
+    });
+
+    localStream.onaddtrack = checkLocalVideo;
+    localStream.onremovetrack = checkLocalVideo;
+
+    return () => {
+      vTracks.forEach((t) => {
+        t.onunmute = null;
+        t.onmute = null;
+        t.onended = null;
+      });
+      if (localStream) {
+        localStream.onaddtrack = null;
+        localStream.onremovetrack = null;
+      }
+    };
+  }, [localStream, isVideoOff, isOpen]);
+
+  // Callback ref to bind and play local self-preview immediately when DOM node mounts
+  const bindLocalVideo = useCallback(
+    (videoEl) => {
+      localVideoRef.current = videoEl;
+      if (videoEl && localStream) {
+        if (videoEl.srcObject !== localStream) {
+          videoEl.srcObject = localStream;
+        }
+        videoEl.muted = true;
+        videoEl.defaultMuted = true;
+        videoEl.playsInline = true;
+        videoEl.setAttribute("playsinline", "true");
+        videoEl.setAttribute("webkit-playsinline", "true");
+        videoEl.setAttribute("muted", "true");
+        videoEl.setAttribute("autoplay", "true");
+        videoEl.play().catch((e) => console.warn("Local video play notice:", e));
+      }
+    },
+    [localStream]
+  );
+
+  // Callback ref to bind and play remote video immediately when DOM node mounts
+  const bindRemoteVideo = useCallback(
+    (videoEl) => {
+      remoteVideoRef.current = videoEl;
+      if (videoEl && remoteStream) {
+        if (videoEl.srcObject !== remoteStream) {
+          videoEl.srcObject = remoteStream;
+        }
+        videoEl.muted = true;
+        videoEl.defaultMuted = true;
+        videoEl.playsInline = true;
+        videoEl.setAttribute("playsinline", "true");
+        videoEl.setAttribute("webkit-playsinline", "true");
+        videoEl.setAttribute("muted", "true");
+        videoEl.setAttribute("autoplay", "true");
+        videoEl.play().catch((e) => console.warn("Remote video play notice:", e));
+      }
+    },
+    [remoteStream]
+  );
+
+  // Callback ref to bind and play remote audio immediately when DOM node mounts
+  const bindRemoteAudio = useCallback(
+    (audioEl) => {
+      remoteAudioRef.current = audioEl;
+      if (audioEl && remoteStream) {
+        if (audioEl.srcObject !== remoteStream) {
+          audioEl.srcObject = remoteStream;
+        }
+        audioEl.playsInline = true;
+        audioEl.setAttribute("playsinline", "true");
+        audioEl.setAttribute("autoplay", "true");
+        audioEl.play().catch((e) => console.warn("Remote audio play notice:", e));
+      }
+    },
+    [remoteStream]
+  );
+
+  // Synchronize local stream changes to self-preview video element
   useEffect(() => {
     if (localVideoRef.current && localStream) {
-      if (localVideoRef.current.srcObject !== localStream) {
-        localVideoRef.current.srcObject = localStream;
+      const el = localVideoRef.current;
+      if (el.srcObject !== localStream) {
+        el.srcObject = localStream;
       }
-      localVideoRef.current.muted = true; // Local preview is always muted
-      localVideoRef.current.play().catch((e) => console.warn("Local video play notice:", e));
+      el.muted = true;
+      el.defaultMuted = true;
+      el.playsInline = true;
+      el.setAttribute("playsinline", "true");
+      el.setAttribute("webkit-playsinline", "true");
+      el.setAttribute("muted", "true");
+      el.setAttribute("autoplay", "true");
+      el.play().catch((e) => console.warn("Local video play notice:", e));
     }
-  }, [localStream, isOpen, callData?.callType]);
+  }, [localStream, isOpen, callData?.callType, callData?.status]);
 
-  // Bind remote stream to dedicated remote audio and remote video tags
+  // Synchronize remote stream changes to remote audio and remote video elements
   useEffect(() => {
     if (!remoteStream) {
       setHasRemoteVideoTrack(false);
@@ -280,34 +391,46 @@ const CallModal = ({
     remoteStream.onaddtrack = () => {
       checkVideoTracks();
       if (remoteVideoRef.current && remoteStream) {
-        remoteVideoRef.current.srcObject = remoteStream;
-        remoteVideoRef.current.play().catch(() => {});
+        const el = remoteVideoRef.current;
+        el.srcObject = remoteStream;
+        el.muted = true;
+        el.defaultMuted = true;
+        el.playsInline = true;
+        el.setAttribute("playsinline", "true");
+        el.setAttribute("webkit-playsinline", "true");
+        el.setAttribute("muted", "true");
+        el.setAttribute("autoplay", "true");
+        el.play().catch(() => {});
       }
     };
     remoteStream.onremovetrack = checkVideoTracks;
 
-    // 1. Play remote audio via dedicated audio element
+    // Play remote audio via dedicated audio element
     if (remoteAudioRef.current) {
-      if (remoteAudioRef.current.srcObject !== remoteStream) {
-        remoteAudioRef.current.srcObject = remoteStream;
+      const el = remoteAudioRef.current;
+      if (el.srcObject !== remoteStream) {
+        el.srcObject = remoteStream;
       }
-      const playAudio = () => {
-        remoteAudioRef.current?.play().catch((e) => console.warn("Remote audio play notice:", e));
-      };
-      remoteAudioRef.current.onloadedmetadata = playAudio;
-      playAudio();
+      el.playsInline = true;
+      el.setAttribute("playsinline", "true");
+      el.setAttribute("autoplay", "true");
+      el.play().catch((e) => console.warn("Remote audio play notice:", e));
     }
 
-    // 2. Play remote video via muted video element (muted prevents browser autoplay blocks)
+    // Play remote video via muted video element
     if (remoteVideoRef.current) {
-      if (remoteVideoRef.current.srcObject !== remoteStream) {
-        remoteVideoRef.current.srcObject = remoteStream;
+      const el = remoteVideoRef.current;
+      if (el.srcObject !== remoteStream) {
+        el.srcObject = remoteStream;
       }
-      const playVideo = () => {
-        remoteVideoRef.current?.play().catch((e) => console.warn("Remote video play notice:", e));
-      };
-      remoteVideoRef.current.onloadedmetadata = playVideo;
-      playVideo();
+      el.muted = true;
+      el.defaultMuted = true;
+      el.playsInline = true;
+      el.setAttribute("playsinline", "true");
+      el.setAttribute("webkit-playsinline", "true");
+      el.setAttribute("muted", "true");
+      el.setAttribute("autoplay", "true");
+      el.play().catch((e) => console.warn("Remote video play notice:", e));
     }
 
     return () => {
@@ -481,7 +604,7 @@ const CallModal = ({
         >
           {/* Dedicated Off-Screen Remote Audio Receiver (Non display:none so browser audio engine never sleeps) */}
           <audio
-            ref={remoteAudioRef}
+            ref={bindRemoteAudio}
             autoPlay
             playsInline
             style={{
@@ -566,12 +689,18 @@ const CallModal = ({
 
                 {/* Remote Video Stream (Always mounted in DOM, muted so browser never blocks video frame rendering; audio plays through remoteAudioRef) */}
                 <video
-                  ref={remoteVideoRef}
+                  ref={bindRemoteVideo}
                   autoPlay
                   playsInline
                   muted
-                  onLoadedMetadata={(e) => e.target.play().catch(() => {})}
-                  onCanPlay={(e) => e.target.play().catch(() => {})}
+                  onLoadedMetadata={(e) => {
+                    e.target.muted = true;
+                    e.target.play().catch(() => {});
+                  }}
+                  onCanPlay={(e) => {
+                    e.target.muted = true;
+                    e.target.play().catch(() => {});
+                  }}
                   style={{
                     position: "absolute",
                     top: 0,
@@ -633,12 +762,18 @@ const CallModal = ({
                   justifyContent="center"
                 >
                   <video
-                    ref={localVideoRef}
+                    ref={bindLocalVideo}
                     autoPlay
                     playsInline
                     muted
-                    onLoadedMetadata={(e) => e.target.play().catch(() => {})}
-                    onCanPlay={(e) => e.target.play().catch(() => {})}
+                    onLoadedMetadata={(e) => {
+                      e.target.muted = true;
+                      e.target.play().catch(() => {});
+                    }}
+                    onCanPlay={(e) => {
+                      e.target.muted = true;
+                      e.target.play().catch(() => {});
+                    }}
                     style={{
                       position: "absolute",
                       top: 0,
@@ -647,13 +782,15 @@ const CallModal = ({
                       height: "100%",
                       objectFit: "cover",
                       transform: isScreenSharing ? "none" : "scaleX(-1)",
-                      opacity: isVideoOff ? 0 : 1,
+                      opacity: !isVideoOff && hasLocalVideoTrack ? 1 : 0,
                       transition: "opacity 0.2s ease-in-out",
+                      zIndex: 1,
                     }}
                   />
-                  {isVideoOff && (
+                  {(!hasLocalVideoTrack || isVideoOff) && (
                     <Flex direction="column" align="center" justify="center" p={2} textAlign="center" zIndex={2}>
-                      <Text fontSize="xs" color="whiteAlpha.700">📷 Off</Text>
+                      <Avatar size="sm" name={currentUser?.name || "You"} src={currentUser?.pic} mb={1} />
+                      <Text fontSize="10px" color="whiteAlpha.700">{isVideoOff ? "📷 Off" : "Loading..."}</Text>
                     </Flex>
                   )}
                 </Box>
