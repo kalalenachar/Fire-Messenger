@@ -47,6 +47,7 @@ const RTC_CONFIG = {
     { urls: "stun:stun2.l.google.com:19302" },
     { urls: "stun:stun3.l.google.com:19302" },
     { urls: "stun:stun4.l.google.com:19302" },
+    { urls: "stun:stun.services.mozilla.com" },
     { urls: "stun:global.stun.twilio.com:3478" },
   ],
   iceCandidatePoolSize: 10,
@@ -327,6 +328,12 @@ const ChatProvider = ({ children }) => {
   const originalVideoTrackRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const pendingIceCandidatesRef = useRef([]);
+  const remoteStreamRef = useRef(null);
+  const callDataRef = useRef(callData);
+
+  useEffect(() => {
+    callDataRef.current = callData;
+  }, [callData]);
 
   const selectedChatRef = useRef(selectedChat);
   useEffect(() => {
@@ -727,7 +734,7 @@ const ChatProvider = ({ children }) => {
     });
 
     // WebRTC Signaling Handlers
-    socket.on("incoming-call", ({ caller, signalData, callType, chatId, fromSocketId }) => {
+    socket.on("incoming-call", ({ caller, signalData, callType, chatId, fromSocketId, fromUserId }) => {
       pendingIceCandidatesRef.current = [];
       setCallData({
         caller,
@@ -735,12 +742,13 @@ const ChatProvider = ({ children }) => {
         callType,
         chatId,
         fromSocketId,
+        fromUserId,
         status: "incoming",
       });
       setIsCallModalOpen(true);
     });
 
-    socket.on("call-accepted", async ({ signalData }) => {
+    socket.on("call-accepted", async ({ signalData, fromSocketId, fromUserId }) => {
       console.log("📞 Call accepted by remote user");
       try {
         if (peerConnectionRef.current && signalData) {
@@ -759,7 +767,16 @@ const ChatProvider = ({ children }) => {
       } catch (err) {
         console.warn("Error setting remote description on call-accepted:", err);
       }
-      setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
+      setCallData((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "connected",
+              fromSocketId: fromSocketId || prev.fromSocketId,
+              fromUserId: fromUserId || prev.fromUserId,
+            }
+          : null
+      );
     });
 
     socket.on("ice-candidate", async ({ candidate }) => {
@@ -1105,22 +1122,30 @@ const ChatProvider = ({ children }) => {
         try {
           return await navigator.mediaDevices.getUserMedia({
             audio: audioConstraints,
-            video: { width: { ideal: 640 }, height: { ideal: 480 } },
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
           });
         } catch (e2) {
-          console.warn("Camera hardware or permission unavailable, falling back to audio stream:", e2);
+          console.warn("Standard video stream failed, trying unconstrained video:", e2);
           try {
-            return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-          } catch (e3) {
-            console.warn("Audio hardware stream unavailable:", e3);
-            toast({
-              title: "Media Access Denied",
-              description: "Please check your microphone and camera permissions in browser settings.",
-              status: "warning",
-              duration: 3500,
-              isClosable: true,
+            return await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: true,
             });
-            return null;
+          } catch (e3) {
+            console.warn("Camera hardware or permission unavailable, falling back to audio stream:", e3);
+            try {
+              return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+            } catch (e4) {
+              console.warn("Audio hardware stream unavailable:", e4);
+              toast({
+                title: "Media Access Denied",
+                description: "Please check your microphone and camera permissions in browser settings.",
+                status: "warning",
+                duration: 3500,
+                isClosable: true,
+              });
+              return null;
+            }
           }
         }
       }
@@ -1154,6 +1179,8 @@ const ChatProvider = ({ children }) => {
       peerConnectionRef.current = null;
     }
 
+    remoteStreamRef.current = new MediaStream();
+
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnectionRef.current = pc;
     // NOTE: Keep existing queued pendingIceCandidatesRef to flush after setRemoteDescription
@@ -1183,9 +1210,10 @@ const ChatProvider = ({ children }) => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate && socket) {
+        const destSocketId = fromSocketId || callDataRef.current?.fromSocketId || null;
         socket.emit("ice-candidate", {
           targetUserId,
-          toSocketId: fromSocketId,
+          toSocketId: destSocketId,
           candidate: event.candidate,
         });
       }
@@ -1193,26 +1221,39 @@ const ChatProvider = ({ children }) => {
 
     pc.ontrack = (event) => {
       console.log("📹 Remote stream track received:", event.track?.kind, event.streams);
-      if (event.streams && event.streams[0]) {
-        const streamInstance = event.streams[0];
-        // Create new MediaStream instance so React state change triggers re-render
-        setRemoteStream(new MediaStream(streamInstance.getTracks()));
 
-        streamInstance.onaddtrack = () => {
-          setRemoteStream(new MediaStream(streamInstance.getTracks()));
-        };
-        streamInstance.onremovetrack = () => {
-          setRemoteStream(new MediaStream(streamInstance.getTracks()));
-        };
-      } else if (event.track) {
-        setRemoteStream((prevStream) => {
-          const currentTracks = prevStream ? prevStream.getTracks() : [];
-          if (!currentTracks.some((t) => t.id === event.track.id)) {
-            return new MediaStream([...currentTracks, event.track]);
+      if (!remoteStreamRef.current) {
+        remoteStreamRef.current = new MediaStream();
+      }
+      const activeRemoteStream = remoteStreamRef.current;
+
+      if (event.track) {
+        if (!activeRemoteStream.getTracks().some((t) => t.id === event.track.id)) {
+          activeRemoteStream.addTrack(event.track);
+        }
+      }
+
+      if (event.streams && event.streams[0]) {
+        event.streams[0].getTracks().forEach((track) => {
+          if (!activeRemoteStream.getTracks().some((t) => t.id === track.id)) {
+            activeRemoteStream.addTrack(track);
           }
-          return prevStream;
         });
       }
+
+      const syncRemoteStreamState = () => {
+        if (remoteStreamRef.current) {
+          setRemoteStream(new MediaStream(remoteStreamRef.current.getTracks()));
+        }
+      };
+
+      if (event.track) {
+        event.track.onunmute = syncRemoteStreamState;
+        event.track.onmute = syncRemoteStreamState;
+        event.track.onended = syncRemoteStreamState;
+      }
+
+      syncRemoteStreamState();
     };
 
     pc.onconnectionstatechange = () => {
@@ -1437,8 +1478,10 @@ const ChatProvider = ({ children }) => {
       localStream.getTracks().forEach((track) => track.stop());
       setLocalStream(null);
     }
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current = null;
+    }
     if (remoteStream) {
-      remoteStream.getTracks().forEach((track) => track.stop());
       setRemoteStream(null);
     }
     setIsScreenSharing(false);

@@ -271,7 +271,8 @@ io.on("connection", (socket) => {
   socket.on("reject-call", ({ targetUserId, toSocketId }) => {
     if (toSocketId) {
       io.to(toSocketId).emit("call-rejected");
-    } else if (targetUserId) {
+    }
+    if (targetUserId) {
       io.to(targetUserId).emit("call-rejected");
     }
   });
@@ -279,7 +280,8 @@ io.on("connection", (socket) => {
   socket.on("end-call", ({ targetUserId, toSocketId }) => {
     if (toSocketId) {
       io.to(toSocketId).emit("call-ended");
-    } else if (targetUserId) {
+    }
+    if (targetUserId) {
       io.to(targetUserId).emit("call-ended");
     }
   });

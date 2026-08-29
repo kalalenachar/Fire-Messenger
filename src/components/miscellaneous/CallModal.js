@@ -241,7 +241,9 @@ const CallModal = ({
   // Bind local stream to self-preview video tag
   useEffect(() => {
     if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+      if (localVideoRef.current.srcObject !== localStream) {
+        localVideoRef.current.srcObject = localStream;
+      }
       localVideoRef.current.muted = true; // Local preview is always muted
       localVideoRef.current.play().catch((e) => console.warn("Local video play notice:", e));
     }
@@ -249,34 +251,76 @@ const CallModal = ({
 
   // Bind remote stream to dedicated remote audio and remote video tags
   useEffect(() => {
-    if (remoteStream) {
-      // Check if remote stream contains an active video track
-      const videoTracks = remoteStream.getVideoTracks();
-      const hasLiveVideo = videoTracks.some((t) => t.readyState === "live" && t.enabled);
-      setHasRemoteVideoTrack(hasLiveVideo);
-
-      // 1. Play remote audio via dedicated audio element
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        const playAudio = () => {
-          remoteAudioRef.current.play().catch((e) => console.warn("Remote audio play notice:", e));
-        };
-        remoteAudioRef.current.onloadedmetadata = playAudio;
-        playAudio();
-      }
-
-      // 2. Play remote video via muted video element (muted prevents browser autoplay blocks)
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-        const playVideo = () => {
-          remoteVideoRef.current.play().catch((e) => console.warn("Remote video play notice:", e));
-        };
-        remoteVideoRef.current.onloadedmetadata = playVideo;
-        playVideo();
-      }
-    } else {
+    if (!remoteStream) {
       setHasRemoteVideoTrack(false);
+      return;
     }
+
+    const checkVideoTracks = () => {
+      if (!remoteStream) {
+        setHasRemoteVideoTrack(false);
+        return;
+      }
+      const videoTracks = remoteStream.getVideoTracks();
+      const hasLiveVideo = videoTracks.some(
+        (t) => t.readyState === "live" && t.enabled
+      );
+      setHasRemoteVideoTrack(hasLiveVideo);
+    };
+
+    checkVideoTracks();
+
+    const videoTracks = remoteStream.getVideoTracks();
+    videoTracks.forEach((track) => {
+      track.onunmute = checkVideoTracks;
+      track.onmute = checkVideoTracks;
+      track.onended = checkVideoTracks;
+    });
+
+    remoteStream.onaddtrack = () => {
+      checkVideoTracks();
+      if (remoteVideoRef.current && remoteStream) {
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteVideoRef.current.play().catch(() => {});
+      }
+    };
+    remoteStream.onremovetrack = checkVideoTracks;
+
+    // 1. Play remote audio via dedicated audio element
+    if (remoteAudioRef.current) {
+      if (remoteAudioRef.current.srcObject !== remoteStream) {
+        remoteAudioRef.current.srcObject = remoteStream;
+      }
+      const playAudio = () => {
+        remoteAudioRef.current?.play().catch((e) => console.warn("Remote audio play notice:", e));
+      };
+      remoteAudioRef.current.onloadedmetadata = playAudio;
+      playAudio();
+    }
+
+    // 2. Play remote video via muted video element (muted prevents browser autoplay blocks)
+    if (remoteVideoRef.current) {
+      if (remoteVideoRef.current.srcObject !== remoteStream) {
+        remoteVideoRef.current.srcObject = remoteStream;
+      }
+      const playVideo = () => {
+        remoteVideoRef.current?.play().catch((e) => console.warn("Remote video play notice:", e));
+      };
+      remoteVideoRef.current.onloadedmetadata = playVideo;
+      playVideo();
+    }
+
+    return () => {
+      videoTracks.forEach((track) => {
+        track.onunmute = null;
+        track.onmute = null;
+        track.onended = null;
+      });
+      if (remoteStream) {
+        remoteStream.onaddtrack = null;
+        remoteStream.onremovetrack = null;
+      }
+    };
   }, [remoteStream, isOpen, callData?.callType, callData?.status]);
 
   const toggleMute = () => {
@@ -515,46 +559,61 @@ const CallModal = ({
                 border="1px solid var(--color-border)"
               >
                 {isScreenSharing && (
-                  <Badge position="absolute" top="12px" left="12px" colorScheme="purple" px={3} py={1} borderRadius="full" zIndex={4} fontSize="xs" boxShadow="md">
+                  <Badge position="absolute" top="12px" left="12px" colorScheme="purple" px={3} py={1} borderRadius="full" zIndex={5} fontSize="xs" boxShadow="md">
                     🖥️ SCREEN SHARING ACTIVE
                   </Badge>
                 )}
 
-                {/* Remote Video Stream (Muted so browser never blocks video frame rendering; audio plays through remoteAudioRef) */}
+                {/* Remote Video Stream (Always mounted in DOM, muted so browser never blocks video frame rendering; audio plays through remoteAudioRef) */}
                 <video
                   ref={remoteVideoRef}
                   autoPlay
                   playsInline
                   muted
+                  onLoadedMetadata={(e) => e.target.play().catch(() => {})}
+                  onCanPlay={(e) => e.target.play().catch(() => {})}
                   style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    display: remoteStream && hasRemoteVideoTrack ? "block" : "none",
+                    opacity: remoteStream && hasRemoteVideoTrack ? 1 : 0,
+                    transition: "opacity 0.3s ease-in-out",
+                    zIndex: 1,
                   }}
                 />
 
                 {/* Fallback Display if Remote Video is not yet received / Audio Only */}
-                {(!remoteStream || !hasRemoteVideoTrack) && (
-                  <Box position="absolute" display="flex" flexDirection="column" alignItems="center" gap={3}>
-                    <Avatar size="2xl" name={user.name} src={user.pic} border="3px solid var(--color-primary)" />
-                    {callData.status === "connected" ? (
-                      <Flex align="center" gap={2}>
-                        <Box w="10px" h="10px" bg="green.400" borderRadius="50%" />
-                        <Text fontSize="sm" color="whiteAlpha.900" fontWeight="medium">
-                          Audio Connected (Camera Off)
-                        </Text>
-                      </Flex>
-                    ) : (
-                      <Flex align="center" gap={2}>
-                        <Spinner size="sm" color="var(--color-primary)" />
-                        <Text fontSize="sm" color="whiteAlpha.800">
-                          {callData.status === "incoming" ? "Incoming Video Call..." : "Connecting Video Stream..."}
-                        </Text>
-                      </Flex>
-                    )}
-                  </Box>
-                )}
+                <Box
+                  position="absolute"
+                  display="flex"
+                  flexDirection="column"
+                  alignItems="center"
+                  gap={3}
+                  zIndex={2}
+                  pointerEvents={hasRemoteVideoTrack ? "none" : "auto"}
+                  opacity={remoteStream && hasRemoteVideoTrack ? 0 : 1}
+                  transition="opacity 0.3s ease-in-out"
+                >
+                  <Avatar size="2xl" name={user.name} src={user.pic} border="3px solid var(--color-primary)" />
+                  {callData.status === "connected" ? (
+                    <Flex align="center" gap={2}>
+                      <Box w="10px" h="10px" bg="green.400" borderRadius="50%" />
+                      <Text fontSize="sm" color="whiteAlpha.900" fontWeight="medium">
+                        Audio Connected (Camera Off)
+                      </Text>
+                    </Flex>
+                  ) : (
+                    <Flex align="center" gap={2}>
+                      <Spinner size="sm" color="var(--color-primary)" />
+                      <Text fontSize="sm" color="whiteAlpha.800">
+                        {callData.status === "incoming" ? "Incoming Video Call..." : "Connecting Video Stream..."}
+                      </Text>
+                    </Flex>
+                  )}
+                </Box>
 
                 {/* Local Self-Preview Video */}
                 <Box
@@ -568,7 +627,7 @@ const CallModal = ({
                   overflow="hidden"
                   border="2px solid var(--color-primary)"
                   boxShadow="0 6px 16px rgba(0,0,0,0.6)"
-                  zIndex={3}
+                  zIndex={4}
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
@@ -578,16 +637,22 @@ const CallModal = ({
                     autoPlay
                     playsInline
                     muted
+                    onLoadedMetadata={(e) => e.target.play().catch(() => {})}
+                    onCanPlay={(e) => e.target.play().catch(() => {})}
                     style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
                       transform: isScreenSharing ? "none" : "scaleX(-1)",
-                      display: isVideoOff ? "none" : "block",
+                      opacity: isVideoOff ? 0 : 1,
+                      transition: "opacity 0.2s ease-in-out",
                     }}
                   />
                   {isVideoOff && (
-                    <Flex direction="column" align="center" justify="center" p={2} textAlign="center">
+                    <Flex direction="column" align="center" justify="center" p={2} textAlign="center" zIndex={2}>
                       <Text fontSize="xs" color="whiteAlpha.700">📷 Off</Text>
                     </Flex>
                   )}
