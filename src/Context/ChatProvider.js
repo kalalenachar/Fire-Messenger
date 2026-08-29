@@ -45,8 +45,11 @@ const RTC_CONFIG = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun.services.mozilla.com" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
+    { urls: "stun:global.stun.twilio.com:3478" },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 let socket = null;
@@ -725,6 +728,7 @@ const ChatProvider = ({ children }) => {
 
     // WebRTC Signaling Handlers
     socket.on("incoming-call", ({ caller, signalData, callType, chatId, fromSocketId }) => {
+      pendingIceCandidatesRef.current = [];
       setCallData({
         caller,
         signalData,
@@ -745,7 +749,11 @@ const ChatProvider = ({ children }) => {
           // Flush queued ICE candidates
           while (pendingIceCandidatesRef.current.length > 0) {
             const cand = pendingIceCandidatesRef.current.shift();
-            await peerConnectionRef.current.addIceCandidate(cand).catch((e) => console.warn("ICE error:", e));
+            try {
+              await peerConnectionRef.current.addIceCandidate(cand);
+            } catch (e) {
+              console.warn("ICE error on call-accepted:", e);
+            }
           }
         }
       } catch (err) {
@@ -773,12 +781,12 @@ const ChatProvider = ({ children }) => {
     });
 
     socket.on("call-rejected", () => {
-      toast({ title: "Call Declined", status: "info", duration: 2500 });
+      toast({ title: "Call Declined", status: "info", duration: 2500, isClosable: true });
       cleanupCall();
     });
 
     socket.on("call-ended", () => {
-      toast({ title: "Call Ended", status: "info", duration: 2500 });
+      toast({ title: "Call Ended", status: "info", duration: 2500, isClosable: true });
       cleanupCall();
     });
 
@@ -1070,34 +1078,69 @@ const ChatProvider = ({ children }) => {
   const getCallStream = async (callType) => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       console.warn("navigator.mediaDevices.getUserMedia is not supported on this device/origin");
+      toast({
+        title: "Media Devices Unavailable",
+        description: "Camera/microphone access requires a secure context (HTTPS or localhost).",
+        status: "error",
+        duration: 3500,
+        isClosable: true,
+      });
       return null;
     }
+
+    const audioConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    };
+
     if (callType === "video") {
       try {
-        return await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        return await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+          video: { width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, facingMode: "user" },
+        });
       } catch (e1) {
         console.warn("Primary HD video stream failed, trying basic video:", e1);
         try {
           return await navigator.mediaDevices.getUserMedia({
-            audio: true,
+            audio: audioConstraints,
             video: { width: { ideal: 640 }, height: { ideal: 480 } },
           });
         } catch (e2) {
           console.warn("Camera hardware or permission unavailable, falling back to audio stream:", e2);
           try {
-            return await navigator.mediaDevices.getUserMedia({ audio: true });
+            return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
           } catch (e3) {
             console.warn("Audio hardware stream unavailable:", e3);
+            toast({
+              title: "Media Access Denied",
+              description: "Please check your microphone and camera permissions in browser settings.",
+              status: "warning",
+              duration: 3500,
+              isClosable: true,
+            });
             return null;
           }
         }
       }
     } else {
       try {
-        return await navigator.mediaDevices.getUserMedia({ audio: true });
+        return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       } catch (e) {
-        console.warn("Audio stream unavailable:", e);
-        return null;
+        console.warn("Audio stream with constraints unavailable, trying basic audio:", e);
+        try {
+          return await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (err2) {
+          toast({
+            title: "Microphone Access Denied",
+            description: "Please check your microphone permissions in browser settings.",
+            status: "warning",
+            duration: 3500,
+            isClosable: true,
+          });
+          return null;
+        }
       }
     }
   };
@@ -1113,13 +1156,29 @@ const ChatProvider = ({ children }) => {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnectionRef.current = pc;
-    pendingIceCandidatesRef.current = [];
+    // NOTE: Keep existing queued pendingIceCandidatesRef to flush after setRemoteDescription
 
     // Add local media tracks to peer connection
     if (stream) {
       stream.getTracks().forEach((track) => {
         pc.addTrack(track, stream);
       });
+    }
+
+    // Ensure audio & video transceivers exist for bidirectional negotiation
+    try {
+      const senders = pc.getSenders();
+      const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
+      const hasVideo = senders.some((s) => s.track && s.track.kind === "video");
+
+      if (!hasAudio) {
+        pc.addTransceiver("audio", { direction: "sendrecv" });
+      }
+      if (!hasVideo) {
+        pc.addTransceiver("video", { direction: "sendrecv" });
+      }
+    } catch (transceiverErr) {
+      console.warn("Transceiver initialization notice:", transceiverErr);
     }
 
     pc.onicecandidate = (event) => {
@@ -1133,9 +1192,26 @@ const ChatProvider = ({ children }) => {
     };
 
     pc.ontrack = (event) => {
-      console.log("📹 Remote stream track received:", event.streams[0]);
+      console.log("📹 Remote stream track received:", event.track?.kind, event.streams);
       if (event.streams && event.streams[0]) {
-        setRemoteStream(event.streams[0]);
+        const streamInstance = event.streams[0];
+        // Create new MediaStream instance so React state change triggers re-render
+        setRemoteStream(new MediaStream(streamInstance.getTracks()));
+
+        streamInstance.onaddtrack = () => {
+          setRemoteStream(new MediaStream(streamInstance.getTracks()));
+        };
+        streamInstance.onremovetrack = () => {
+          setRemoteStream(new MediaStream(streamInstance.getTracks()));
+        };
+      } else if (event.track) {
+        setRemoteStream((prevStream) => {
+          const currentTracks = prevStream ? prevStream.getTracks() : [];
+          if (!currentTracks.some((t) => t.id === event.track.id)) {
+            return new MediaStream([...currentTracks, event.track]);
+          }
+          return prevStream;
+        });
       }
     };
 
@@ -1145,6 +1221,15 @@ const ChatProvider = ({ children }) => {
         setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
       } else if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
         console.log("WebRTC state changed to:", pc.connectionState);
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log("ICE connection state:", pc.iceConnectionState);
+      if (pc.iceConnectionState === "failed") {
+        if (typeof pc.restartIce === "function") {
+          pc.restartIce();
+        }
       }
     };
 
@@ -1158,6 +1243,7 @@ const ChatProvider = ({ children }) => {
       return;
     }
 
+    pendingIceCandidatesRef.current = [];
     const stream = await getCallStream(callType);
     if (stream) setLocalStream(stream);
 
@@ -1174,7 +1260,7 @@ const ChatProvider = ({ children }) => {
       const pc = createPeerConnection(targetUser._id, null, stream);
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: callType === "video",
+        offerToReceiveVideo: true,
       });
       await pc.setLocalDescription(offer);
 
@@ -1208,14 +1294,21 @@ const ChatProvider = ({ children }) => {
       if (callData.signalData) {
         await pc.setRemoteDescription(new RTCSessionDescription(callData.signalData));
 
-        // Flush any queued ICE candidates
+        // Flush any queued ICE candidates that arrived before acceptCall
         while (pendingIceCandidatesRef.current.length > 0) {
           const cand = pendingIceCandidatesRef.current.shift();
-          await pc.addIceCandidate(cand).catch((e) => console.warn("ICE error:", e));
+          try {
+            await pc.addIceCandidate(cand);
+          } catch (e) {
+            console.warn("ICE candidate add error:", e);
+          }
         }
       }
 
-      const answer = await pc.createAnswer();
+      const answer = await pc.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
       await pc.setLocalDescription(answer);
 
       setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));

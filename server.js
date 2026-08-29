@@ -254,8 +254,7 @@ io.on("connection", (socket) => {
     const payload = { signalData, fromSocketId: socket.id, fromUserId: socket.userId };
     if (toSocketId) {
       io.to(toSocketId).emit("call-accepted", payload);
-    }
-    if (toUserId) {
+    } else if (toUserId) {
       io.to(toUserId).emit("call-accepted", payload);
     }
   });
@@ -264,20 +263,25 @@ io.on("connection", (socket) => {
     const payload = { candidate, fromSocketId: socket.id, fromUserId: socket.userId };
     if (toSocketId) {
       io.to(toSocketId).emit("ice-candidate", payload);
-    }
-    if (targetUserId) {
+    } else if (targetUserId) {
       io.to(targetUserId).emit("ice-candidate", payload);
     }
   });
 
   socket.on("reject-call", ({ targetUserId, toSocketId }) => {
-    if (toSocketId) io.to(toSocketId).emit("call-rejected");
-    if (targetUserId) io.to(targetUserId).emit("call-rejected");
+    if (toSocketId) {
+      io.to(toSocketId).emit("call-rejected");
+    } else if (targetUserId) {
+      io.to(targetUserId).emit("call-rejected");
+    }
   });
 
   socket.on("end-call", ({ targetUserId, toSocketId }) => {
-    if (toSocketId) io.to(toSocketId).emit("call-ended");
-    if (targetUserId) io.to(targetUserId).emit("call-ended");
+    if (toSocketId) {
+      io.to(toSocketId).emit("call-ended");
+    } else if (targetUserId) {
+      io.to(targetUserId).emit("call-ended");
+    }
   });
 
   socket.on("disconnect", () => {

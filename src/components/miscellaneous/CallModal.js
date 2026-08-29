@@ -24,6 +24,129 @@ import {
   DownloadIcon,
 } from "@chakra-ui/icons";
 
+// Web Audio API Ringtone & Call Tone Synthesizer
+class CallToneGenerator {
+  constructor() {
+    this.ctx = null;
+    this.timer = null;
+    this.activeNodes = [];
+  }
+
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
+    }
+    if (this.ctx && this.ctx.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  stop() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    this.activeNodes.forEach((node) => {
+      try {
+        node.stop();
+        node.disconnect();
+      } catch (e) {}
+    });
+    this.activeNodes = [];
+  }
+
+  playCallingTone() {
+    this.stop();
+    this.init();
+    if (!this.ctx) return;
+
+    const playPulse = () => {
+      if (!this.ctx || this.ctx.state === "closed") return;
+      try {
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc1.frequency.value = 440; // A4
+        osc2.frequency.value = 480; // Standard ringback tone frequency
+        osc1.type = "sine";
+        osc2.type = "sine";
+
+        const now = this.ctx.currentTime;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
+        gain.gain.setValueAtTime(0.12, now + 1.2);
+        gain.gain.linearRampToValueAtTime(0, now + 1.3);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 1.35);
+        osc2.stop(now + 1.35);
+
+        this.activeNodes.push(osc1, osc2, gain);
+      } catch (e) {
+        console.warn("Call tone pulse error:", e);
+      }
+    };
+
+    playPulse();
+    this.timer = setInterval(playPulse, 3500);
+  }
+
+  playIncomingRingtone() {
+    this.stop();
+    this.init();
+    if (!this.ctx) return;
+
+    const notes = [
+      { freq: 523.25, dur: 0.18, delay: 0 },
+      { freq: 659.25, dur: 0.18, delay: 0.2 },
+      { freq: 783.99, dur: 0.25, delay: 0.4 },
+      { freq: 1046.5, dur: 0.4, delay: 0.7 },
+    ];
+
+    const playChime = () => {
+      if (!this.ctx || this.ctx.state === "closed") return;
+      try {
+        const now = this.ctx.currentTime;
+        notes.forEach(({ freq, dur, delay }) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = "sine";
+          osc.frequency.value = freq;
+
+          const start = now + delay;
+          gain.gain.setValueAtTime(0, start);
+          gain.gain.linearRampToValueAtTime(0.15, start + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(start);
+          osc.stop(start + dur);
+          this.activeNodes.push(osc, gain);
+        });
+      } catch (e) {
+        console.warn("Incoming ringtone chime error:", e);
+      }
+    };
+
+    playChime();
+    this.timer = setInterval(playChime, 2500);
+  }
+}
+
+const toneGenerator = new CallToneGenerator();
+
 const CallModal = ({
   isOpen,
   onClose,
@@ -44,6 +167,7 @@ const CallModal = ({
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [hasRemoteVideoTrack, setHasRemoteVideoTrack] = useState(false);
 
   // Call Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -53,6 +177,40 @@ const CallModal = ({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsMuted(false);
+      setIsVideoOff(false);
+      setCallDuration(0);
+      setIsRecording(false);
+      setRecordedBlob(null);
+      setRecordedUrl(null);
+      setHasRemoteVideoTrack(false);
+      toneGenerator.stop();
+    }
+  }, [isOpen]);
+
+  // Manage Call Ringtones based on Call Status
+  useEffect(() => {
+    if (!isOpen || !callData) {
+      toneGenerator.stop();
+      return;
+    }
+
+    if (callData.status === "calling") {
+      toneGenerator.playCallingTone();
+    } else if (callData.status === "incoming") {
+      toneGenerator.playIncomingRingtone();
+    } else if (callData.status === "connected") {
+      toneGenerator.stop();
+    }
+
+    return () => {
+      toneGenerator.stop();
+    };
+  }, [isOpen, callData?.status, callData]);
 
   // Timer for connected call duration
   useEffect(() => {
@@ -80,39 +238,82 @@ const CallModal = ({
     return () => clearInterval(timer);
   }, [isRecording]);
 
-  // Bind streams to video and audio tags
+  // Bind local stream to self-preview video tag
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.muted = true; // Local preview is always muted
+      localVideoRef.current.play().catch((e) => console.warn("Local video play notice:", e));
     }
-  }, [localStream, isOpen]);
+  }, [localStream, isOpen, callData?.callType]);
 
+  // Bind remote stream to dedicated remote audio and remote video tags
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
+    if (remoteStream) {
+      // Check if remote stream contains an active video track
+      const videoTracks = remoteStream.getVideoTracks();
+      const hasLiveVideo = videoTracks.some((t) => t.readyState === "live" && t.enabled);
+      setHasRemoteVideoTrack(hasLiveVideo);
+
+      // 1. Play remote audio via dedicated audio element
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
+        const playAudio = () => {
+          remoteAudioRef.current.play().catch((e) => console.warn("Remote audio play notice:", e));
+        };
+        remoteAudioRef.current.onloadedmetadata = playAudio;
+        playAudio();
+      }
+
+      // 2. Play remote video via muted video element (muted prevents browser autoplay blocks)
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream;
+        const playVideo = () => {
+          remoteVideoRef.current.play().catch((e) => console.warn("Remote video play notice:", e));
+        };
+        remoteVideoRef.current.onloadedmetadata = playVideo;
+        playVideo();
+      }
+    } else {
+      setHasRemoteVideoTrack(false);
     }
-    if (remoteAudioRef.current && remoteStream) {
-      remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.play().catch((e) => console.warn("Audio autoplay:", e));
-    }
-  }, [remoteStream, isOpen]);
+  }, [remoteStream, isOpen, callData?.callType, callData?.status]);
 
   const toggleMute = () => {
     if (localStream) {
+      const newMuted = !isMuted;
       localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !track.enabled;
+        track.enabled = !newMuted;
       });
-      setIsMuted(!isMuted);
+      setIsMuted(newMuted);
     }
   };
 
   const toggleVideo = () => {
     if (localStream) {
+      const newVideoOff = !isVideoOff;
       localStream.getVideoTracks().forEach((track) => {
-        track.enabled = !track.enabled;
+        track.enabled = !newVideoOff;
       });
-      setIsVideoOff(!isVideoOff);
+      setIsVideoOff(newVideoOff);
     }
+  };
+
+  const handleAccept = () => {
+    toneGenerator.stop();
+    toneGenerator.init(); // Prime audio context on click
+    if (onAcceptCall) onAcceptCall();
+  };
+
+  const handleReject = () => {
+    toneGenerator.stop();
+    if (onRejectCall) onRejectCall();
+  };
+
+  const handleEnd = () => {
+    toneGenerator.stop();
+    if (isRecording) stopRecording();
+    if (onEndCall) onEndCall();
   };
 
   const getSupportedMimeType = () => {
@@ -226,16 +427,56 @@ const CallModal = ({
     <>
       <Modal isOpen={isOpen} onClose={onClose} isCentered size={isVideoCall ? "2xl" : "md"} closeOnOverlayClick={false}>
         <ModalOverlay backdropFilter="blur(8px)" bg="rgba(0, 0, 0, 0.75)" />
-        <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="24px" border="1px solid var(--color-border)" overflow="hidden" boxShadow="var(--shadow-xl)">
-          {/* Audio Output Receiver */}
-          <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
+        <ModalContent
+          bg="var(--bg-card)"
+          color="var(--text-primary)"
+          borderRadius="24px"
+          border="1px solid var(--color-border)"
+          overflow="hidden"
+          boxShadow="var(--shadow-xl)"
+        >
+          {/* Dedicated Off-Screen Remote Audio Receiver (Non display:none so browser audio engine never sleeps) */}
+          <audio
+            ref={remoteAudioRef}
+            autoPlay
+            playsInline
+            style={{
+              position: "fixed",
+              top: "-9999px",
+              left: "-9999px",
+              width: "1px",
+              height: "1px",
+              opacity: 0.01,
+              pointerEvents: "none",
+            }}
+          />
 
-          <ModalBody p={6} display="flex" flexDirection="column" alignItems="center" justifyContent="center" position="relative" minH={isVideoCall ? "480px" : "360px"}>
-            
+          <ModalBody
+            p={6}
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            position="relative"
+            minH={isVideoCall ? "480px" : "360px"}
+          >
             {/* Top Status Header */}
             <Flex direction="column" align="center" mb={4} zIndex={2}>
               <Flex gap={2} align="center" mb={2}>
-                <Badge colorScheme={callData.status === "connected" ? "green" : "orange"} px={3} py={1} borderRadius="full" fontSize="xs">
+                <Badge
+                  colorScheme={
+                    callData.status === "connected"
+                      ? "green"
+                      : callData.status === "incoming"
+                      ? "blue"
+                      : "orange"
+                  }
+                  px={3}
+                  py={1}
+                  borderRadius="full"
+                  fontSize="xs"
+                  fontWeight="bold"
+                >
                   {callData.status === "connected"
                     ? `CONNECTED • ${formatDuration(callDuration)}`
                     : callData.status === "incoming"
@@ -255,47 +496,82 @@ const CallModal = ({
                 {user.name}
               </Text>
               <Text fontSize="xs" color="var(--text-secondary)">
-                {isVideoCall ? "Agni Messenger Video Call 📹" : "Agni Messenger HD Voice Call 🎤"}
+                {isVideoCall ? "Agni Messenger HD Video Call 📹" : "Agni Messenger HD Voice Call 🎤"}
               </Text>
             </Flex>
 
             {/* Video or Audio Visual Area */}
             {isVideoCall ? (
-              <Box position="relative" w="100%" h="320px" bg="#000" borderRadius="16px" overflow="hidden" display="flex" alignItems="center" justifyContent="center">
+              <Box
+                position="relative"
+                w="100%"
+                h="320px"
+                bg="#050505"
+                borderRadius="16px"
+                overflow="hidden"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                border="1px solid var(--color-border)"
+              >
                 {isScreenSharing && (
                   <Badge position="absolute" top="12px" left="12px" colorScheme="purple" px={3} py={1} borderRadius="full" zIndex={4} fontSize="xs" boxShadow="md">
                     🖥️ SCREEN SHARING ACTIVE
                   </Badge>
                 )}
 
-                {/* Remote Video Stream */}
+                {/* Remote Video Stream (Muted so browser never blocks video frame rendering; audio plays through remoteAudioRef) */}
                 <video
                   ref={remoteVideoRef}
                   autoPlay
                   playsInline
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  muted
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: remoteStream && hasRemoteVideoTrack ? "block" : "none",
+                  }}
                 />
 
-                {!remoteStream && (
+                {/* Fallback Display if Remote Video is not yet received / Audio Only */}
+                {(!remoteStream || !hasRemoteVideoTrack) && (
                   <Box position="absolute" display="flex" flexDirection="column" alignItems="center" gap={3}>
-                    <Avatar size="2xl" name={user.name} src={user.pic} />
-                    <Spinner size="lg" color="var(--color-primary)" />
-                    <Text fontSize="sm" color="whiteAlpha.800">Waiting for video stream...</Text>
+                    <Avatar size="2xl" name={user.name} src={user.pic} border="3px solid var(--color-primary)" />
+                    {callData.status === "connected" ? (
+                      <Flex align="center" gap={2}>
+                        <Box w="10px" h="10px" bg="green.400" borderRadius="50%" />
+                        <Text fontSize="sm" color="whiteAlpha.900" fontWeight="medium">
+                          Audio Connected (Camera Off)
+                        </Text>
+                      </Flex>
+                    ) : (
+                      <Flex align="center" gap={2}>
+                        <Spinner size="sm" color="var(--color-primary)" />
+                        <Text fontSize="sm" color="whiteAlpha.800">
+                          {callData.status === "incoming" ? "Incoming Video Call..." : "Connecting Video Stream..."}
+                        </Text>
+                      </Flex>
+                    )}
                   </Box>
                 )}
 
                 {/* Local Self-Preview Video */}
                 <Box
                   position="absolute"
-                  bottom="16px"
-                  right="16px"
+                  bottom="14px"
+                  right="14px"
                   w="110px"
-                  h="150px"
-                  bg="#1e293b"
+                  h="145px"
+                  bg="#111827"
                   borderRadius="12px"
                   overflow="hidden"
                   border="2px solid var(--color-primary)"
-                  boxShadow="0 4px 12px rgba(0,0,0,0.5)"
+                  boxShadow="0 6px 16px rgba(0,0,0,0.6)"
+                  zIndex={3}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
                 >
                   <video
                     ref={localVideoRef}
@@ -307,8 +583,14 @@ const CallModal = ({
                       height: "100%",
                       objectFit: "cover",
                       transform: isScreenSharing ? "none" : "scaleX(-1)",
+                      display: isVideoOff ? "none" : "block",
                     }}
                   />
+                  {isVideoOff && (
+                    <Flex direction="column" align="center" justify="center" p={2} textAlign="center">
+                      <Text fontSize="xs" color="whiteAlpha.700">📷 Off</Text>
+                    </Flex>
+                  )}
                 </Box>
               </Box>
             ) : (
@@ -316,20 +598,36 @@ const CallModal = ({
               <Flex direction="column" align="center" justify="center" py={6} position="relative">
                 <Box position="relative" display="flex" alignItems="center" justifyContent="center">
                   <Box
-                    w="130px"
-                    h="130px"
+                    w="140px"
+                    h="140px"
                     borderRadius="50%"
                     bg="var(--color-primary)"
-                    opacity={0.2}
+                    opacity={callData.status === "connected" ? 0.3 : 0.15}
                     position="absolute"
                     className="pulse-ring"
                   />
-                  <Avatar size="2xl" name={user.name} src={user.pic} border="4px solid var(--color-primary)" boxShadow="var(--shadow-md)" />
+                  <Avatar
+                    size="2xl"
+                    name={user.name}
+                    src={user.pic}
+                    border="4px solid var(--color-primary)"
+                    boxShadow="var(--shadow-md)"
+                  />
                 </Box>
                 {callData.status !== "connected" && (
-                  <Flex align="center" gap={2} mt={4}>
+                  <Flex align="center" gap={2} mt={5}>
                     <Spinner size="sm" color="var(--color-primary)" />
-                    <Text fontSize="sm" color="var(--text-secondary)">Connecting audio channel...</Text>
+                    <Text fontSize="sm" color="var(--text-secondary)">
+                      {callData.status === "incoming" ? "Incoming Voice Call..." : "Connecting HD Audio Channel..."}
+                    </Text>
+                  </Flex>
+                )}
+                {callData.status === "connected" && (
+                  <Flex align="center" gap={2} mt={5}>
+                    <Box w="8px" h="8px" bg="green.400" borderRadius="50%" />
+                    <Text fontSize="sm" color="green.400" fontWeight="bold">
+                      HD Audio Stream Live
+                    </Text>
                   </Flex>
                 )}
               </Flex>
@@ -348,7 +646,7 @@ const CallModal = ({
                     w="60px"
                     h="60px"
                     boxShadow="0 4px 15px rgba(34, 197, 94, 0.4)"
-                    onClick={onAcceptCall}
+                    onClick={handleAccept}
                   />
                   <IconButton
                     icon={<CloseIcon fontSize="18px" />}
@@ -359,7 +657,7 @@ const CallModal = ({
                     w="60px"
                     h="60px"
                     boxShadow="0 4px 15px rgba(239, 68, 68, 0.4)"
-                    onClick={onRejectCall}
+                    onClick={handleReject}
                   />
                 </>
               ) : (
@@ -434,10 +732,7 @@ const CallModal = ({
                       w="60px"
                       h="60px"
                       boxShadow="0 4px 15px rgba(239, 68, 68, 0.4)"
-                      onClick={() => {
-                        if (isRecording) stopRecording();
-                        onEndCall();
-                      }}
+                      onClick={handleEnd}
                     />
                   </Tooltip>
                 </>
