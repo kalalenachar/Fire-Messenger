@@ -125,6 +125,7 @@ async function connectDb() {
       });
       isConnected = true;
       console.log(`✅ MongoDB Connected successfully: ${conn.connection.host}`);
+      await ensureUserIndexes();
       await seedDatabaseIfEmpty();
       await ensureAdminPrivileges();
       return;
@@ -179,6 +180,40 @@ async function ensureAdminPrivileges() {
     await Message.deleteMany({ chat: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge"] } });
   } catch (err) {
     console.error("Error ensuring admin privileges:", err);
+  }
+}
+
+async function ensureUserIndexes() {
+  try {
+    const db = mongoose.connection.db;
+    if (!db) return;
+    const collections = await db.listCollections({ name: "users" }).toArray();
+    if (collections.length > 0) {
+      const usersCol = db.collection("users");
+      const indexes = await usersCol.indexes();
+
+      // Unset duplicate null keys so sparse index ignores them
+      await usersCol.updateMany({ email: null }, { $unset: { email: "" } });
+      await usersCol.updateMany({ username: null }, { $unset: { username: "" } });
+
+      // Drop non-sparse legacy unique indexes if present
+      for (const idx of indexes) {
+        if (idx.name === "email_1" && !idx.sparse) {
+          console.log("Dropping non-sparse email_1 index...");
+          await usersCol.dropIndex("email_1").catch(() => {});
+        }
+        if (idx.name === "username_1" && !idx.sparse) {
+          console.log("Dropping non-sparse username_1 index...");
+          await usersCol.dropIndex("username_1").catch(() => {});
+        }
+      }
+
+      // Recreate sparse unique indexes
+      await usersCol.createIndex({ email: 1 }, { unique: true, sparse: true, background: true });
+      await usersCol.createIndex({ username: 1 }, { unique: true, sparse: true, background: true });
+    }
+  } catch (err) {
+    console.warn("Index check note:", err.message);
   }
 }
 

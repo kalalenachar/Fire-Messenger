@@ -99,11 +99,20 @@ const registerUser = async (req, res) => {
       }
     }
 
+    // Determine unique email and username
+    const finalUsername =
+      cleanUsername ||
+      (cleanEmail ? cleanEmail.split("@")[0].replace(/[^a-z0-9_.]/g, "").slice(0, 15) + "_" + Math.floor(Math.random() * 1000) : undefined);
+
+    const finalEmail =
+      cleanEmail ||
+      (finalUsername ? `${finalUsername}@agnimessenger.io` : undefined);
+
     const userCount = await User.countDocuments();
     const shouldBeAdmin =
       userCount === 0 ||
-      (cleanEmail && (cleanEmail === "kalalenachar@gmail.com" || cleanEmail === "alex@agnimessenger.io" || cleanEmail === "alex@agni.io")) ||
-      (cleanUsername && (cleanUsername === "kalalenachar" || cleanUsername === "alex"));
+      (finalEmail && (finalEmail === "kalalenachar@gmail.com" || finalEmail === "alex@agnimessenger.io" || finalEmail === "alex@agni.io")) ||
+      (finalUsername && (finalUsername === "kalalenachar" || finalUsername === "alex"));
 
     const newUserObj = {
       _id: `user_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -115,8 +124,8 @@ const registerUser = async (req, res) => {
       token: `token_${Date.now()}`,
     };
 
-    if (cleanUsername) newUserObj.username = cleanUsername;
-    if (cleanEmail) newUserObj.email = cleanEmail;
+    if (finalUsername) newUserObj.username = finalUsername;
+    if (finalEmail) newUserObj.email = finalEmail;
 
     const newUser = await User.create(newUserObj);
 
@@ -149,6 +158,14 @@ const registerUser = async (req, res) => {
     delete clean.password;
     res.json({ success: true, user: clean });
   } catch (err) {
+    console.error("Registration error:", err);
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0] || "email or username";
+      return res.status(400).json({
+        success: false,
+        message: `An account with this ${field} already exists. Please choose a different one or login.`,
+      });
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 };
