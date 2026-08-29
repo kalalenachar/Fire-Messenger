@@ -108,6 +108,7 @@ const SingleChat = () => {
     togglePinChat,
     isChatPinned,
     saveToSavedMessages,
+    deleteMessage,
     hideChat,
     unhideChat,
     isChatHidden,
@@ -131,6 +132,7 @@ const SingleChat = () => {
   const [isPollModalOpen, setIsPollModalOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, msg: null });
 
   // Right-Click Context Menu State
   const [contextMenu, setContextMenu] = useState({
@@ -699,8 +701,8 @@ const SingleChat = () => {
               onMouseEnter={() => setHoveredMsgId(msg._id)}
               onMouseLeave={() => setHoveredMsgId(null)}
             >
-              {/* Floating Reaction & Save Bar on Hover */}
-              {showHoverReactions && (
+              {/* Floating Reaction & Action Bar on Hover */}
+              {showHoverReactions && !msg.isDeleted && (
                 <Box className="reaction-bar">
                   {["👍", "❤️", "🔥", "😂", "👏", "💩"].map((emoji) => (
                     <button
@@ -718,26 +720,48 @@ const SingleChat = () => {
                   >
                     🔖
                   </button>
+                  <button
+                    className="reaction-btn"
+                    title="Delete Message 🗑️"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const isSavedChat = selectedChat.isSavedMessages || selectedChat._id?.startsWith("chat_saved_");
+                      if (isSavedChat) {
+                        deleteMessage(selectedChat._id, msg._id, true);
+                      } else {
+                        setDeleteModal({ isOpen: true, msg });
+                      }
+                    }}
+                  >
+                    🗑️
+                  </button>
                 </Box>
               )}
 
               {/* Message Bubble */}
               <Box
                 className={`message-bubble ${isMe ? "sent" : "received"}`}
-                onContextMenu={(e) => handleContextMenu(e, msg)}
+                onContextMenu={(e) => !msg.isDeleted && handleContextMenu(e, msg)}
               >
-                {msg.forwardedFrom && (
-                  <Text fontSize="11px" fontWeight="600" color="var(--color-primary)" mb={1} display="flex" alignItems="center" gap={1}>
-                    <span>↩</span>
-                    <span>Forwarded from {msg.forwardedFrom.senderName}</span>
-                  </Text>
-                )}
+                {msg.isDeleted ? (
+                  <Box display="flex" alignItems="center" gap={1.5} color="var(--text-muted)" fontStyle="italic" fontSize="13px" py={0.5}>
+                    <span style={{ fontSize: "14px" }}>🚫</span>
+                    <span>This message was deleted</span>
+                  </Box>
+                ) : (
+                  <>
+                    {msg.forwardedFrom && (
+                      <Text fontSize="11px" fontWeight="600" color="var(--color-primary)" mb={1} display="flex" alignItems="center" gap={1}>
+                        <span>↩</span>
+                        <span>Forwarded from {msg.forwardedFrom.senderName}</span>
+                      </Text>
+                    )}
 
-                {!isMe && selectedChat.isGroupChat && (
-                  <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" mb={0.5}>
-                    {msg.sender?.name}
-                  </Text>
-                )}
+                    {!isMe && selectedChat.isGroupChat && (
+                      <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" mb={0.5}>
+                        {msg.sender?.name}
+                      </Text>
+                    )}
 
                 {/* --- RENDER IMAGE ATTACHMENT --- */}
                 {msg.type === "image" && hasFileUrl ? (
@@ -1127,6 +1151,8 @@ const SingleChat = () => {
                 ) : (
                   /* --- RENDER REGULAR TEXT MESSAGE --- */
                   <FormattedMarkdown content={msg.content} />
+                )}
+                </>
                 )}
 
                 {/* Reaction Badges */}
@@ -1532,6 +1558,36 @@ const SingleChat = () => {
             </Box>
           )}
 
+          {/* Delete Message Option */}
+          {contextMenu.msgObj && !contextMenu.msgObj.isDeleted && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="#f44336"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "rgba(244, 67, 54, 0.15)" }}
+              onClick={() => {
+                const targetMsg = contextMenu.msgObj;
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+                const isSavedChat = selectedChat.isSavedMessages || selectedChat._id?.startsWith("chat_saved_");
+                if (isSavedChat) {
+                  deleteMessage(selectedChat._id, targetMsg._id, true);
+                } else {
+                  setDeleteModal({ isOpen: true, msg: targetMsg });
+                }
+              }}
+            >
+              <span>🗑️</span>
+              <span>Delete Message</span>
+            </Box>
+          )}
+
           {/* Hide / Unhide Option */}
           <Box
             display="flex"
@@ -1667,6 +1723,71 @@ const SingleChat = () => {
         onClose={() => setReportTarget(null)}
         targetObj={reportTarget}
       />
+
+      {/* Delete Message Confirmation Modal */}
+      <Modal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, msg: null })}
+        isCentered
+        size="sm"
+      >
+        <ModalOverlay bg="rgba(0,0,0,0.65)" backdropFilter="blur(6px)" />
+        <ModalContent
+          bg="var(--bg-modal)"
+          color="var(--text-primary)"
+          borderRadius="18px"
+          p={3}
+          border="1px solid var(--color-border)"
+          boxShadow="0 20px 40px rgba(0,0,0,0.5)"
+        >
+          <ModalHeader fontSize="lg" fontWeight="bold" pb={1}>
+            Delete Message?
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody py={2}>
+            <Text fontSize="sm" color="var(--text-secondary)">
+              {deleteModal.msg?.sender?._id === user?._id
+                ? "Are you sure you want to delete this message? You can delete it for everyone or only for yourself."
+                : "Are you sure you want to delete this message for yourself?"}
+            </Text>
+          </ModalBody>
+          <ModalFooter display="flex" flexDirection="column" gap={2} pt={2}>
+            {deleteModal.msg?.sender?._id === user?._id && (
+              <Button
+                w="100%"
+                colorScheme="red"
+                borderRadius="10px"
+                onClick={() => {
+                  deleteMessage(selectedChat._id, deleteModal.msg._id, true);
+                  setDeleteModal({ isOpen: false, msg: null });
+                }}
+              >
+                Delete for Everyone
+              </Button>
+            )}
+            <Button
+              w="100%"
+              variant="outline"
+              borderColor="var(--color-border)"
+              borderRadius="10px"
+              onClick={() => {
+                deleteMessage(selectedChat._id, deleteModal.msg._id, false);
+                setDeleteModal({ isOpen: false, msg: null });
+              }}
+            >
+              Delete for Me
+            </Button>
+            <Button
+              w="100%"
+              variant="ghost"
+              borderRadius="10px"
+              onClick={() => setDeleteModal({ isOpen: false, msg: null })}
+            >
+              Cancel
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

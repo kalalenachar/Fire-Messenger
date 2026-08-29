@@ -248,7 +248,12 @@ function SideDrawer() {
               variant="ghost"
               color="var(--text-header)"
               _hover={{ bg: "rgba(255,255,255,0.15)" }}
-              onClick={openSavedMessages}
+              onClick={() => {
+                if (location.pathname !== "/chats") {
+                  history.push("/chats");
+                }
+                openSavedMessages();
+              }}
               fontWeight="600"
               px={{ base: 2, md: 3 }}
               minW="auto"

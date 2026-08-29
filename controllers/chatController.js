@@ -8,7 +8,12 @@ const { fireBotUser } = require("../config/db");
 const getUserChats = async (req, res) => {
   try {
     const { userId } = req.params;
-    const chats = await Chat.find({ "users._id": userId }).sort({ updatedAt: -1 }).lean();
+    const savedId = `chat_saved_${userId}`;
+    const chats = await Chat.find({
+      $or: [{ "users._id": userId }, { _id: savedId }],
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
 
     const userIds = new Set();
     chats.forEach((c) => (c.users || []).forEach((u) => userIds.add(u._id)));
@@ -18,6 +23,7 @@ const getUserChats = async (req, res) => {
 
     const hydrated = chats.map((c) => ({
       ...c,
+      isSavedMessages: c.isSavedMessages || c._id === savedId || c._id?.startsWith("chat_saved_"),
       users: (c.users || []).map((u) => {
         const full = userMap.get(u._id);
         return full ? { ...full, ...u } : u;

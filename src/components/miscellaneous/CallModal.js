@@ -39,6 +39,7 @@ const CallModal = ({
 }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -79,7 +80,7 @@ const CallModal = ({
     return () => clearInterval(timer);
   }, [isRecording]);
 
-  // Bind streams to video tags
+  // Bind streams to video and audio tags
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
@@ -89,6 +90,10 @@ const CallModal = ({
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
+    }
+    if (remoteAudioRef.current && remoteStream) {
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch((e) => console.warn("Audio autoplay:", e));
     }
   }, [remoteStream, isOpen]);
 
@@ -222,6 +227,9 @@ const CallModal = ({
       <Modal isOpen={isOpen} onClose={onClose} isCentered size={isVideoCall ? "2xl" : "md"} closeOnOverlayClick={false}>
         <ModalOverlay backdropFilter="blur(8px)" bg="rgba(0, 0, 0, 0.75)" />
         <ModalContent bg="var(--bg-card)" color="var(--text-primary)" borderRadius="24px" border="1px solid var(--color-border)" overflow="hidden" boxShadow="var(--shadow-xl)">
+          {/* Audio Output Receiver */}
+          <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
+
           <ModalBody p={6} display="flex" flexDirection="column" alignItems="center" justifyContent="center" position="relative" minH={isVideoCall ? "480px" : "360px"}>
             
             {/* Top Status Header */}

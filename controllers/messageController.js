@@ -248,10 +248,100 @@ const stopLiveLocationDocument = async ({ chatId, messageId }) => {
   return msg.toObject();
 };
 
+// @desc    Delete a message
+// @route   DELETE /api/messages/:messageId or POST /api/messages/delete
+const deleteMessage = async (req, res, io) => {
+  try {
+    const messageId = req.params.messageId || req.body.messageId;
+    const { chatId, deleteForEveryone = true, userId } = req.body;
+
+    const result = await deleteMessageDocument({ chatId, messageId, deleteForEveryone, userId });
+
+    if (io && chatId) {
+      io.in(chatId).emit("message deleted", { chatId, messageId, deleteForEveryone, userId });
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const deleteMessageDocument = async ({ chatId, messageId, deleteForEveryone = true, userId }) => {
+  if (!messageId) return { messageId };
+
+  const isSavedChat = chatId && (chatId.startsWith("chat_saved_") || chatId.includes("saved"));
+
+  if (isSavedChat) {
+    await Message.findByIdAndDelete(messageId);
+  } else if (deleteForEveryone) {
+    const msg = await Message.findById(messageId);
+    if (msg) {
+      msg.isDeleted = true;
+      msg.content = "This message was deleted";
+      msg.fileUrl = null;
+      msg.audioUrl = null;
+      msg.mediaUrl = null;
+      msg.pollData = null;
+      msg.locationData = null;
+      msg.reactions = {};
+      msg.deletedAt = new Date();
+      msg.markModified("reactions");
+      await msg.save();
+    }
+  } else if (userId) {
+    await Message.findByIdAndUpdate(messageId, { $addToSet: { deletedFor: userId } });
+  }
+
+  // Update latestMessage in Chat if needed
+  if (chatId) {
+    const lastMsg = await Message.findOne({
+      chat: chatId,
+      isDeleted: { $ne: true },
+      deletedFor: { $nin: userId ? [userId] : [] },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (lastMsg) {
+      const displayContent =
+        lastMsg.type === "voice"
+          ? "🎤 Voice Note"
+          : lastMsg.type === "video"
+          ? "🎥 Video"
+          : lastMsg.type === "image"
+          ? "📷 Photo"
+          : lastMsg.type === "file"
+          ? `📄 ${lastMsg.fileName || lastMsg.content || "File"}`
+          : lastMsg.content;
+
+      await Chat.findByIdAndUpdate(chatId, {
+        latestMessage: {
+          content: displayContent,
+          sender: lastMsg.sender,
+          createdAt: lastMsg.createdAt,
+        },
+        updatedAt: new Date(),
+      });
+    } else {
+      await Chat.findByIdAndUpdate(chatId, {
+        latestMessage: {
+          content: "No messages yet",
+          createdAt: new Date().toISOString(),
+        },
+      });
+    }
+  }
+
+  return { messageId, chatId, deleteForEveryone };
+};
+
 module.exports = {
   getChatMessages,
   addMessage,
   saveMessageDocument,
+  deleteMessage,
+  deleteMessageDocument,
   toggleReaction,
   toggleReactionDocument,
   togglePollVote,

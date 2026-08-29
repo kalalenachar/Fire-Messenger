@@ -13,10 +13,12 @@ const chatSchema = new mongoose.Schema(
     isHidden: { type: Boolean, default: false },
     unread: { type: Number, default: 0 },
     category: { type: String, default: "Personal" },
+    isSavedMessages: { type: Boolean, default: false },
   },
   {
     timestamps: true,
     _id: false,
+    strict: false,
   }
 );
 

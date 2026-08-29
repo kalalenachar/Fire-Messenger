@@ -344,6 +344,51 @@ export const toggleReactionAsync = async (chatId, messageId, emoji) => {
   }
 };
 
+export const deleteMessageAsync = async (messageId, chatId, deleteForEveryone = true, userId = null) => {
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/messages/delete`, {
+      messageId,
+      chatId,
+      deleteForEveryone,
+      userId,
+    });
+
+    const currentUser = getCurrentSessionUser();
+    if (currentUser && chatId) {
+      const storedMap = getStoredMessagesMap(currentUser._id) || {};
+      const chatMsgs = storedMap[chatId] || [];
+      const isSavedChat = chatId.startsWith("chat_saved_") || chatId.includes("saved");
+
+      let updatedMsgs;
+      if (isSavedChat) {
+        updatedMsgs = chatMsgs.filter((m) => m._id !== messageId);
+      } else if (deleteForEveryone) {
+        updatedMsgs = chatMsgs.map((m) =>
+          m._id === messageId
+            ? { ...m, isDeleted: true, content: "This message was deleted", fileUrl: null, audioUrl: null, reactions: {} }
+            : m
+        );
+      } else {
+        updatedMsgs = chatMsgs.filter((m) => m._id !== messageId);
+      }
+      storedMap[chatId] = updatedMsgs;
+      saveStoredMessagesMap(currentUser._id, storedMap);
+    }
+
+    return data;
+  } catch (error) {
+    console.warn("Error deleting message on server DB:", error);
+    const currentUser = getCurrentSessionUser();
+    if (currentUser && chatId) {
+      const storedMap = getStoredMessagesMap(currentUser._id) || {};
+      const chatMsgs = storedMap[chatId] || [];
+      storedMap[chatId] = chatMsgs.filter((m) => m._id !== messageId);
+      saveStoredMessagesMap(currentUser._id, storedMap);
+    }
+    return { success: true, messageId };
+  }
+};
+
 // Synchronous fallbacks for backwards compatibility
 export const loginUser = loginUserAsync;
 export const registerUser = registerUserAsync;

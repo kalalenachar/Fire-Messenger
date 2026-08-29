@@ -20,6 +20,7 @@ const reportRoutes = require("./routes/reportRoutes");
 // Import Message Controller Helpers for WebSockets
 const {
   saveMessageDocument,
+  deleteMessageDocument,
   toggleReactionDocument,
   togglePollVoteDocument,
   addPollOptionDocument,
@@ -161,6 +162,19 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Message Deletion & Server DB Persistence
+  socket.on("delete message", async (data) => {
+    try {
+      await deleteMessageDocument(data);
+    } catch (err) {
+      console.error("Error deleting message in DB:", err);
+    }
+    const { chatId, messageId, deleteForEveryone, userId } = data;
+    if (chatId) {
+      io.in(chatId).emit("message deleted", { chatId, messageId, deleteForEveryone, userId });
+    }
+  });
+
   // Reactions & Server DB Persistence
   socket.on("toggle reaction", async (data) => {
     try {
@@ -230,23 +244,29 @@ io.on("connection", (socket) => {
         callType,
         chatId,
         fromSocketId: socket.id,
+        fromUserId: socket.userId || caller?._id,
       });
     }
   });
 
   socket.on("answer-call", ({ toSocketId, toUserId, signalData }) => {
     console.log(`📞 Call answered by ${toUserId || socket.id}`);
+    const payload = { signalData, fromSocketId: socket.id, fromUserId: socket.userId };
     if (toSocketId) {
-      io.to(toSocketId).emit("call-accepted", { signalData, fromSocketId: socket.id });
+      io.to(toSocketId).emit("call-accepted", payload);
     }
     if (toUserId) {
-      io.to(toUserId).emit("call-accepted", { signalData, fromSocketId: socket.id });
+      io.to(toUserId).emit("call-accepted", payload);
     }
   });
 
-  socket.on("ice-candidate", ({ targetUserId, candidate }) => {
+  socket.on("ice-candidate", ({ targetUserId, toSocketId, candidate }) => {
+    const payload = { candidate, fromSocketId: socket.id, fromUserId: socket.userId };
+    if (toSocketId) {
+      io.to(toSocketId).emit("ice-candidate", payload);
+    }
     if (targetUserId) {
-      io.to(targetUserId).emit("ice-candidate", { candidate, fromSocketId: socket.id });
+      io.to(targetUserId).emit("ice-candidate", payload);
     }
   });
 

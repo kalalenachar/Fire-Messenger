@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getChatMessages,
   addMessage,
+  deleteMessage,
   toggleReaction,
   togglePollVote,
   addPollOption,
@@ -12,6 +13,8 @@ const {
 
 router.get("/:chatId", (req, res) => getChatMessages(req, res));
 router.post("/", (req, res) => addMessage(req, res));
+router.delete("/:messageId", (req, res) => deleteMessage(req, res, req.io));
+router.post("/delete", (req, res) => deleteMessage(req, res, req.io));
 router.put("/reaction", (req, res) => toggleReaction(req, res));
 router.put("/poll-vote", (req, res) => togglePollVote(req, res, req.io));
 router.put("/poll-add-option", (req, res) => addPollOption(req, res, req.io));

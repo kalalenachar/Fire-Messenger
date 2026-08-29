@@ -9,7 +9,6 @@ const messageSchema = new mongoose.Schema(
     chatObj: { type: mongoose.Schema.Types.Mixed },
     type: {
       type: String,
-      enum: ["text", "voice", "image", "video", "file", "location", "live_location", "poll"],
       default: "text",
     },
     messageType: { type: String },
@@ -17,12 +16,19 @@ const messageSchema = new mongoose.Schema(
     mediaName: { type: String },
     mediaSize: { type: String },
     mediaDuration: { type: Number },
+    fileUrl: { type: String },
+    audioUrl: { type: String },
     fileName: { type: String },
+    fileSize: { type: mongoose.Schema.Types.Mixed },
+    fileType: { type: String },
+    forwardedFrom: { type: mongoose.Schema.Types.Mixed },
     reactions: { type: mongoose.Schema.Types.Mixed, default: {} },
     pollData: { type: mongoose.Schema.Types.Mixed },
     locationData: { type: mongoose.Schema.Types.Mixed },
     location: { type: mongoose.Schema.Types.Mixed },
     isDeleted: { type: Boolean, default: false },
+    deletedFor: [{ type: String }],
+    deletedAt: { type: Date },
     isForwarded: { type: Boolean, default: false },
     isBroadcast: { type: Boolean, default: false },
     replyTo: { type: mongoose.Schema.Types.Mixed },
@@ -31,6 +37,7 @@ const messageSchema = new mongoose.Schema(
   {
     timestamps: true,
     _id: false,
+    strict: false,
   }
 );
 

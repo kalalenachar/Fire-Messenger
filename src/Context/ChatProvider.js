@@ -10,6 +10,7 @@ import {
   saveChatAsync,
   fetchChatMessagesAsync,
   saveMessageAsync,
+  deleteMessageAsync,
   toggleReactionAsync,
   notifySyncEvent,
   subscribeSyncEvent,
@@ -30,7 +31,7 @@ import {
   safeLocalStorageSetItem,
 } from "../data/fireStorage";
 import { getBotReplyAsync } from "../data/fireMockData";
-import { useColorMode } from "@chakra-ui/react";
+import { useColorMode, useToast } from "@chakra-ui/react";
 import CallModal from "../components/miscellaneous/CallModal";
 
 const ChatContext = createContext();
@@ -39,10 +40,20 @@ const ENDPOINT =
     ? `http://${window.location.hostname}:5000`
     : `${window.location.protocol}//${window.location.host}`;
 
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun.services.mozilla.com" },
+  ],
+};
+
 let socket = null;
 
 const ChatProvider = ({ children }) => {
   const { colorMode, setColorMode } = useColorMode();
+  const toast = useToast();
   const [selectedChat, setSelectedChat] = useState(null);
   const [user, setUser] = useState(() => getCurrentSessionUser());
   const [notification, setNotification] = useState([]);
@@ -206,76 +217,96 @@ const ChatProvider = ({ children }) => {
     setSelectedChat(savedChat);
   }, [user, chats]);
 
-  const saveToSavedMessages = useCallback(async (msg) => {
-    if (!user || !user._id || !msg) return;
-    const savedId = getSavedMessagesChatId(user._id);
-    let savedChat = chats.find((c) => c._id === savedId || c.isSavedMessages);
-    if (!savedChat) {
-      savedChat = {
-        _id: savedId,
-        chatName: "Saved Messages",
-        isGroupChat: false,
-        isSavedMessages: true,
-        users: [user],
-        category: "Personal",
-        latestMessage: {
-          content: "Your personal cloud storage for notes, files, & forwarded messages 🔖",
-          sender: user,
-          createdAt: new Date().toISOString(),
+  const saveToSavedMessages = useCallback(
+    async (msg) => {
+      if (!user || !user._id || !msg) return;
+      const savedId = getSavedMessagesChatId(user._id);
+      let savedChat = chats.find((c) => c._id === savedId || c.isSavedMessages);
+      if (!savedChat) {
+        savedChat = {
+          _id: savedId,
+          chatName: "Saved Messages",
+          isGroupChat: false,
+          isSavedMessages: true,
+          users: [user],
+          category: "Personal",
+          latestMessage: {
+            content: "Your personal cloud storage for notes, files, & forwarded messages 🔖",
+            sender: user,
+            createdAt: new Date().toISOString(),
+          },
+          unread: 0,
+        };
+        await saveChatAsync({ chat: savedChat });
+        setChats((prev) => [savedChat, ...prev]);
+      }
+
+      const senderName = msg.sender?.name || (msg.sender?._id === user._id ? user.name : "Contact");
+      const sourceChatName = selectedChatRef.current?.chatName || "Chat";
+
+      const forwardedMsg = {
+        ...msg,
+        _id: `msg_saved_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        chat: savedId,
+        sender: user,
+        forwardedFrom: {
+          senderName,
+          sourceChatName,
         },
-        unread: 0,
+        fileUrl: msg.fileUrl || null,
+        audioUrl: msg.audioUrl || null,
+        fileName: msg.fileName || null,
+        fileSize: msg.fileSize || null,
+        fileType: msg.fileType || null,
+        pollData: msg.pollData || null,
+        locationData: msg.locationData || null,
+        createdAt: new Date().toISOString(),
       };
-      await saveChatAsync({ chat: savedChat });
-      setChats((prev) => [savedChat, ...prev]);
-    }
 
-    const senderName = msg.sender?.name || "User";
-    const sourceChatName = selectedChatRef.current?.chatName || "Chat";
+      const savedMessage = await saveMessageAsync(forwardedMsg);
+      setMessagesMap((prev) => ({
+        ...prev,
+        [savedId]: [...(prev[savedId] || []), savedMessage],
+      }));
 
-    const forwardedMsg = {
-      ...msg,
-      _id: `msg_saved_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      chat: savedId,
-      sender: user,
-      forwardedFrom: {
-        senderName,
-        sourceChatName,
-      },
-      createdAt: new Date().toISOString(),
-    };
+      const latestText =
+        msg.type === "voice"
+          ? "🎤 Voice Note"
+          : msg.type === "image"
+          ? "📷 Photo"
+          : msg.type === "video"
+          ? "🎥 Video"
+          : msg.type === "file"
+          ? `📄 ${msg.fileName || msg.content || "File"}`
+          : msg.content || "Saved Message";
 
-    const savedMessage = await saveMessageAsync(forwardedMsg);
-    setMessagesMap((prev) => ({
-      ...prev,
-      [savedId]: [...(prev[savedId] || []), savedMessage],
-    }));
+      setChats((prev) =>
+        prev.map((c) =>
+          c._id === savedId || c.isSavedMessages
+            ? {
+                ...c,
+                latestMessage: {
+                  content: `Saved: ${latestText}`,
+                  sender: user,
+                  createdAt: new Date().toISOString(),
+                },
+              }
+            : c
+        )
+      );
 
-    const latestText = msg.type === "voice"
-      ? "🎤 Voice Note"
-      : msg.type === "image"
-      ? "📷 Photo"
-      : msg.type === "file"
-      ? `📄 ${msg.content || "File"}`
-      : msg.content || "Saved Message";
-
-    setChats((prev) =>
-      prev.map((c) =>
-        c._id === savedId || c.isSavedMessages
-          ? {
-              ...c,
-              latestMessage: {
-                content: `Forwarded: ${latestText}`,
-                sender: user,
-                createdAt: new Date().toISOString(),
-              },
-            }
-          : c
-      )
-    );
-
-    notifySyncEvent("NEW_MESSAGE", savedMessage);
-  }, [user, chats]);
-
+      notifySyncEvent("NEW_MESSAGE", { chatId: savedId, message: savedMessage });
+      toast({
+        title: "Saved to Saved Messages 🔖",
+        description: "Message saved to your private cloud storage.",
+        status: "success",
+        duration: 2500,
+        isClosable: true,
+        position: "top-right",
+      });
+    },
+    [user, chats, toast]
+  );
 
   // Status & Story States
   const [statusFeed, setStatusFeed] = useState([]);
@@ -284,13 +315,15 @@ const ChatProvider = ({ children }) => {
   const [isStatusComposerOpen, setIsStatusComposerOpen] = useState(false);
   const [isAudienceModalOpen, setIsAudienceModalOpen] = useState(false);
 
-  // WebRTC Audio / Video Call States
+  // WebRTC Audio / Video Call States & Refs
   const [callData, setCallData] = useState(null);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const originalVideoTrackRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const pendingIceCandidatesRef = useRef([]);
 
   const selectedChatRef = useRef(selectedChat);
   useEffect(() => {
@@ -647,6 +680,49 @@ const ChatProvider = ({ children }) => {
       });
     });
 
+    socket.on("message deleted", ({ chatId, messageId, deleteForEveryone, userId: delUserId }) => {
+      if (!chatId || !messageId) return;
+      const isSavedChat = chatId.startsWith("chat_saved_") || chatId.includes("saved");
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        let updated;
+        if (isSavedChat) {
+          updated = chatMsgs.filter((m) => m._id !== messageId);
+        } else if (deleteForEveryone) {
+          updated = chatMsgs.map((m) =>
+            m._id === messageId
+              ? { ...m, isDeleted: true, content: "This message was deleted", fileUrl: null, audioUrl: null, reactions: {} }
+              : m
+          );
+        } else if (delUserId && delUserId === user?._id) {
+          updated = chatMsgs.filter((m) => m._id !== messageId);
+        } else {
+          return prev;
+        }
+        return { ...prev, [chatId]: updated };
+      });
+
+      setChats((prevChats) => {
+        return prevChats.map((c) => {
+          if (c._id === chatId) {
+            const chatMsgs = (messagesMap[chatId] || []).filter((m) => m._id !== messageId && !m.isDeleted);
+            const lastMsg = chatMsgs[chatMsgs.length - 1];
+            return {
+              ...c,
+              latestMessage: lastMsg
+                ? {
+                    content: lastMsg.content,
+                    sender: lastMsg.sender,
+                    createdAt: lastMsg.createdAt,
+                  }
+                : { content: "No messages yet", createdAt: new Date().toISOString() },
+            };
+          }
+          return c;
+        });
+      });
+    });
+
     // WebRTC Signaling Handlers
     socket.on("incoming-call", ({ caller, signalData, callType, chatId, fromSocketId }) => {
       setCallData({
@@ -660,15 +736,49 @@ const ChatProvider = ({ children }) => {
       setIsCallModalOpen(true);
     });
 
-    socket.on("call-accepted", ({ signalData }) => {
+    socket.on("call-accepted", async ({ signalData }) => {
+      console.log("📞 Call accepted by remote user");
+      try {
+        if (peerConnectionRef.current && signalData) {
+          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signalData));
+
+          // Flush queued ICE candidates
+          while (pendingIceCandidatesRef.current.length > 0) {
+            const cand = pendingIceCandidatesRef.current.shift();
+            await peerConnectionRef.current.addIceCandidate(cand).catch((e) => console.warn("ICE error:", e));
+          }
+        }
+      } catch (err) {
+        console.warn("Error setting remote description on call-accepted:", err);
+      }
       setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
     });
 
+    socket.on("ice-candidate", async ({ candidate }) => {
+      if (!candidate) return;
+      try {
+        const iceCandidate = new RTCIceCandidate(candidate);
+        if (
+          peerConnectionRef.current &&
+          peerConnectionRef.current.remoteDescription &&
+          peerConnectionRef.current.remoteDescription.type
+        ) {
+          await peerConnectionRef.current.addIceCandidate(iceCandidate);
+        } else {
+          pendingIceCandidatesRef.current.push(iceCandidate);
+        }
+      } catch (err) {
+        console.warn("Error adding ICE candidate:", err);
+      }
+    });
+
     socket.on("call-rejected", () => {
+      toast({ title: "Call Declined", status: "info", duration: 2500 });
       cleanupCall();
     });
 
     socket.on("call-ended", () => {
+      toast({ title: "Call Ended", status: "info", duration: 2500 });
       cleanupCall();
     });
 
@@ -716,6 +826,27 @@ const ChatProvider = ({ children }) => {
             return m;
           });
           return { ...prev, [chatId]: updatedMsgs };
+        });
+      } else if (type === "DELETE_MESSAGE") {
+        const { chatId, messageId, deleteForEveryone, userId: delUserId } = payload;
+        const isSavedChat = chatId && (chatId.startsWith("chat_saved_") || chatId.includes("saved"));
+        setMessagesMap((prev) => {
+          const chatMsgs = prev[chatId] || [];
+          let updated;
+          if (isSavedChat) {
+            updated = chatMsgs.filter((m) => m._id !== messageId);
+          } else if (deleteForEveryone) {
+            updated = chatMsgs.map((m) =>
+              m._id === messageId
+                ? { ...m, isDeleted: true, content: "This message was deleted", fileUrl: null, audioUrl: null, reactions: {} }
+                : m
+            );
+          } else if (delUserId && delUserId === user?._id) {
+            updated = chatMsgs.filter((m) => m._id !== messageId);
+          } else {
+            return prev;
+          }
+          return { ...prev, [chatId]: updated };
         });
       } else if (type === "USER_UPDATED") {
         handleUserProfileUpdated(payload);
@@ -971,10 +1102,59 @@ const ChatProvider = ({ children }) => {
     }
   };
 
+  // Helper to create and configure RTCPeerConnection with STUN ICE servers
+  const createPeerConnection = (targetUserId, fromSocketId, stream) => {
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch (e) {}
+      peerConnectionRef.current = null;
+    }
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    peerConnectionRef.current = pc;
+    pendingIceCandidatesRef.current = [];
+
+    // Add local media tracks to peer connection
+    if (stream) {
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
+      });
+    }
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socket) {
+        socket.emit("ice-candidate", {
+          targetUserId,
+          toSocketId: fromSocketId,
+          candidate: event.candidate,
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      console.log("📹 Remote stream track received:", event.streams[0]);
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log("WebRTC connection state:", pc.connectionState);
+      if (pc.connectionState === "connected") {
+        setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
+      } else if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+        console.log("WebRTC state changed to:", pc.connectionState);
+      }
+    };
+
+    return pc;
+  };
+
   // WebRTC Calling Engine
   const startCall = async (targetUser, callType = "video", chatId) => {
     if (!targetUser || !targetUser._id) {
-      console.warn("Cannot start call: target user is missing");
+      toast({ title: "Cannot start call: user not available", status: "warning", duration: 2500 });
       return;
     }
 
@@ -990,29 +1170,66 @@ const ChatProvider = ({ children }) => {
     });
     setIsCallModalOpen(true);
 
-    if (socket) {
-      socket.emit("call-user", {
-        targetUserId: targetUser._id,
-        signalData: null,
-        caller: user,
-        callType,
-        chatId,
+    try {
+      const pc = createPeerConnection(targetUser._id, null, stream);
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: callType === "video",
       });
+      await pc.setLocalDescription(offer);
+
+      if (socket) {
+        socket.emit("call-user", {
+          targetUserId: targetUser._id,
+          signalData: offer,
+          caller: user,
+          callType,
+          chatId,
+        });
+      }
+    } catch (err) {
+      console.error("Error initiating WebRTC call:", err);
+      toast({ title: "Call initiation error", description: err.message, status: "error", duration: 3000 });
     }
   };
 
   const acceptCall = async () => {
-    const stream = await getCallStream(callData?.callType);
+    if (!callData) return;
+    const callType = callData.callType || "video";
+    const stream = await getCallStream(callType);
     if (stream) setLocalStream(stream);
 
-    setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
+    const targetId = callData.caller?._id || callData.targetUserId;
+    const fromSocketId = callData.fromSocketId;
 
-    if (socket && callData) {
-      socket.emit("answer-call", {
-        toSocketId: callData.fromSocketId,
-        toUserId: callData.caller?._id || callData.targetUserId,
-        signalData: null,
-      });
+    try {
+      const pc = createPeerConnection(targetId, fromSocketId, stream);
+
+      if (callData.signalData) {
+        await pc.setRemoteDescription(new RTCSessionDescription(callData.signalData));
+
+        // Flush any queued ICE candidates
+        while (pendingIceCandidatesRef.current.length > 0) {
+          const cand = pendingIceCandidatesRef.current.shift();
+          await pc.addIceCandidate(cand).catch((e) => console.warn("ICE error:", e));
+        }
+      }
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      setCallData((prev) => (prev ? { ...prev, status: "connected" } : null));
+
+      if (socket) {
+        socket.emit("answer-call", {
+          toSocketId: fromSocketId,
+          toUserId: targetId,
+          signalData: answer,
+        });
+      }
+    } catch (err) {
+      console.error("Error accepting WebRTC call:", err);
+      toast({ title: "Failed to connect call", description: err.message, status: "error", duration: 3000 });
     }
   };
 
@@ -1020,7 +1237,7 @@ const ChatProvider = ({ children }) => {
     if (socket && callData) {
       socket.emit("reject-call", {
         toSocketId: callData.fromSocketId,
-        targetUserId: callData.caller._id,
+        targetUserId: callData.caller?._id || callData.targetUserId,
       });
     }
     cleanupCall();
@@ -1056,6 +1273,15 @@ const ChatProvider = ({ children }) => {
           }
         }
 
+        // Replace track in peer connection if active
+        if (peerConnectionRef.current) {
+          const senders = peerConnectionRef.current.getSenders();
+          const videoSender = senders.find((s) => s.track && s.track.kind === "video");
+          if (videoSender) {
+            videoSender.replaceTrack(screenTrack);
+          }
+        }
+
         screenTrack.onended = () => {
           stopScreenShare();
         };
@@ -1074,29 +1300,32 @@ const ChatProvider = ({ children }) => {
   };
 
   const stopScreenShare = async () => {
-    if (localStream) {
-      localStream.getVideoTracks().forEach((track) => {
-        if (track !== originalVideoTrackRef.current) {
-          track.stop();
-        }
-      });
-    }
-
-    try {
-      let cameraTrack = originalVideoTrackRef.current;
-      if (!cameraTrack || cameraTrack.readyState === "ended") {
+    let cameraTrack = originalVideoTrackRef.current;
+    if (!cameraTrack || cameraTrack.readyState === "ended") {
+      try {
         const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
         cameraTrack = cameraStream.getVideoTracks()[0];
+      } catch (e) {
+        console.warn("Could not re-acquire camera track:", e);
       }
+    }
 
-      const restoredStream = new MediaStream([
-        cameraTrack,
-        ...(localStream ? localStream.getAudioTracks() : []),
-      ]);
+    if (peerConnectionRef.current && cameraTrack) {
+      const senders = peerConnectionRef.current.getSenders();
+      const videoSender = senders.find((s) => s.track && s.track.kind === "video");
+      if (videoSender) {
+        videoSender.replaceTrack(cameraTrack);
+      }
+    }
 
+    if (localStream) {
+      localStream.getVideoTracks().forEach((track) => {
+        if (track !== cameraTrack) track.stop();
+      });
+      const restoredStream = new MediaStream(
+        [cameraTrack, ...localStream.getAudioTracks()].filter(Boolean)
+      );
       setLocalStream(restoredStream);
-    } catch (err) {
-      console.warn("Could not restore camera stream:", err);
     }
 
     setIsScreenSharing(false);
@@ -1104,6 +1333,13 @@ const ChatProvider = ({ children }) => {
   };
 
   const cleanupCall = () => {
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch (e) {}
+      peerConnectionRef.current = null;
+    }
+    pendingIceCandidatesRef.current = [];
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
       setLocalStream(null);
@@ -1116,6 +1352,71 @@ const ChatProvider = ({ children }) => {
     originalVideoTrackRef.current = null;
     setIsCallModalOpen(false);
     setCallData(null);
+  };
+
+  // Delete message function
+  const deleteMessage = (chatId, messageId, deleteForEveryone = true) => {
+    if (!chatId || !messageId) return;
+
+    const isSavedChat = chatId.startsWith("chat_saved_") || chatId.includes("saved");
+
+    setMessagesMap((prev) => {
+      const chatMsgs = prev[chatId] || [];
+      let updated;
+      if (isSavedChat) {
+        updated = chatMsgs.filter((m) => m._id !== messageId);
+      } else if (deleteForEveryone) {
+        updated = chatMsgs.map((m) =>
+          m._id === messageId
+            ? { ...m, isDeleted: true, content: "This message was deleted", fileUrl: null, audioUrl: null, reactions: {} }
+            : m
+        );
+      } else {
+        updated = chatMsgs.filter((m) => m._id !== messageId);
+      }
+      return { ...prev, [chatId]: updated };
+    });
+
+    setChats((prevChats) => {
+      return prevChats.map((c) => {
+        if (c._id === chatId) {
+          const chatMsgs = (messagesMap[chatId] || []).filter((m) => m._id !== messageId && !m.isDeleted);
+          const lastMsg = chatMsgs[chatMsgs.length - 1];
+          return {
+            ...c,
+            latestMessage: lastMsg
+              ? {
+                  content: lastMsg.content,
+                  sender: lastMsg.sender,
+                  createdAt: lastMsg.createdAt,
+                }
+              : { content: "No messages yet", createdAt: new Date().toISOString() },
+          };
+        }
+        return c;
+      });
+    });
+
+    deleteMessageAsync(messageId, chatId, deleteForEveryone, user?._id);
+
+    if (socket) {
+      socket.emit("delete message", {
+        chatId,
+        messageId,
+        deleteForEveryone,
+        userId: user?._id,
+      });
+    }
+
+    notifySyncEvent("DELETE_MESSAGE", { chatId, messageId, deleteForEveryone, userId: user?._id });
+
+    toast({
+      title: isSavedChat ? "Item removed from Saved Messages" : "Message deleted",
+      status: "info",
+      duration: 2000,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
   const updateUserProfile = (updates) => {
@@ -1244,6 +1545,7 @@ const ChatProvider = ({ children }) => {
         isChatPinned,
         openSavedMessages,
         saveToSavedMessages,
+        deleteMessage,
         // Hide Chat & Block Contact Context Values
         hiddenChatIds,
         hideChat,
