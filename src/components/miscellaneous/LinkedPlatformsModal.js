@@ -55,12 +55,18 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
       if (res?.pairingCode) {
         setWaPairingCode(res.pairingCode);
       }
+      if (res?.connected) {
+        setLinkedPlatforms((prev) => ({
+          ...prev,
+          whatsapp: { connected: true, phone: res.phone, name: res.name },
+        }));
+      }
     } catch (err) {
       console.error("WhatsApp bridge start error:", err);
     } finally {
       setWaLoading(false);
     }
-  }, [user]);
+  }, [user, setLinkedPlatforms]);
 
   const handleStartTelegram = useCallback(async () => {
     if (!user?._id) return;
@@ -70,12 +76,18 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
       if (res?.qrDataUrl) {
         setTgQrDataUrl(res.qrDataUrl);
       }
+      if (res?.connected) {
+        setLinkedPlatforms((prev) => ({
+          ...prev,
+          telegram: { connected: true, username: res.username, name: res.name },
+        }));
+      }
     } catch (err) {
       console.error("Telegram bridge start error:", err);
     } finally {
       setTgLoading(false);
     }
-  }, [user]);
+  }, [user, setLinkedPlatforms]);
 
   const loadStatus = useCallback(async () => {
     if (!user?._id) return;
@@ -170,21 +182,31 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     if (!user?._id) return;
     setWaLoading(true);
     try {
-      const session = await confirmWhatsAppBridgeAsync(user._id);
-      setLinkedPlatforms((prev) => ({
-        ...prev,
-        whatsapp: { connected: true, phone: session.phone, name: session.name },
-      }));
-      await syncBridgeChats();
-      toast({
-        title: "WhatsApp Connected! 🟢",
-        description: "Your WhatsApp chats and contacts have been synced into Agni Messenger.",
-        status: "success",
-        duration: 4000,
-        isClosable: true,
-      });
+      const res = await confirmWhatsAppBridgeAsync(user._id);
+      if (res?.connected) {
+        setLinkedPlatforms((prev) => ({
+          ...prev,
+          whatsapp: { connected: true, phone: res.phone || "Active", name: res.name || "WhatsApp Account" },
+        }));
+        await syncBridgeChats();
+        toast({
+          title: "WhatsApp Connected! 🟢",
+          description: `Linked ${res.phone || "successfully"}.`,
+          status: "success",
+          duration: 4000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: "Waiting for WhatsApp Scan 🟡",
+          description: "Please scan the QR code using WhatsApp on your phone (Settings > Linked Devices > Link a Device).",
+          status: "info",
+          duration: 4000,
+          isClosable: true,
+        });
+      }
     } catch (err) {
-      toast({ title: "Connection pending scan", description: "Scan the QR code with WhatsApp on your phone.", status: "info", duration: 3000 });
+      toast({ title: "Connection check failed", status: "error", duration: 3000 });
     } finally {
       setWaLoading(false);
     }
@@ -219,21 +241,31 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     if (!user?._id) return;
     setTgLoading(true);
     try {
-      const session = await confirmTelegramBridgeAsync(user._id);
-      setLinkedPlatforms((prev) => ({
-        ...prev,
-        telegram: { connected: true, username: session.username, name: session.name },
-      }));
-      await syncBridgeChats();
-      toast({
-        title: "Telegram Connected! 🔵",
-        description: "Your Telegram channels and chats have been synced into Agni Messenger.",
-        status: "success",
-        duration: 4000,
-        isClosable: true,
-      });
+      const res = await confirmTelegramBridgeAsync(user._id);
+      if (res?.connected) {
+        setLinkedPlatforms((prev) => ({
+          ...prev,
+          telegram: { connected: true, username: res.username || "@user", name: res.name || "Telegram Account" },
+        }));
+        await syncBridgeChats();
+        toast({
+          title: "Telegram Connected! 🔵",
+          description: `Linked ${res.username || "successfully"}.`,
+          status: "success",
+          duration: 4000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: "Waiting for Telegram Scan 🟡",
+          description: "Please scan the QR code using Telegram on your phone (Settings > Devices > Link Desktop Device).",
+          status: "info",
+          duration: 4000,
+          isClosable: true,
+        });
+      }
     } catch (err) {
-      toast({ title: "Connection pending scan", description: "Scan the QR code with Telegram on your phone.", status: "info", duration: 3000 });
+      toast({ title: "Connection check failed", status: "error", duration: 3000 });
     } finally {
       setTgLoading(false);
     }

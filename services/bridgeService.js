@@ -2,6 +2,7 @@
 const {
   default: makeWASocket,
   useMultiFileAuthState,
+  makeCacheableSignalKeyStore,
   DisconnectReason,
   fetchLatestBaileysVersion,
   Browsers,
@@ -41,38 +42,43 @@ class BridgeService {
   static async startWhatsAppBridge(userId, phone = null) {
     if (!userId) throw new Error("User ID is required");
 
-    // If existing active open connection, return it
     const existing = liveSessions.whatsapp.get(userId);
-    if (existing && existing.status === "connected") {
+    if (existing && existing.status === "connected" && existing.socket) {
       return {
         status: "connected",
         connected: true,
-        phone: existing.user?.phone,
-        name: existing.user?.name,
-      };
-    }
-    if (existing && existing.qrDataUrl) {
-      return {
-        status: existing.status,
-        qrCode: existing.qrCode,
-        qrDataUrl: existing.qrDataUrl,
-        pairingCode: existing.pairingCode,
-        expiresAt: existing.expiresAt,
+        phone: existing.user?.phone || "Active",
+        name: existing.user?.name || "WhatsApp User",
       };
     }
 
+    // Clean up any stale/unauthenticated socket
+    if (existing?.socket) {
+      try {
+        existing.socket.ev.removeAllListeners();
+        existing.socket.end(undefined);
+      } catch (e) {}
+    }
+
     const sessionPath = path.join(SESSIONS_DIR, `whatsapp_${userId}`);
+    const logger = pino({ level: "silent" });
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1015901307] }));
 
     const sock = makeWASocket({
       version,
-      logger: pino({ level: "silent" }),
+      logger,
       printQRInTerminal: false,
-      auth: state,
-      browser: Browsers.macOS("Desktop"),
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, logger),
+      },
+      browser: ["Agni Messenger", "Chrome", "120.0.0.0"],
       syncFullHistory: false,
       generateHighQualityLinkPreview: true,
+      defaultQueryTimeoutMs: 60000,
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 30000,
     });
 
     const sessionRecord = {
@@ -105,6 +111,8 @@ class BridgeService {
           sessionRecord.qrDataUrl = null;
         }
 
+        console.log(`🟢 WhatsApp QR Code generated for user: ${userId}`);
+
         if (io) {
           io.to(userId).emit("bridge_whatsapp_qr", {
             qrCode: qr,
@@ -121,7 +129,7 @@ class BridgeService {
 
       if (connection === "open") {
         const waUser = sock.user || {};
-        const formattedPhone = waUser.id ? waUser.id.split(":")[0].split("@")[0] : phone || "Connected Phone";
+        const formattedPhone = waUser.id ? waUser.id.split(":")[0].split("@")[0] : phone || "Connected";
         sessionRecord.status = "connected";
         sessionRecord.user = {
           phone: `+${formattedPhone}`,
@@ -129,6 +137,8 @@ class BridgeService {
         };
         sessionRecord.qrCode = null;
         sessionRecord.qrDataUrl = null;
+
+        console.log(`🎉 🟢 WhatsApp successfully linked for user: ${userId} (${sessionRecord.user.phone})`);
 
         if (io) {
           io.to(userId).emit("bridge_whatsapp_connected", {
@@ -145,7 +155,10 @@ class BridgeService {
       }
 
       if (connection === "close") {
-        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        console.log(`⚠️ WhatsApp connection closed (code: ${statusCode}, reconnect: ${shouldReconnect})`);
+
         sessionRecord.status = "disconnected";
 
         if (shouldReconnect) {
@@ -218,16 +231,27 @@ class BridgeService {
     const session = liveSessions.whatsapp.get(userId);
     if (!session) {
       const sessionPath = path.join(SESSIONS_DIR, `whatsapp_${userId}`);
-      if (fs.existsSync(sessionPath) && fs.existsSync(path.join(sessionPath, "creds.json"))) {
-        return { connected: true, status: "connected", name: "WhatsApp Linked" };
+      if (fs.existsSync(sessionPath)) {
+        try {
+          const credsFile = path.join(sessionPath, "creds.json");
+          if (fs.existsSync(credsFile)) {
+            const creds = JSON.parse(fs.readFileSync(credsFile, "utf8"));
+            if (creds.registered && creds.me) {
+              const formatted = creds.me.id ? creds.me.id.split(":")[0].split("@")[0] : "Active";
+              return { connected: true, status: "connected", phone: `+${formatted}`, name: creds.me.name || "WhatsApp Account" };
+            }
+          }
+        } catch (e) {}
       }
       return { connected: false, status: "disconnected" };
     }
+
+    const isConnected = session.status === "connected";
     return {
-      connected: session.status === "connected",
+      connected: isConnected,
       status: session.status,
-      qrCode: session.qrCode,
-      qrDataUrl: session.qrDataUrl,
+      qrCode: isConnected ? null : session.qrCode,
+      qrDataUrl: isConnected ? null : session.qrDataUrl,
       pairingCode: session.pairingCode,
       phone: session.user?.phone,
       name: session.user?.name,
@@ -245,6 +269,7 @@ class BridgeService {
     liveSessions.whatsapp.delete(userId);
     const sessionPath = path.join(SESSIONS_DIR, `whatsapp_${userId}`);
     fs.rmSync(sessionPath, { recursive: true, force: true });
+    console.log(`🔌 WhatsApp disconnected for user: ${userId}`);
     return { success: true, platform: "whatsapp" };
   }
 
@@ -256,21 +281,19 @@ class BridgeService {
     if (!userId) throw new Error("User ID is required");
 
     const existing = liveSessions.telegram.get(userId);
-    if (existing && existing.status === "connected") {
+    if (existing && existing.status === "connected" && existing.client) {
       return {
         status: "connected",
         connected: true,
-        username: existing.user?.username,
-        name: existing.user?.name,
+        username: existing.user?.username || "@user",
+        name: existing.user?.name || "Telegram User",
       };
     }
-    if (existing && existing.qrDataUrl) {
-      return {
-        status: existing.status,
-        qrCode: existing.qrCode,
-        qrDataUrl: existing.qrDataUrl,
-        expiresAt: existing.expiresAt,
-      };
+
+    if (existing?.client) {
+      try {
+        await existing.client.disconnect();
+      } catch (e) {}
     }
 
     const sessionFilePath = path.join(SESSIONS_DIR, `telegram_${userId}.json`);
@@ -321,7 +344,6 @@ class BridgeService {
 
     let onTgQrReceived = null;
 
-    // Request QR Code Login stream from Telegram MTProto
     client
       .signInUserWithQrCode(
         { apiId: TELEGRAM_API_ID, apiHash: TELEGRAM_API_HASH },
@@ -334,6 +356,8 @@ class BridgeService {
             } catch (e) {
               sessionRecord.qrDataUrl = null;
             }
+
+            console.log(`🔵 Telegram MTProto QR generated for user: ${userId}`);
 
             const io = BridgeService.getIo();
             if (io) {
@@ -366,6 +390,8 @@ class BridgeService {
           JSON.stringify({ session: client.session.save(), userId, connectedAt: new Date().toISOString() })
         );
 
+        console.log(`🎉 🔵 Telegram successfully linked for user: ${userId} (${sessionRecord.user.username})`);
+
         const io = BridgeService.getIo();
         if (io) {
           io.to(userId).emit("bridge_telegram_connected", {
@@ -376,7 +402,7 @@ class BridgeService {
         }
       })
       .catch((err) => {
-        console.warn("Telegram QR login ended:", err.message);
+        console.warn("Telegram QR login finished:", err.message);
       });
 
     // Wait up to 3.5 seconds for Telegram QR token
@@ -398,15 +424,22 @@ class BridgeService {
     if (!session) {
       const sessionFilePath = path.join(SESSIONS_DIR, `telegram_${userId}.json`);
       if (fs.existsSync(sessionFilePath)) {
-        return { connected: true, status: "connected", username: "@telegram_user", name: "Telegram Linked" };
+        try {
+          const fileContent = JSON.parse(fs.readFileSync(sessionFilePath, "utf8"));
+          if (fileContent.session) {
+            return { connected: true, status: "connected", username: "@telegram_user", name: "Telegram Linked" };
+          }
+        } catch (e) {}
       }
       return { connected: false, status: "disconnected" };
     }
+
+    const isConnected = session.status === "connected";
     return {
-      connected: session.status === "connected",
+      connected: isConnected,
       status: session.status,
-      qrCode: session.qrCode,
-      qrDataUrl: session.qrDataUrl,
+      qrCode: isConnected ? null : session.qrCode,
+      qrDataUrl: isConnected ? null : session.qrDataUrl,
       username: session.user?.username,
       name: session.user?.name,
       expiresAt: session.expiresAt,
@@ -425,6 +458,7 @@ class BridgeService {
     if (fs.existsSync(sessionFilePath)) {
       fs.unlinkSync(sessionFilePath);
     }
+    console.log(`🔌 Telegram disconnected for user: ${userId}`);
     return { success: true, platform: "telegram" };
   }
 
