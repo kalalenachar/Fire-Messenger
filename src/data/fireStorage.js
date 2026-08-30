@@ -38,18 +38,15 @@ export const checkUsernameAvailabilityAsync = async (username) => {
     const { data } = await axios.get(`${API_BASE_URL}/user/check-username`, {
       params: { username },
     });
-    // Validate it's a proper response object
     if (data && typeof data === "object" && "available" in data) {
       return data;
     }
     return { success: false, available: null, serverError: true, message: "⚠️ Unexpected server response — will be checked on submit." };
   } catch (error) {
-    // If server responded with a structured JSON error (e.g. 400 invalid format), use that
     const serverData = error.response?.data;
     if (serverData && typeof serverData === "object" && "available" in serverData) {
       return serverData;
     }
-    // 404 (route not found), HTML responses, network failures — don't block the user
     return { success: false, available: null, serverError: true, message: "⚠️ Server unreachable — username will be verified on submit." };
   }
 };
@@ -150,7 +147,6 @@ export const safeLocalStorageSetItem = (key, value) => {
   } catch (error) {
     if (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" || error.code === 22) {
       try {
-        // Clear message caches to free space for primary state
         Object.keys(localStorage).forEach((k) => {
           if (k.startsWith("fire_messenger_messages_")) {
             localStorage.removeItem(k);
@@ -663,6 +659,62 @@ export const sendAdminBroadcastAsync = async (content) => {
   }
 };
 
+export const editMessageAsync = async (messageId, chatId, newContent) => {
+  try {
+    const res = await axios.put(`${API_BASE_URL}/messages/edit`, { messageId, chatId, newContent });
+    return res?.data?.success ? res.data.message : null;
+  } catch (error) {
+    console.error("Error editing message:", error?.message || error);
+    return null;
+  }
+};
 
+export const toggleStarMessageAsync = async (messageId, userId, chatId) => {
+  try {
+    const res = await axios.put(`${API_BASE_URL}/messages/star`, { messageId, userId, chatId });
+    return res?.data?.success ? res.data.message : null;
+  } catch (error) {
+    console.error("Error starring message:", error?.message || error);
+    return null;
+  }
+};
 
+export const pinChatMessageAsync = async (chatId, message) => {
+  try {
+    const res = await axios.put(`${API_BASE_URL}/messages/pin`, { chatId, message });
+    return res?.data?.success ? res.data.chat : null;
+  } catch (error) {
+    console.error("Error pinning message:", error?.message || error);
+    return null;
+  }
+};
 
+export const unpinChatMessageAsync = async (chatId) => {
+  try {
+    const res = await axios.put(`${API_BASE_URL}/messages/unpin`, { chatId });
+    return res?.data?.success ? res.data.chat : null;
+  } catch (error) {
+    console.error("Error unpinning message:", error?.message || error);
+    return null;
+  }
+};
+
+export const forwardMessagesAsync = async (message, targetChatIds, senderUser) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/messages/forward`, { message, targetChatIds, senderUser });
+    return res?.data?.success ? res.data.messages : [];
+  } catch (error) {
+    console.error("Error forwarding messages:", error?.message || error);
+    return [];
+  }
+};
+
+export const setChatDisappearingTimerAsync = async (chatId, seconds) => {
+  try {
+    const res = await axios.put(`${API_BASE_URL}/messages/disappearing-timer`, { chatId, seconds });
+    return res?.data?.success ? res.data.chat : null;
+  } catch (error) {
+    console.error("Error setting disappearing timer:", error?.message || error);
+    return null;
+  }
+};

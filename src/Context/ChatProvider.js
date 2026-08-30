@@ -29,10 +29,17 @@ import {
   fetchUserFoldersAsync,
   saveUserFoldersAsync,
   safeLocalStorageSetItem,
+  editMessageAsync,
+  toggleStarMessageAsync,
+  pinChatMessageAsync,
+  unpinChatMessageAsync,
+  forwardMessagesAsync,
+  setChatDisappearingTimerAsync,
 } from "../data/fireStorage";
 import { getBotReplyAsync } from "../data/fireMockData";
 import { useColorMode, useToast } from "@chakra-ui/react";
 import CallModal from "../components/miscellaneous/CallModal";
+import { soundEngine } from "../config/soundEngine";
 
 const ChatContext = createContext();
 const ENDPOINT =
@@ -69,6 +76,37 @@ const ChatProvider = ({ children }) => {
   });
   const [activeFilter, setActiveFilter] = useState("All");
   const [isTypingMap, setIsTypingMap] = useState({});
+  const [isSoundEnabled, setIsSoundEnabled] = useState(() => soundEngine.isEnabled);
+  const [draftsMap, setDraftsMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem("fire_drafts_map");
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const toggleSound = useCallback(() => {
+    const next = soundEngine.toggleSound();
+    setIsSoundEnabled(next);
+    return next;
+  }, []);
+
+  const setDraftForChat = useCallback((chatId, draftText) => {
+    if (!chatId) return;
+    setDraftsMap((prev) => {
+      const updated = { ...prev };
+      if (!draftText || !draftText.trim()) {
+        delete updated[chatId];
+      } else {
+        updated[chatId] = draftText;
+      }
+      try {
+        localStorage.setItem("fire_drafts_map", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  }, []);
 
   // Folder Settings State
   const [folders, setFolders] = useState([]);
@@ -593,6 +631,10 @@ const ChatProvider = ({ children }) => {
       const chatId = newMessage.chatObj?._id || (typeof newMessage.chat === "object" ? newMessage.chat?._id : newMessage.chat);
       if (!chatId) return;
 
+      if (newMessage.sender?._id !== user._id) {
+        soundEngine.playMessageReceived();
+      }
+
       setMessagesMap((prev) => {
         const chatMsgs = prev[chatId] || [];
         if (chatMsgs.some((m) => m._id === newMessage._id)) return prev;
@@ -642,6 +684,56 @@ const ChatProvider = ({ children }) => {
         };
         setNotification((prev) => [notifItem, ...prev.filter((n) => n._id !== newMessage._id)]);
       }
+    });
+
+    socket.on("message edited", ({ chatId, message }) => {
+      if (!chatId || !message) return;
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        const updated = chatMsgs.map((m) => (m._id === message._id ? { ...m, ...message } : m));
+        return { ...prev, [chatId]: updated };
+      });
+      setChats((prevChats) =>
+        prevChats.map((c) => {
+          if (c._id === chatId && c.latestMessage && c.latestMessage._id === message._id) {
+            return { ...c, latestMessage: { ...c.latestMessage, content: message.content } };
+          }
+          return c;
+        })
+      );
+    });
+
+    socket.on("message starred", ({ chatId, message }) => {
+      if (!chatId || !message) return;
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        const updated = chatMsgs.map((m) => (m._id === message._id ? { ...m, ...message } : m));
+        return { ...prev, [chatId]: updated };
+      });
+    });
+
+    socket.on("message pinned", ({ chatId, pinnedMessage }) => {
+      if (!chatId) return;
+      setChats((prevChats) =>
+        prevChats.map((c) => (c._id === chatId ? { ...c, pinnedMessage } : c))
+      );
+      setSelectedChat((prev) => (prev && prev._id === chatId ? { ...prev, pinnedMessage } : prev));
+    });
+
+    socket.on("message unpinned", ({ chatId }) => {
+      if (!chatId) return;
+      setChats((prevChats) =>
+        prevChats.map((c) => (c._id === chatId ? { ...c, pinnedMessage: null } : c))
+      );
+      setSelectedChat((prev) => (prev && prev._id === chatId ? { ...prev, pinnedMessage: null } : prev));
+    });
+
+    socket.on("disappearing timer updated", ({ chatId, timerSeconds }) => {
+      if (!chatId) return;
+      setChats((prevChats) =>
+        prevChats.map((c) => (c._id === chatId ? { ...c, disappearingTimer: timerSeconds } : c))
+      );
+      setSelectedChat((prev) => (prev && prev._id === chatId ? { ...prev, disappearingTimer: timerSeconds } : prev));
     });
 
     socket.on("typing", ({ room, user: typingUser }) => {
@@ -956,6 +1048,9 @@ const ChatProvider = ({ children }) => {
       return prevChats;
     });
 
+    // Play crisp sent pop sound
+    soundEngine.playMessageSent();
+
     if (socket) {
       socket.emit("new message", newMessage);
     }
@@ -1003,6 +1098,148 @@ const ChatProvider = ({ children }) => {
           console.error("Error generating Agni Bot Groq reply:", err);
         }
       })();
+    }
+  };
+
+  // Edit message handler
+  const editMessage = async (chatId, messageId, newContent) => {
+    if (!chatId || !messageId || !newContent?.trim()) return;
+
+    setMessagesMap((prev) => {
+      const chatMsgs = prev[chatId] || [];
+      const updated = chatMsgs.map((m) =>
+        m._id === messageId ? { ...m, content: newContent, isEdited: true, editedAt: new Date().toISOString() } : m
+      );
+      return { ...prev, [chatId]: updated };
+    });
+
+    setChats((prevChats) =>
+      prevChats.map((c) => {
+        if (c._id === chatId && c.latestMessage && c.latestMessage._id === messageId) {
+          return { ...c, latestMessage: { ...c.latestMessage, content: newContent } };
+        }
+        return c;
+      })
+    );
+
+    editMessageAsync(messageId, chatId, newContent);
+
+    if (socket) {
+      socket.emit("edit message", { messageId, chatId, newContent });
+    }
+  };
+
+  // Star / Bookmark message handler
+  const toggleStarMessage = (chatId, messageId) => {
+    if (!user || !chatId || !messageId) return;
+
+    soundEngine.playReactionSound();
+
+    setMessagesMap((prev) => {
+      const chatMsgs = prev[chatId] || [];
+      const updated = chatMsgs.map((m) => {
+        if (m._id === messageId) {
+          let starList = Array.isArray(m.isStarredBy) ? [...m.isStarredBy] : [];
+          if (starList.includes(user._id)) {
+            starList = starList.filter((id) => id !== user._id);
+          } else {
+            starList.push(user._id);
+          }
+          return { ...m, isStarredBy: starList };
+        }
+        return m;
+      });
+      return { ...prev, [chatId]: updated };
+    });
+
+    toggleStarMessageAsync(messageId, user._id, chatId);
+
+    if (socket) {
+      socket.emit("star message", { messageId, userId: user._id, chatId });
+    }
+  };
+
+  // Pin message in chat
+  const pinChatMessage = (chatId, message) => {
+    if (!chatId || !message) return;
+
+    setChats((prev) => prev.map((c) => (c._id === chatId ? { ...c, pinnedMessage: message } : c)));
+    setSelectedChat((prev) => (prev && prev._id === chatId ? { ...prev, pinnedMessage: message } : prev));
+
+    pinChatMessageAsync(chatId, message);
+
+    if (socket) {
+      socket.emit("pin chat message", { chatId, message });
+    }
+  };
+
+  // Unpin message from chat
+  const unpinChatMessage = (chatId) => {
+    if (!chatId) return;
+
+    setChats((prev) => prev.map((c) => (c._id === chatId ? { ...c, pinnedMessage: null } : c)));
+    setSelectedChat((prev) => (prev && prev._id === chatId ? { ...prev, pinnedMessage: null } : prev));
+
+    unpinChatMessageAsync(chatId);
+
+    if (socket) {
+      socket.emit("unpin chat message", { chatId });
+    }
+  };
+
+  // Forward message to multiple chats
+  const forwardMessage = async (message, targetChatIds) => {
+    if (!message || !Array.isArray(targetChatIds) || targetChatIds.length === 0 || !user) return;
+
+    soundEngine.playMessageSent();
+
+    for (const targetChatId of targetChatIds) {
+      const forwardedMsg = {
+        ...message,
+        _id: `msg_fwd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        chat: targetChatId,
+        sender: user,
+        isForwarded: true,
+        forwardedFrom: message.sender?.name || "Contact",
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[targetChatId] || [];
+        return { ...prev, [targetChatId]: [...chatMsgs, forwardedMsg] };
+      });
+
+      setChats((prevChats) => {
+        return prevChats.map((c) => {
+          if (c._id === targetChatId) {
+            return {
+              ...c,
+              latestMessage: {
+                content: forwardedMsg.content || "Forwarded Message",
+                sender: user,
+                createdAt: forwardedMsg.createdAt,
+              },
+            };
+          }
+          return c;
+        });
+      });
+    }
+
+    forwardMessagesAsync(message, targetChatIds, user);
+  };
+
+  // Set disappearing messages timer
+  const setChatDisappearingTimer = (chatId, seconds) => {
+    if (!chatId) return;
+
+    setChats((prev) => prev.map((c) => (c._id === chatId ? { ...c, disappearingTimer: seconds || 0 } : c)));
+    setSelectedChat((prev) => (prev && prev._id === chatId ? { ...prev, disappearingTimer: seconds || 0 } : prev));
+
+    setChatDisappearingTimerAsync(chatId, seconds || 0);
+
+    if (socket) {
+      socket.emit("disappearing timer", { chatId, timerSeconds: seconds || 0 });
     }
   };
 
@@ -1633,6 +1870,16 @@ const ChatProvider = ({ children }) => {
         toggleReaction,
         theme,
         toggleTheme,
+        isSoundEnabled,
+        toggleSound,
+        draftsMap,
+        setDraftForChat,
+        editMessage,
+        toggleStarMessage,
+        pinChatMessage,
+        unpinChatMessage,
+        forwardMessage,
+        setChatDisappearingTimer,
         activeFilter,
         setActiveFilter,
         updateUserProfile,

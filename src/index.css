@@ -248,3 +248,40 @@ code {
   transform: scale(1.1);
 }
 
+/* Highlight Flash Animation for jumping to message */
+.highlight-flash {
+  animation: flash-pulse 2s ease-out;
+}
+
+@keyframes flash-pulse {
+  0% {
+    background-color: rgba(56, 189, 248, 0.35);
+    border-radius: 12px;
+  }
+  50% {
+    background-color: rgba(56, 189, 248, 0.2);
+    border-radius: 12px;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Search Highlight Row */
+.search-highlight-row {
+  background: rgba(249, 115, 22, 0.12);
+  border-radius: 12px;
+  padding: 2px 4px;
+}
+
+/* Live Mic Bar Animation */
+.live-mic-bar {
+  display: inline-block;
+  width: 3px;
+  min-height: 4px;
+  max-height: 24px;
+  background: var(--color-primary);
+  border-radius: 3px;
+  transition: height 0.08s ease;
+}
+

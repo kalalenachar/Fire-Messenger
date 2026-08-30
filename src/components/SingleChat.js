@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Box, Text } from "@chakra-ui/layout";
 import {
   Avatar,
@@ -19,14 +19,35 @@ import {
   ModalCloseButton,
   Image,
   Badge,
-  useDisclosure,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuDivider,
+  InputGroup,
+  InputLeftElement,
+  InputRightElement,
+  Flex,
 } from "@chakra-ui/react";
-import { PhoneIcon, ViewIcon, AttachmentIcon, ArrowBackIcon } from "@chakra-ui/icons";
+import {
+  PhoneIcon,
+  ViewIcon,
+  AttachmentIcon,
+  ArrowBackIcon,
+  SearchIcon,
+  CloseIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+} from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
 import ProfileModal from "./miscellaneous/ProfileModal";
 import VoicePlayer from "./VoicePlayer";
 import PollComposerModal from "./miscellaneous/PollComposerModal";
 import LocationShareModal from "./miscellaneous/LocationShareModal";
+import ForwardModal from "./miscellaneous/ForwardModal";
+import EditMessageModal from "./miscellaneous/EditMessageModal";
+import DisappearingTimerModal from "./miscellaneous/DisappearingTimerModal";
+import MediaLightboxModal from "./miscellaneous/MediaLightboxModal";
 import FormattedMarkdown from "./FormattedMarkdown";
 import VerifiedBadge from "./common/VerifiedBadge";
 import ReportModal from "./miscellaneous/ReportModal";
@@ -107,6 +128,9 @@ const SingleChat = () => {
     stopLiveLocation,
     togglePinChat,
     isChatPinned,
+    pinChatMessage,
+    unpinChatMessage,
+    toggleStarMessage,
     saveToSavedMessages,
     deleteMessage,
     hideChat,
@@ -115,9 +139,12 @@ const SingleChat = () => {
     blockUser,
     unblockUser,
     isUserBlocked,
+    draftsMap,
+    setDraftForChat,
   } = ChatState();
 
   const [textInput, setTextInput] = useState("");
+  const [replyingTo, setReplyingTo] = useState(null);
   const [newOptionInputs, setNewOptionInputs] = useState({}); // messageId -> string
   const [isRecording, setIsRecording] = useState(false);
   const [recordingState, setRecordingState] = useState("idle"); // "idle" | "recording" | "preview"
@@ -127,12 +154,20 @@ const SingleChat = () => {
   const [voicePreviewBase64, setVoicePreviewBase64] = useState(null);
   const [voicePreviewBlob, setVoicePreviewBlob] = useState(null);
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
-  const [previewImage, setPreviewImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isPollModalOpen, setIsPollModalOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, msg: null });
+  const [forwardModal, setForwardModal] = useState({ isOpen: false, msg: null });
+  const [editModal, setEditModal] = useState({ isOpen: false, msg: null });
+  const [disappearingModal, setDisappearingModal] = useState(false);
+  const [lightboxData, setLightboxData] = useState({ isOpen: false, url: "", type: "image", name: "" });
+
+  // In-Chat Search State
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
 
   // Right-Click Context Menu State
   const [contextMenu, setContextMenu] = useState({
@@ -143,6 +178,7 @@ const SingleChat = () => {
     fileName: null,
     content: null,
     msgId: null,
+    msgObj: null,
   });
 
   // Attachment Preview Modal State
@@ -154,24 +190,42 @@ const SingleChat = () => {
     caption: "",
   });
 
-  const { isOpen: isImageOpen, onOpen: onImageOpen, onClose: onImageClose } = useDisclosure();
-
   const timerRef = useRef(null);
   const typingTimerRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const messageRefs = useRef({});
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const fileInputRef = useRef(null);
   const audioContextRef = useRef(null);
   const animFrameRef = useRef(null);
 
-  const activeMessages = selectedChat && typeof selectedChat === "object" ? messagesMap[selectedChat._id] || [] : [];
+  const activeMessages = React.useMemo(() => {
+    return selectedChat && typeof selectedChat === "object" ? messagesMap[selectedChat._id] || [] : [];
+  }, [selectedChat, messagesMap]);
+
   const activeTypingText = selectedChat && typeof selectedChat === "object" ? isTypingMap[selectedChat._id] : null;
 
-  // Scroll to bottom when messages update
+  // Restore draft when switching chats
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeMessages.length, selectedChat, activeTypingText]);
+    if (selectedChat && selectedChat._id) {
+      const savedDraft = draftsMap?.[selectedChat._id] || "";
+      setTextInput(savedDraft);
+      setReplyingTo(null);
+      setIsSearchOpen(false);
+      setSearchQuery("");
+    } else {
+      setTextInput("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChat?._id]);
+
+  // Scroll to bottom when messages update (unless searching)
+  useEffect(() => {
+    if (!isSearchOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [activeMessages.length, selectedChat, activeTypingText, isSearchOpen]);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -182,6 +236,45 @@ const SingleChat = () => {
     return () => window.removeEventListener("click", handleClickOutside);
   }, [contextMenu.visible]);
 
+  // In-Chat Search Matches
+  const searchMatches = React.useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    const indices = [];
+    activeMessages.forEach((msg, idx) => {
+      if (msg.content && msg.content.toLowerCase().includes(q) && !msg.isDeleted) {
+        indices.push(idx);
+      }
+    });
+    return indices;
+  }, [searchQuery, activeMessages]);
+
+  const scrollToMessage = useCallback((msgId) => {
+    if (!msgId) return;
+    const el = messageRefs.current[msgId];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("highlight-flash");
+      setTimeout(() => el.classList.remove("highlight-flash"), 2000);
+    }
+  }, []);
+
+  const handleNextSearchMatch = () => {
+    if (searchMatches.length === 0) return;
+    const nextIdx = (searchMatchIndex + 1) % searchMatches.length;
+    setSearchMatchIndex(nextIdx);
+    const targetMsg = activeMessages[searchMatches[nextIdx]];
+    if (targetMsg) scrollToMessage(targetMsg._id);
+  };
+
+  const handlePrevSearchMatch = () => {
+    if (searchMatches.length === 0) return;
+    const prevIdx = (searchMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setSearchMatchIndex(prevIdx);
+    const targetMsg = activeMessages[searchMatches[prevIdx]];
+    if (targetMsg) scrollToMessage(targetMsg._id);
+  };
+
   const handleContextMenu = (e, msg) => {
     e.preventDefault();
     e.stopPropagation();
@@ -189,8 +282,8 @@ const SingleChat = () => {
     const fileName = msg.fileName || (msg.type === "voice" ? `voice_note_${Date.now()}.webm` : "attachment");
     setContextMenu({
       visible: true,
-      x: Math.min(e.clientX, window.innerWidth - 200),
-      y: Math.min(e.clientY, window.innerHeight - 150),
+      x: Math.min(e.clientX, window.innerWidth - 220),
+      y: Math.min(e.clientY, window.innerHeight - 280),
       fileUrl,
       fileName,
       content: msg.content,
@@ -234,8 +327,8 @@ const SingleChat = () => {
   const handleInputChange = (e) => {
     const val = e.target.value;
     setTextInput(val);
-
     if (selectedChat) {
+      setDraftForChat?.(selectedChat._id, val);
       sendTypingStatus(selectedChat._id, true);
 
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -252,7 +345,6 @@ const SingleChat = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
-      // Setup Web Audio API Analyzer for dynamic spectrum visualizer
       try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (AudioContextClass) {
@@ -280,7 +372,7 @@ const SingleChat = () => {
           analyzeMic();
         }
       } catch (e) {
-        console.warn("AudioContext visualizer not supported", e);
+        console.warn("AudioContext visualizer notice:", e);
       }
 
       mediaRecorder.ondataavailable = (e) => {
@@ -333,9 +425,10 @@ const SingleChat = () => {
       `🎤 Voice Note (${durationSec}s)`,
       "voice",
       base64Data,
-      { fileName: `voice_note_${Date.now()}.webm`, fileSize: blobSize, fileType: "audio/webm" }
+      { fileName: `voice_note_${Date.now()}.webm`, fileSize: blobSize, fileType: "audio/webm", replyTo: replyingTo }
     );
 
+    setReplyingTo(null);
     cancelVoiceRecording();
   };
 
@@ -349,33 +442,30 @@ const SingleChat = () => {
           const audioBase64 = reader.result;
           sendMessage(
             selectedChat._id,
-            `🎤 Voice Note (${recordingSeconds}s)`,
+            `🎤 Voice Note (${recordingSeconds || 1}s)`,
             "voice",
             audioBase64,
-            { fileName: `voice_note_${Date.now()}.webm`, fileSize: audioBlob.size, fileType: "audio/webm" }
+            { fileName: `voice_note_${Date.now()}.webm`, fileSize: audioBlob.size, fileType: "audio/webm", replyTo: replyingTo }
           );
         };
         reader.readAsDataURL(audioBlob);
-
         mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
       };
       mediaRecorderRef.current.stop();
-    } else {
-      sendMessage(selectedChat._id, `🎤 Voice Note (${recordingSeconds || 3}s)`, "voice", null);
     }
+    setReplyingTo(null);
     setIsRecording(false);
     setRecordingState("idle");
     setRecordingSeconds(0);
+    setVoicePreviewUrl(null);
+    setVoicePreviewBase64(null);
   };
 
   const cancelVoiceRecording = () => {
     stopAudioAnalyzer();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
-    }
-    if (voicePreviewUrl) {
-      URL.revokeObjectURL(voicePreviewUrl);
+      mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
     setRecordingState("idle");
@@ -385,17 +475,16 @@ const SingleChat = () => {
     setVoicePreviewBlob(null);
   };
 
-  // Drag & Drop Handlers
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
+    if (!isDragging) setIsDragging(true);
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.currentTarget && !e.currentTarget.contains(e.relatedTarget)) {
+    if (e.relatedTarget === null || !e.currentTarget.contains(e.relatedTarget)) {
       setIsDragging(false);
     }
   };
@@ -409,7 +498,6 @@ const SingleChat = () => {
     }
   };
 
-  // Attachment Upload Handler
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -442,6 +530,7 @@ const SingleChat = () => {
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
+      replyTo: replyingTo,
     };
 
     sendMessage(
@@ -452,6 +541,7 @@ const SingleChat = () => {
       fileMeta
     );
 
+    setReplyingTo(null);
     setAttachmentModal({ isOpen: false, file: null, dataUrl: null, category: null, caption: "" });
   };
 
@@ -526,9 +616,11 @@ const SingleChat = () => {
     if (!textInput.trim()) return;
     if (selectedChat) {
       sendTypingStatus(selectedChat._id, false);
+      setDraftForChat?.(selectedChat._id, "");
     }
-    sendMessage(selectedChat._id, textInput, "text");
+    sendMessage(selectedChat._id, textInput, "text", null, { replyTo: replyingTo });
     setTextInput("");
+    setReplyingTo(null);
   };
 
   const handleKeyPress = (e) => {
@@ -542,7 +634,7 @@ const SingleChat = () => {
     setTextInput((prev) => prev + emoji);
   };
 
-  const availableEmojis = ["🔥", "❤️", "👍", "😂", "👏", "🚀", "💻", "✨"];
+  const availableEmojis = ["🔥", "❤️", "👍", "😂", "👏", "🚀", "💻", "✨", "🎉", "😮", "🙏", "💯"];
 
   return (
     <Box
@@ -619,6 +711,11 @@ const SingleChat = () => {
                   📌
                 </Text>
               )}
+              {selectedChat.disappearingTimer > 0 && (
+                <Text fontSize="xs" title={`Disappearing messages: ${selectedChat.disappearingTimer === 86400 ? "24h" : selectedChat.disappearingTimer === 604800 ? "7d" : "90d"}`}>
+                  ⏳
+                </Text>
+              )}
             </Box>
             <Text
               fontSize="xs"
@@ -630,7 +727,22 @@ const SingleChat = () => {
           </Box>
         </Box>
 
-        <Box display="flex" gap={2}>
+        <Box display="flex" gap={1.5} alignItems="center">
+          {/* In-Chat Search Button */}
+          <Tooltip label="Search in Chat" placement="bottom">
+            <IconButton
+              icon={<SearchIcon />}
+              size="sm"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+              onClick={() => {
+                setIsSearchOpen((prev) => !prev);
+                if (isSearchOpen) setSearchQuery("");
+              }}
+            />
+          </Tooltip>
+
           {/* Pin / Unpin Button */}
           <Tooltip label={isChatPinned?.(selectedChat._id) ? "Unpin Chat" : "Pin Chat"} placement="bottom">
             <IconButton
@@ -645,7 +757,7 @@ const SingleChat = () => {
 
           {header.userObj && (
             <>
-              <Tooltip label="Real HD Voice Call" placement="bottom">
+              <Tooltip label="HD Voice Call" placement="bottom">
                 <IconButton
                   icon={<PhoneIcon />}
                   size="sm"
@@ -655,7 +767,7 @@ const SingleChat = () => {
                   onClick={() => startCall(header.userObj, "audio", selectedChat._id)}
                 />
               </Tooltip>
-              <Tooltip label="Real HD Video Call" placement="bottom">
+              <Tooltip label="HD Video Call" placement="bottom">
                 <IconButton
                   icon={<span style={{ fontSize: "16px" }}>📹</span>}
                   size="sm"
@@ -676,8 +788,165 @@ const SingleChat = () => {
               </ProfileModal>
             </>
           )}
+
+          {/* Chat More Options Menu */}
+          <Menu placement="bottom-end">
+            <MenuButton
+              as={IconButton}
+              icon={<span style={{ fontSize: "18px" }}>⋮</span>}
+              size="sm"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+            />
+            <MenuList bg="var(--bg-menu)" borderColor="var(--color-border)" color="var(--text-primary)" zIndex={3000}>
+              <MenuItem
+                icon={<span>⏳</span>}
+                bg="transparent"
+                _hover={{ bg: "var(--bg-hover)" }}
+                onClick={() => setDisappearingModal(true)}
+              >
+                Disappearing Messages
+              </MenuItem>
+              <MenuItem
+                icon={<span>🔍</span>}
+                bg="transparent"
+                _hover={{ bg: "var(--bg-hover)" }}
+                onClick={() => setIsSearchOpen(true)}
+              >
+                Search Messages
+              </MenuItem>
+              <MenuDivider borderColor="var(--color-border)" />
+              <MenuItem
+                icon={<span>⚠️</span>}
+                bg="transparent"
+                _hover={{ bg: "var(--bg-hover)" }}
+                color="#ffb74d"
+                onClick={() => setReportTarget(header.userObj || selectedChat)}
+              >
+                Report Chat
+              </MenuItem>
+            </MenuList>
+          </Menu>
         </Box>
       </Box>
+
+      {/* In-Chat Search Bar Overlay */}
+      {isSearchOpen && (
+        <Flex
+          bg="var(--bg-header)"
+          p={2.5}
+          borderBottom="1px solid var(--color-border)"
+          align="center"
+          gap={2}
+          zIndex={5}
+          animation="fadeIn 0.2s ease"
+        >
+          <InputGroup size="sm" flex="1">
+            <InputLeftElement pointerEvents="none">
+              <SearchIcon color="var(--text-secondary)" />
+            </InputLeftElement>
+            <Input
+              placeholder="Search in this chat..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchMatchIndex(0);
+              }}
+              bg="var(--bg-search)"
+              borderColor="var(--color-border)"
+              borderRadius="full"
+              autoFocus
+            />
+            {searchQuery && (
+              <InputRightElement>
+                <IconButton
+                  icon={<CloseIcon boxSize={2.5} />}
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setSearchQuery("")}
+                />
+              </InputRightElement>
+            )}
+          </InputGroup>
+
+          {searchMatches.length > 0 && (
+            <Flex align="center" gap={1}>
+              <Text fontSize="xs" color="var(--text-secondary)" whiteSpace="nowrap">
+                {searchMatchIndex + 1} of {searchMatches.length}
+              </Text>
+              <IconButton
+                icon={<ChevronUpIcon fontSize="18px" />}
+                size="xs"
+                variant="ghost"
+                onClick={handlePrevSearchMatch}
+                title="Previous Match"
+              />
+              <IconButton
+                icon={<ChevronDownIcon fontSize="18px" />}
+                size="xs"
+                variant="ghost"
+                onClick={handleNextSearchMatch}
+                title="Next Match"
+              />
+            </Flex>
+          )}
+
+          {searchQuery && searchMatches.length === 0 && (
+            <Text fontSize="xs" color="var(--text-muted)" whiteSpace="nowrap">
+              No results
+            </Text>
+          )}
+
+          <IconButton
+            icon={<CloseIcon boxSize={3} />}
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setIsSearchOpen(false);
+              setSearchQuery("");
+            }}
+          />
+        </Flex>
+      )}
+
+      {/* Pinned Message Sticky Banner */}
+      {selectedChat.pinnedMessage && (
+        <Flex
+          bg="var(--bg-header)"
+          px={4}
+          py={2}
+          borderBottom="1px solid var(--color-border)"
+          align="center"
+          justify="space-between"
+          cursor="pointer"
+          _hover={{ bg: "var(--bg-hover)" }}
+          onClick={() => scrollToMessage(selectedChat.pinnedMessage._id)}
+          zIndex={4}
+        >
+          <Flex align="center" gap={3} overflow="hidden">
+            <Text fontSize="md">📌</Text>
+            <Box overflow="hidden">
+              <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)" lineHeight="1.1">
+                Pinned Message • {selectedChat.pinnedMessage.sender?.name || "Sender"}
+              </Text>
+              <Text fontSize="xs" color="var(--text-secondary)" noOfLines={1}>
+                {selectedChat.pinnedMessage.content || "Attachment"}
+              </Text>
+            </Box>
+          </Flex>
+          <IconButton
+            icon={<CloseIcon boxSize={2.5} />}
+            size="xs"
+            variant="ghost"
+            title="Unpin Message"
+            onClick={(e) => {
+              e.stopPropagation();
+              unpinChatMessage(selectedChat._id);
+            }}
+          />
+        </Flex>
+      )}
 
       {/* Messages Scroll Area */}
       <Box flex="1" overflowY="auto" p={4} display="flex" flexDirection="column" gap={2.5}>
@@ -685,26 +954,30 @@ const SingleChat = () => {
           TODAY
         </Box>
 
-        {activeMessages.map((msg) => {
+        {activeMessages.map((msg, index) => {
           const isMe = msg.sender?._id === user?._id;
           const showHoverReactions = hoveredMsgId === msg._id;
           const category = getFileCategory(msg.fileType, msg.fileName || msg.content);
           const hasFileUrl = Boolean(msg.fileUrl);
+          const isStarred = Array.isArray(msg.isStarredBy) && msg.isStarredBy.includes(user?._id);
+          const isSearchMatch = searchMatches.includes(index);
 
           return (
             <Box
               key={msg._id}
+              ref={(el) => (messageRefs.current[msg._id] = el)}
               display="flex"
               flexDirection="column"
               alignItems={isMe ? "flex-end" : "flex-start"}
               position="relative"
               onMouseEnter={() => setHoveredMsgId(msg._id)}
               onMouseLeave={() => setHoveredMsgId(null)}
+              className={isSearchMatch ? "search-highlight-row" : ""}
             >
               {/* Floating Reaction & Action Bar on Hover */}
               {showHoverReactions && !msg.isDeleted && (
                 <Box className="reaction-bar">
-                  {["👍", "❤️", "🔥", "😂", "👏", "💩"].map((emoji) => (
+                  {["👍", "❤️", "🔥", "😂", "👏", "🎉"].map((emoji) => (
                     <button
                       key={emoji}
                       className="reaction-btn"
@@ -715,7 +988,28 @@ const SingleChat = () => {
                   ))}
                   <button
                     className="reaction-btn"
-                    title="Save to Saved Messages 🔖"
+                    title="Reply / Quote 💬"
+                    onClick={() => setReplyingTo(msg)}
+                  >
+                    💬
+                  </button>
+                  <button
+                    className="reaction-btn"
+                    title={isStarred ? "Unstar Message ⭐" : "Star Message ⭐"}
+                    onClick={() => toggleStarMessage(selectedChat._id, msg._id)}
+                  >
+                    {isStarred ? "★" : "☆"}
+                  </button>
+                  <button
+                    className="reaction-btn"
+                    title="Forward Message ↗️"
+                    onClick={() => setForwardModal({ isOpen: true, msg })}
+                  >
+                    ↗️
+                  </button>
+                  <button
+                    className="reaction-btn"
+                    title="Save to Cloud 🔖"
                     onClick={() => saveToSavedMessages?.(msg)}
                   >
                     🔖
@@ -750,11 +1044,33 @@ const SingleChat = () => {
                   </Box>
                 ) : (
                   <>
-                    {msg.forwardedFrom && (
+                    {/* Forwarded Header */}
+                    {msg.isForwarded && (
                       <Text fontSize="11px" fontWeight="600" color="var(--color-primary)" mb={1} display="flex" alignItems="center" gap={1}>
-                        <span>↩</span>
-                        <span>Forwarded from {msg.forwardedFrom.senderName}</span>
+                        <span>↗️ Forwarded</span>
+                        {msg.forwardedFrom && <span>from {msg.forwardedFrom}</span>}
                       </Text>
+                    )}
+
+                    {/* Quoted Message Box */}
+                    {msg.replyTo && (
+                      <Box
+                        p={2}
+                        mb={1.5}
+                        borderRadius="md"
+                        bg="rgba(0,0,0,0.18)"
+                        borderLeft="3px solid var(--color-primary)"
+                        cursor="pointer"
+                        _hover={{ opacity: 0.85 }}
+                        onClick={() => scrollToMessage(msg.replyTo._id)}
+                      >
+                        <Text fontSize="11px" fontWeight="bold" color="var(--color-primary)">
+                          {msg.replyTo.sender?.name || "Reply"}
+                        </Text>
+                        <Text fontSize="xs" color="var(--text-primary)" noOfLines={1}>
+                          {msg.replyTo.content || "Attachment"}
+                        </Text>
+                      </Box>
                     )}
 
                     {!isMe && selectedChat.isGroupChat && (
@@ -763,396 +1079,357 @@ const SingleChat = () => {
                       </Text>
                     )}
 
-                {/* --- RENDER IMAGE ATTACHMENT --- */}
-                {msg.type === "image" && hasFileUrl ? (
-                  <Box mb={1} position="relative" group="true">
-                    <Box position="relative" display="inline-block" overflow="hidden" borderRadius="12px">
-                      <Image
-                        src={msg.fileUrl}
-                        alt="Photo Attachment"
-                        maxW="280px"
-                        maxH="300px"
-                        objectFit="cover"
-                        borderRadius="12px"
-                        cursor="pointer"
-                        transition="transform 0.2s ease"
-                        _hover={{ transform: "scale(1.02)" }}
-                        onClick={() => {
-                          setPreviewImage(msg.fileUrl);
-                          onImageOpen();
-                        }}
-                      />
-                    </Box>
-                    {msg.content && !msg.content.startsWith("📷 Photo") && (
-                      <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
-                        {msg.content}
-                      </Text>
-                    )}
-                  </Box>
-                ) : msg.type === "video" && hasFileUrl ? (
-                  /* --- RENDER VIDEO ATTACHMENT --- */
-                  <Box mb={1}>
-                    <Box position="relative" maxW="290px" borderRadius="12px" overflow="hidden">
-                      <video
-                        controls
-                        src={msg.fileUrl}
-                        style={{ width: "100%", maxHeight: "280px", borderRadius: "12px", background: "#000" }}
-                      />
-                    </Box>
-                    {msg.content && !msg.content.startsWith("🎥 Video") && (
-                      <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
-                        {msg.content}
-                      </Text>
-                    )}
-                  </Box>
-                ) : msg.type === "voice" ? (
-                  /* --- RENDER VOICE NOTE WITH CUSTOM AUDIO PLAYER --- */
-                  <Box display="flex" flexDirection="column" gap={1}>
-                    <VoicePlayer audioUrl={msg.audioUrl || msg.fileUrl} fileName={msg.fileName} isMe={isMe} />
-                    {msg.content && !msg.content.startsWith("🎤 Voice Note") && (
-                      <Text fontSize="xs" mt={0.5} opacity={0.85} whiteSpace="pre-wrap">
-                        {msg.content}
-                      </Text>
-                    )}
-                  </Box>
-                ) : msg.type === "poll" && msg.pollData ? (
-                  /* --- RENDER ADVANCED INTERACTIVE POLL CARD --- */
-                  <Box minW="270px" maxW="330px" py={1}>
-                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                      <Box display="flex" alignItems="center" gap={2}>
-                        <Text fontSize="md">📊</Text>
-                        <Text fontWeight="bold" fontSize="sm" color="var(--text-primary)">
-                          {msg.pollData.question}
-                        </Text>
-                      </Box>
-                      {msg.pollData.settings?.isQuizMode && (
-                        <Badge colorScheme="purple" fontSize="9px" borderRadius="6px" px={2}>
-                          🎯 QUIZ
-                        </Badge>
-                      )}
-                    </Box>
-
-                    <Box display="flex" flexDirection="column" gap={2}>
-                      {(() => {
-                        const settings = msg.pollData.settings || {};
-                        const totalVotes = msg.pollData.options.reduce(
-                          (acc, opt) => acc + (opt.voters?.length || 0),
-                          0
-                        );
-                        const hasUserVotedInPoll = msg.pollData.options.some((opt) =>
-                          (opt.voters || []).some(
-                            (v) => (typeof v === "object" ? v.userId : v) === user?._id
-                          )
-                        );
-                        const isExpired = settings.expiresAt && new Date(settings.expiresAt) < new Date();
-                        const isResultsHidden = settings.hideResults && !hasUserVotedInPoll && !isExpired;
-                        const isRevotingDisabled = settings.allowRevoting === false && hasUserVotedInPoll;
-
-                        return msg.pollData.options.map((opt) => {
-                          const voteCount = opt.voters?.length || 0;
-                          const percent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
-                          const hasVoted = opt.voters?.some(
-                            (v) => (typeof v === "object" ? v.userId : v) === user?._id
-                          );
-                          const isQuizCorrect = settings.isQuizMode && opt.isCorrect;
-                          const isQuizUserChoice = settings.isQuizMode && hasVoted;
-
-                          let bgStyle = hasVoted ? "rgba(249, 115, 22, 0.15)" : "var(--bg-search)";
-                          let borderStyle = hasVoted ? "1px solid var(--color-primary)" : "1px solid var(--color-border)";
-
-                          if (settings.isQuizMode && hasUserVotedInPoll) {
-                            if (isQuizCorrect) {
-                              bgStyle = "rgba(34, 197, 94, 0.2)";
-                              borderStyle = "1px solid #22c55e";
-                            } else if (isQuizUserChoice && !isQuizCorrect) {
-                              bgStyle = "rgba(239, 68, 68, 0.2)";
-                              borderStyle = "1px solid #ef4444";
+                    {/* --- RENDER IMAGE ATTACHMENT --- */}
+                    {msg.type === "image" && hasFileUrl ? (
+                      <Box mb={1} position="relative">
+                        <Box position="relative" display="inline-block" overflow="hidden" borderRadius="12px">
+                          <Image
+                            src={msg.fileUrl}
+                            alt="Photo Attachment"
+                            maxW="280px"
+                            maxH="300px"
+                            objectFit="cover"
+                            borderRadius="12px"
+                            cursor="pointer"
+                            transition="transform 0.2s ease"
+                            _hover={{ transform: "scale(1.02)" }}
+                            onClick={() =>
+                              setLightboxData({
+                                isOpen: true,
+                                url: msg.fileUrl,
+                                type: "image",
+                                name: msg.fileName || "Photo",
+                              })
                             }
-                          }
+                          />
+                        </Box>
+                        {msg.content && !msg.content.startsWith("📷 Photo") && (
+                          <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
+                            {msg.content}
+                          </Text>
+                        )}
+                      </Box>
+                    ) : msg.type === "video" && hasFileUrl ? (
+                      /* --- RENDER VIDEO ATTACHMENT --- */
+                      <Box mb={1}>
+                        <Box position="relative" maxW="290px" borderRadius="12px" overflow="hidden">
+                          <video
+                            controls
+                            src={msg.fileUrl}
+                            style={{ width: "100%", maxHeight: "280px", borderRadius: "12px", background: "#000" }}
+                            onClick={(e) => {
+                              if (e.detail === 2) {
+                                setLightboxData({
+                                  isOpen: true,
+                                  url: msg.fileUrl,
+                                  type: "video",
+                                  name: msg.fileName || "Video",
+                                });
+                              }
+                            }}
+                          />
+                        </Box>
+                        {msg.content && !msg.content.startsWith("🎥 Video") && (
+                          <Text fontSize="sm" mt={1.5} whiteSpace="pre-wrap">
+                            {msg.content}
+                          </Text>
+                        )}
+                      </Box>
+                    ) : msg.type === "voice" ? (
+                      /* --- RENDER VOICE NOTE WITH CUSTOM AUDIO PLAYER --- */
+                      <Box display="flex" flexDirection="column" gap={1}>
+                        <VoicePlayer audioUrl={msg.audioUrl || msg.fileUrl} fileName={msg.fileName} isMe={isMe} />
+                        {msg.content && !msg.content.startsWith("🎤 Voice Note") && (
+                          <Text fontSize="xs" mt={0.5} opacity={0.85} whiteSpace="pre-wrap">
+                            {msg.content}
+                          </Text>
+                        )}
+                      </Box>
+                    ) : msg.type === "poll" && msg.pollData ? (
+                      /* --- RENDER ADVANCED INTERACTIVE POLL CARD --- */
+                      <Box minW="270px" maxW="330px" py={1}>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                          <Box display="flex" alignItems="center" gap={2}>
+                            <Text fontSize="md">📊</Text>
+                            <Text fontWeight="bold" fontSize="sm" color="var(--text-primary)">
+                              {msg.pollData.question}
+                            </Text>
+                          </Box>
+                          {msg.pollData.settings?.isQuizMode && (
+                            <Badge colorScheme="purple" fontSize="9px" borderRadius="6px" px={2}>
+                              🎯 QUIZ
+                            </Badge>
+                          )}
+                        </Box>
 
-                          return (
-                            <Box
-                              key={opt.id}
-                              onClick={() => {
-                                if (isRevotingDisabled && !hasVoted) return;
-                                if (!isExpired) {
-                                  votePoll(selectedChat._id, msg._id, opt.id);
+                        <Box display="flex" flexDirection="column" gap={2}>
+                          {(() => {
+                            const settings = msg.pollData.settings || {};
+                            const totalVotes = msg.pollData.options.reduce(
+                              (acc, opt) => acc + (opt.voters?.length || 0),
+                              0
+                            );
+                            const hasUserVotedInPoll = msg.pollData.options.some((opt) =>
+                              (opt.voters || []).some(
+                                (v) => (typeof v === "object" ? v.userId : v) === user?._id
+                              )
+                            );
+                            const isExpired = settings.expiresAt && new Date(settings.expiresAt) < new Date();
+                            const isResultsHidden = settings.hideResults && !hasUserVotedInPoll && !isExpired;
+                            const isRevotingDisabled = settings.allowRevoting === false && hasUserVotedInPoll;
+
+                            return msg.pollData.options.map((opt) => {
+                              const voteCount = opt.voters?.length || 0;
+                              const percent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+                              const hasVoted = opt.voters?.some(
+                                (v) => (typeof v === "object" ? v.userId : v) === user?._id
+                              );
+                              const isQuizCorrect = settings.isQuizMode && opt.isCorrect;
+                              const isQuizUserChoice = settings.isQuizMode && hasVoted;
+
+                              let bgStyle = hasVoted ? "rgba(249, 115, 22, 0.15)" : "var(--bg-search)";
+                              let borderStyle = hasVoted ? "1px solid var(--color-primary)" : "1px solid var(--color-border)";
+
+                              if (settings.isQuizMode && hasUserVotedInPoll) {
+                                if (isQuizCorrect) {
+                                  bgStyle = "rgba(34, 197, 94, 0.2)";
+                                  borderStyle = "1px solid #22c55e";
+                                } else if (isQuizUserChoice && !isQuizCorrect) {
+                                  bgStyle = "rgba(239, 68, 68, 0.2)";
+                                  borderStyle = "1px solid #ef4444";
+                                }
+                              }
+
+                              return (
+                                <Box
+                                  key={opt.id}
+                                  onClick={() => {
+                                    if (isRevotingDisabled && !hasVoted) return;
+                                    if (!isExpired) {
+                                      votePoll(selectedChat._id, msg._id, opt.id);
+                                    }
+                                  }}
+                                  p={2.5}
+                                  borderRadius="12px"
+                                  bg={bgStyle}
+                                  border={borderStyle}
+                                  cursor={isExpired || isRevotingDisabled ? "default" : "pointer"}
+                                  position="relative"
+                                  overflow="hidden"
+                                  transition="all 0.2s ease"
+                                  _hover={!isExpired && !isRevotingDisabled ? { transform: "scale(1.01)" } : {}}
+                                >
+                                  {/* Animated Progress Bar */}
+                                  {!isResultsHidden && (
+                                    <Box
+                                      position="absolute"
+                                      top="0"
+                                      left="0"
+                                      bottom="0"
+                                      w={`${percent}%`}
+                                      bg={
+                                        settings.isQuizMode && isQuizCorrect
+                                          ? "rgba(34, 197, 94, 0.3)"
+                                          : hasVoted
+                                          ? "rgba(249, 115, 22, 0.3)"
+                                          : "rgba(255, 255, 255, 0.08)"
+                                      }
+                                      transition="width 0.4s ease"
+                                      pointerEvents="none"
+                                    />
+                                  )}
+
+                                  <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    position="relative"
+                                    zIndex="1"
+                                  >
+                                    <Box display="flex" alignItems="center" gap={2.5}>
+                                      <Box
+                                        w="16px"
+                                        h="16px"
+                                        borderRadius={settings.allowMultiple ? "4px" : "50%"}
+                                        border={
+                                          hasVoted
+                                            ? "5px solid var(--color-primary)"
+                                            : "2px solid var(--text-secondary)"
+                                        }
+                                        bg={hasVoted ? "white" : "transparent"}
+                                      />
+                                      <Text fontSize="sm" fontWeight={hasVoted ? "bold" : "normal"}>
+                                        {opt.text}
+                                      </Text>
+                                      {settings.isQuizMode && hasUserVotedInPoll && isQuizCorrect && (
+                                        <Text fontSize="xs">🎉 Correct</Text>
+                                      )}
+                                      {settings.isQuizMode && hasUserVotedInPoll && isQuizUserChoice && !isQuizCorrect && (
+                                        <Text fontSize="xs">❌</Text>
+                                      )}
+                                    </Box>
+
+                                    <Text fontSize="xs" fontWeight="bold" opacity={0.9}>
+                                      {isResultsHidden ? "• • •" : `${percent}% (${voteCount})`}
+                                    </Text>
+                                  </Box>
+
+                                  {/* Voter Avatars */}
+                                  {(settings.voterPrivacyMode === "public" ||
+                                    (settings.voterPrivacyMode === "creator_only" && msg.sender?._id === user?._id)) &&
+                                    opt.voters?.length > 0 && (
+                                      <Box display="flex" alignItems="center" gap={1} mt={1.5} pl={6}>
+                                        {opt.voters.slice(0, 4).map((voter, vIdx) => (
+                                          <Avatar
+                                            key={vIdx}
+                                            size="2xs"
+                                            name={typeof voter === "object" ? voter.name : "User"}
+                                            src={typeof voter === "object" ? voter.pic : ""}
+                                          />
+                                        ))}
+                                        {opt.voters.length > 4 && (
+                                          <Text fontSize="10px" color="var(--text-secondary)">
+                                            +{opt.voters.length - 4}
+                                          </Text>
+                                        )}
+                                      </Box>
+                                    )}
+                                </Box>
+                              );
+                            });
+                          })()}
+                        </Box>
+
+                        {/* Inline Add Option */}
+                        {msg.pollData.settings?.allowAddingOptions && (
+                          <Box mt={2.5} display="flex" gap={2}>
+                            <Input
+                              placeholder="Suggest a new option..."
+                              size="xs"
+                              borderRadius="10px"
+                              bg="var(--bg-search)"
+                              border="1px solid var(--color-border)"
+                              value={newOptionInputs[msg._id] || ""}
+                              onChange={(e) =>
+                                setNewOptionInputs((prev) => ({ ...prev, [msg._id]: e.target.value }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && newOptionInputs[msg._id]?.trim()) {
+                                  addPollOption(selectedChat._id, msg._id, newOptionInputs[msg._id]);
+                                  setNewOptionInputs((prev) => ({ ...prev, [msg._id]: "" }));
                                 }
                               }}
-                              p={2.5}
-                              borderRadius="12px"
-                              bg={bgStyle}
-                              border={borderStyle}
-                              cursor={isExpired || isRevotingDisabled ? "default" : "pointer"}
-                              position="relative"
-                              overflow="hidden"
-                              transition="all 0.2s ease"
-                              _hover={!isExpired && !isRevotingDisabled ? { transform: "scale(1.01)" } : {}}
+                            />
+                            <Button
+                              size="xs"
+                              colorScheme="orange"
+                              variant="solid"
+                              borderRadius="10px"
+                              onClick={() => {
+                                if (newOptionInputs[msg._id]?.trim()) {
+                                  addPollOption(selectedChat._id, msg._id, newOptionInputs[msg._id]);
+                                  setNewOptionInputs((prev) => ({ ...prev, [msg._id]: "" }));
+                                }
+                              }}
                             >
-                              {/* Animated Progress Bar */}
-                              {!isResultsHidden && (
-                                <Box
-                                  position="absolute"
-                                  top="0"
-                                  left="0"
-                                  bottom="0"
-                                  w={`${percent}%`}
-                                  bg={
-                                    settings.isQuizMode && isQuizCorrect
-                                      ? "rgba(34, 197, 94, 0.3)"
-                                      : hasVoted
-                                      ? "rgba(249, 115, 22, 0.3)"
-                                      : "rgba(255, 255, 255, 0.08)"
-                                  }
-                                  transition="width 0.4s ease"
-                                  pointerEvents="none"
-                                />
-                              )}
-
-                              <Box
-                                display="flex"
-                                alignItems="center"
-                                justifyContent="space-between"
-                                position="relative"
-                                zIndex="1"
-                              >
-                                <Box display="flex" alignItems="center" gap={2.5}>
-                                  <Box
-                                    w="16px"
-                                    h="16px"
-                                    borderRadius={settings.allowMultiple ? "4px" : "50%"}
-                                    border={
-                                      hasVoted
-                                        ? "5px solid var(--color-primary)"
-                                        : "2px solid var(--text-secondary)"
-                                    }
-                                    bg={hasVoted ? "white" : "transparent"}
-                                  />
-                                  <Text fontSize="sm" fontWeight={hasVoted ? "bold" : "normal"}>
-                                    {opt.text}
-                                  </Text>
-                                  {settings.isQuizMode && hasUserVotedInPoll && isQuizCorrect && (
-                                    <Text fontSize="xs">🎉 Correct</Text>
-                                  )}
-                                  {settings.isQuizMode && hasUserVotedInPoll && isQuizUserChoice && !isQuizCorrect && (
-                                    <Text fontSize="xs">❌</Text>
-                                  )}
-                                </Box>
-
-                                <Text fontSize="xs" fontWeight="bold" opacity={0.9}>
-                                  {isResultsHidden ? "• • •" : `${percent}% (${voteCount})`}
-                                </Text>
-                              </Box>
-
-                              {/* Show Voter Avatars based on Privacy Settings */}
-                              {(settings.voterPrivacyMode === "public" ||
-                                (settings.voterPrivacyMode === "creator_only" && msg.sender?._id === user?._id)) &&
-                                opt.voters?.length > 0 && (
-                                  <Box display="flex" alignItems="center" gap={1} mt={1.5} pl={6}>
-                                    {opt.voters.slice(0, 4).map((voter, vIdx) => (
-                                      <Avatar
-                                        key={vIdx}
-                                        size="2xs"
-                                        name={typeof voter === "object" ? voter.name : "User"}
-                                        src={typeof voter === "object" ? voter.pic : ""}
-                                      />
-                                    ))}
-                                    {opt.voters.length > 4 && (
-                                      <Text fontSize="10px" color="var(--text-secondary)">
-                                        +{opt.voters.length - 4}
-                                      </Text>
-                                    )}
-                                  </Box>
-                                )}
-                            </Box>
-                          );
-                        });
-                      })()}
-                    </Box>
-
-                    {/* Quiz Explanation Card (revealed after voting) */}
-                    {msg.pollData.settings?.isQuizMode &&
-                      msg.pollData.options.some((o) => (o.voters || []).some((v) => (typeof v === "object" ? v.userId : v) === user?._id)) &&
-                      msg.pollData.settings?.quizExplanation && (
-                        <Box mt={2.5} p={2.5} bg="rgba(59, 130, 246, 0.12)" borderRadius="12px" border="1px solid rgba(59, 130, 246, 0.3)">
-                          <Text fontSize="xs" fontWeight="bold" color="#3b82f6" mb={0.5}>
-                            💡 Explanation:
-                          </Text>
-                          <Text fontSize="xs" color="var(--text-primary)" lineHeight="1.3">
-                            {msg.pollData.settings.quizExplanation}
-                          </Text>
+                              Add
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
+                    ) : (msg.type === "location" || msg.type === "live_location") && msg.locationData ? (
+                      /* --- RENDER LOCATION / LIVE LOCATION CARD --- */
+                      <Box minW="260px" maxW="300px" py={1}>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                          <Box display="flex" alignItems="center" gap={1.5}>
+                            <Text fontSize="sm">{msg.type === "live_location" ? "🛰️" : "📍"}</Text>
+                            <Text fontWeight="bold" fontSize="xs" color="var(--color-primary)">
+                              {msg.type === "live_location" ? "Live Location" : "Shared Location"}
+                            </Text>
+                          </Box>
+                          {msg.type === "live_location" && (
+                            <Badge
+                              colorScheme={msg.locationData.isLive ? "green" : "gray"}
+                              borderRadius="6px"
+                              fontSize="9px"
+                              px={1.5}
+                            >
+                              {msg.locationData.isLive ? "LIVE NOW" : "ENDED"}
+                            </Badge>
+                          )}
                         </Box>
-                      )}
 
-                    {/* Inline "+ Add Option" Input if allowAddingOptions is ON */}
-                    {msg.pollData.settings?.allowAddingOptions && (
-                      <Box mt={2.5} display="flex" gap={2}>
-                        <Input
-                          placeholder="Suggest a new option..."
-                          size="xs"
-                          borderRadius="10px"
-                          bg="var(--bg-search)"
-                          border="1px solid var(--color-border)"
-                          value={newOptionInputs[msg._id] || ""}
-                          onChange={(e) =>
-                            setNewOptionInputs((prev) => ({ ...prev, [msg._id]: e.target.value }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && newOptionInputs[msg._id]?.trim()) {
-                              addPollOption(selectedChat._id, msg._id, newOptionInputs[msg._id]);
-                              setNewOptionInputs((prev) => ({ ...prev, [msg._id]: "" }));
-                            }
-                          }}
-                        />
-                        <Button
-                          size="xs"
-                          colorScheme="orange"
-                          variant="solid"
-                          borderRadius="10px"
-                          onClick={() => {
-                            if (newOptionInputs[msg._id]?.trim()) {
-                              addPollOption(selectedChat._id, msg._id, newOptionInputs[msg._id]);
-                              setNewOptionInputs((prev) => ({ ...prev, [msg._id]: "" }));
-                            }
-                          }}
-                        >
-                          Add
-                        </Button>
+                        <Box w="100%" h="130px" borderRadius="12px" overflow="hidden" position="relative" bg="#1e293b" mb={2}>
+                          <iframe
+                            title="Map View"
+                            width="100%"
+                            height="130"
+                            frameBorder="0"
+                            scrolling="no"
+                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${msg.locationData.lng - 0.005}%2C${msg.locationData.lat - 0.005}%2C${msg.locationData.lng + 0.005}%2C${msg.locationData.lat + 0.005}&layer=mapnik&marker=${msg.locationData.lat}%2C${msg.locationData.lng}`}
+                            style={{ filter: "brightness(0.9) contrast(1.1)", pointerEvents: "none" }}
+                          />
+                        </Box>
+
+                        <Text fontSize="xs" fontWeight="600" mb={1} whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis">
+                          {msg.locationData.name || `Lat: ${msg.locationData.lat.toFixed(4)}, Lng: ${msg.locationData.lng.toFixed(4)}`}
+                        </Text>
+
+                        <Box display="flex" gap={2} mt={2}>
+                          <Button
+                            as="a"
+                            href={msg.locationData.mapUrl || `https://www.openstreetmap.org/?mlat=${msg.locationData.lat}&mlon=${msg.locationData.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="xs"
+                            variant="solid"
+                            bg="var(--bg-search)"
+                            color="var(--text-primary)"
+                            _hover={{ bg: "var(--bg-hover)" }}
+                            flex="1"
+                          >
+                            🗺️ Open Map
+                          </Button>
+
+                          {msg.type === "live_location" && msg.locationData.isLive && msg.sender?._id === user?._id && (
+                            <Button
+                              size="xs"
+                              colorScheme="red"
+                              variant="outline"
+                              onClick={() => stopLiveLocation(selectedChat._id, msg._id)}
+                            >
+                              ⏹️ Stop
+                            </Button>
+                          )}
+                        </Box>
                       </Box>
+                    ) : msg.type === "file" || msg.fileName ? (
+                      /* --- RENDER FILE / PDF / DOCUMENT / ZIP CARD --- */
+                      <Box mb={1}>
+                        <Box className="file-attachment-card">
+                          <Box className={`file-icon-badge ${getFileBadgeClass(category)}`}>
+                            {getFileCategoryIcon(category)}
+                          </Box>
+                          <Box className="file-info">
+                            <Text className="file-name" title={msg.fileName || msg.content}>
+                              {msg.fileName || msg.content}
+                            </Text>
+                            <Text className="file-size">
+                              {formatBytes(msg.fileSize)} • {category.toUpperCase()}
+                            </Text>
+                          </Box>
+                        </Box>
+                        {msg.content && msg.content !== msg.fileName && !msg.content.startsWith("📄") && (
+                          <Box mt={1}>
+                            <FormattedMarkdown content={msg.content} />
+                          </Box>
+                        )}
+                      </Box>
+                    ) : (
+                      /* --- RENDER REGULAR TEXT MESSAGE --- */
+                      <FormattedMarkdown content={msg.content} />
                     )}
-
-                    {/* Poll Card Footer Badges */}
-                    <Box
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      mt={2.5}
-                      pt={1.5}
-                      borderTop="1px solid var(--color-border)"
-                      fontSize="10px"
-                      color="var(--text-muted)"
-                    >
-                      <span>
-                        {msg.pollData.options.reduce((acc, opt) => acc + (opt.voters?.length || 0), 0)} votes
-                        {msg.pollData.settings?.voterPrivacyMode === "anonymous"
-                          ? " • 🔒 Anonymous"
-                          : msg.pollData.settings?.voterPrivacyMode === "creator_only"
-                          ? " • 🔒 Visible to creator"
-                          : ""}
-                        {msg.pollData.settings?.allowMultiple
-                          ? msg.pollData.settings?.maxChoices && msg.pollData.settings?.maxChoices !== "unlimited"
-                            ? ` • Select up to ${msg.pollData.settings.maxChoices}`
-                            : " • Multi-select"
-                          : ""}
-                      </span>
-
-                      {msg.pollData.settings?.expiresAt && (
-                        <Badge
-                          colorScheme={
-                            new Date(msg.pollData.settings.expiresAt) < new Date() ? "gray" : "green"
-                          }
-                          fontSize="9px"
-                          borderRadius="6px"
-                        >
-                          {new Date(msg.pollData.settings.expiresAt) < new Date() ? "Closed" : "Active"}
-                        </Badge>
-                      )}
-                    </Box>
-                  </Box>
-                ) : (msg.type === "location" || msg.type === "live_location") && msg.locationData ? (
-                  /* --- RENDER LOCATION / LIVE LOCATION CARD --- */
-                  <Box minW="260px" maxW="300px" py={1}>
-                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                      <Box display="flex" alignItems="center" gap={1.5}>
-                        <Text fontSize="sm">{msg.type === "live_location" ? "🛰️" : "📍"}</Text>
-                        <Text fontWeight="bold" fontSize="xs" color="var(--color-primary)">
-                          {msg.type === "live_location" ? "Live Location" : "Shared Location"}
-                        </Text>
-                      </Box>
-                      {msg.type === "live_location" && (
-                        <Badge
-                          colorScheme={msg.locationData.isLive ? "green" : "gray"}
-                          borderRadius="6px"
-                          fontSize="9px"
-                          px={1.5}
-                        >
-                          {msg.locationData.isLive ? "LIVE NOW" : "ENDED"}
-                        </Badge>
-                      )}
-                    </Box>
-
-                    {/* Interactive OpenStreetMap Embed Frame */}
-                    <Box w="100%" h="130px" borderRadius="12px" overflow="hidden" position="relative" bg="#1e293b" mb={2}>
-                      <iframe
-                        title="Map View"
-                        width="100%"
-                        height="130"
-                        frameBorder="0"
-                        scrolling="no"
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${msg.locationData.lng - 0.005}%2C${msg.locationData.lat - 0.005}%2C${msg.locationData.lng + 0.005}%2C${msg.locationData.lat + 0.005}&layer=mapnik&marker=${msg.locationData.lat}%2C${msg.locationData.lng}`}
-                        style={{ filter: "brightness(0.9) contrast(1.1)", pointerEvents: "none" }}
-                      />
-                    </Box>
-
-                    <Text fontSize="xs" fontWeight="600" mb={1} whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis">
-                      {msg.locationData.name || `Lat: ${msg.locationData.lat.toFixed(4)}, Lng: ${msg.locationData.lng.toFixed(4)}`}
-                    </Text>
-
-                    <Box display="flex" gap={2} mt={2}>
-                      <Button
-                        as="a"
-                        href={msg.locationData.mapUrl || `https://www.openstreetmap.org/?mlat=${msg.locationData.lat}&mlon=${msg.locationData.lng}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        size="xs"
-                        variant="solid"
-                        bg="var(--bg-search)"
-                        color="var(--text-primary)"
-                        _hover={{ bg: "var(--bg-hover)" }}
-                        flex="1"
-                      >
-                        🗺️ Open Map
-                      </Button>
-
-                      {msg.type === "live_location" && msg.locationData.isLive && msg.sender?._id === user?._id && (
-                        <Button
-                          size="xs"
-                          colorScheme="red"
-                          variant="outline"
-                          onClick={() => stopLiveLocation(selectedChat._id, msg._id)}
-                        >
-                          ⏹️ Stop
-                        </Button>
-                      )}
-                    </Box>
-                  </Box>
-                ) : msg.type === "file" || msg.fileName ? (
-                  /* --- RENDER FILE / PDF / DOCUMENT / ZIP CARD --- */
-                  <Box mb={1}>
-                    <Box className="file-attachment-card">
-                      <Box className={`file-icon-badge ${getFileBadgeClass(category)}`}>
-                        {getFileCategoryIcon(category)}
-                      </Box>
-                      <Box className="file-info">
-                        <Text className="file-name" title={msg.fileName || msg.content}>
-                          {msg.fileName || msg.content}
-                        </Text>
-                        <Text className="file-size">
-                          {formatBytes(msg.fileSize)} • {category.toUpperCase()}
-                        </Text>
-                      </Box>
-                    </Box>
-                    {msg.content && msg.content !== msg.fileName && !msg.content.startsWith("📄") && (
-                      <Box mt={1}>
-                        <FormattedMarkdown content={msg.content} />
-                      </Box>
-                    )}
-                  </Box>
-                ) : (
-                  /* --- RENDER REGULAR TEXT MESSAGE --- */
-                  <FormattedMarkdown content={msg.content} />
-                )}
-                </>
+                  </>
                 )}
 
                 {/* Reaction Badges */}
@@ -1177,8 +1454,18 @@ const SingleChat = () => {
                   </Box>
                 )}
 
-                {/* Meta Time & Checkmarks */}
+                {/* Meta Time, Star, Edited & Checkmarks */}
                 <Box className="message-meta">
+                  {msg.isEdited && (
+                    <Text as="span" fontSize="10px" opacity={0.8} mr={1}>
+                      (edited)
+                    </Text>
+                  )}
+                  {isStarred && (
+                    <Text as="span" color="#fbbf24" fontSize="10px" mr={1}>
+                      ★
+                    </Text>
+                  )}
                   <span>
                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </span>
@@ -1205,6 +1492,34 @@ const SingleChat = () => {
 
         <div ref={messagesEndRef} />
       </Box>
+
+      {/* Quoted Message Preview Bar (when replying) */}
+      {replyingTo && (
+        <Flex
+          bg="var(--bg-header)"
+          px={4}
+          py={2}
+          borderTop="1px solid var(--color-border)"
+          align="center"
+          justify="space-between"
+          borderLeft="4px solid var(--color-primary)"
+        >
+          <Box overflow="hidden">
+            <Text fontSize="xs" fontWeight="bold" color="var(--color-primary)">
+              Replying to {replyingTo.sender?.name || "Sender"}
+            </Text>
+            <Text fontSize="xs" color="var(--text-secondary)" noOfLines={1}>
+              {replyingTo.content || (replyingTo.type === "voice" ? "🎤 Voice Note" : "Attachment")}
+            </Text>
+          </Box>
+          <IconButton
+            icon={<CloseIcon boxSize={2.5} />}
+            size="xs"
+            variant="ghost"
+            onClick={() => setReplyingTo(null)}
+          />
+        </Flex>
+      )}
 
       {/* Input Toolbar */}
       <Box p={3} bg="var(--bg-header)" borderTop="1px solid var(--color-border)" display="flex" alignItems="center" gap={2}>
@@ -1234,7 +1549,7 @@ const SingleChat = () => {
           </PopoverContent>
         </Popover>
 
-        {/* File & Media Attachment Button with Expanded Rich Menu */}
+        {/* Attachment Button */}
         <input
           type="file"
           ref={fileInputRef}
@@ -1339,7 +1654,6 @@ const SingleChat = () => {
                 00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}s
               </Text>
               
-              {/* Dynamic Live Mic Spectrum Visualizer */}
               <Box display="flex" alignItems="center" gap="3px" h="24px" px={2}>
                 {audioLevels.map((lvl, idx) => (
                   <span
@@ -1466,15 +1780,37 @@ const SingleChat = () => {
         </ModalContent>
       </Modal>
 
-      {/* Image Lightbox Modal */}
-      <Modal isOpen={isImageOpen} onClose={onImageClose} size="xl" isCentered>
-        <ModalOverlay backdropFilter="blur(8px)" />
-        <ModalContent bg="transparent" boxShadow="none">
-          <ModalBody p={0} display="flex" justifyContent="center" alignItems="center">
-            <Image src={previewImage} maxH="85vh" maxW="90vw" borderRadius="lg" boxShadow="var(--shadow-xl)" />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+      {/* Fullscreen Media Lightbox Modal */}
+      <MediaLightboxModal
+        isOpen={lightboxData.isOpen}
+        onClose={() => setLightboxData({ isOpen: false, url: "", type: "image", name: "" })}
+        mediaUrl={lightboxData.url}
+        mediaType={lightboxData.type}
+        mediaName={lightboxData.name}
+      />
+
+      {/* Forward Modal */}
+      <ForwardModal
+        isOpen={forwardModal.isOpen}
+        onClose={() => setForwardModal({ isOpen: false, msg: null })}
+        messageToForward={forwardModal.msg}
+      />
+
+      {/* Edit Message Modal */}
+      <EditMessageModal
+        isOpen={editModal.isOpen}
+        onClose={() => setEditModal({ isOpen: false, msg: null })}
+        messageToEdit={editModal.msg}
+        chatId={selectedChat._id}
+      />
+
+      {/* Disappearing Messages Settings Modal */}
+      <DisappearingTimerModal
+        isOpen={disappearingModal}
+        onClose={() => setDisappearingModal(false)}
+        chatId={selectedChat._id}
+        currentTimer={selectedChat.disappearingTimer || 0}
+      />
 
       {/* Floating Custom Right-Click Context Menu */}
       {contextMenu.visible && (
@@ -1489,9 +1825,142 @@ const SingleChat = () => {
           zIndex="9999"
           py={1.5}
           px={1.5}
-          minW="180px"
+          minW="200px"
           backdropFilter="blur(12px)"
         >
+          {/* Reply / Quote Action */}
+          {contextMenu.msgObj && !contextMenu.msgObj.isDeleted && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                setReplyingTo(contextMenu.msgObj);
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>💬</span>
+              <span>Reply</span>
+            </Box>
+          )}
+
+          {/* Edit Message Option (Only for sent text messages) */}
+          {contextMenu.msgObj &&
+            contextMenu.msgObj.sender?._id === user?._id &&
+            contextMenu.msgObj.type === "text" &&
+            !contextMenu.msgObj.isDeleted && (
+              <Box
+                display="flex"
+                alignItems="center"
+                gap={2.5}
+                px={3}
+                py={2}
+                borderRadius="10px"
+                cursor="pointer"
+                color="var(--text-primary)"
+                fontSize="13px"
+                fontWeight="500"
+                _hover={{ bg: "var(--bg-hover)" }}
+                onClick={() => {
+                  setEditModal({ isOpen: true, msg: contextMenu.msgObj });
+                  setContextMenu((prev) => ({ ...prev, visible: false }));
+                }}
+              >
+                <span>✏️</span>
+                <span>Edit Message</span>
+              </Box>
+            )}
+
+          {/* Star / Unstar Option */}
+          {contextMenu.msgObj && !contextMenu.msgObj.isDeleted && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                toggleStarMessage(selectedChat._id, contextMenu.msgObj._id);
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>⭐</span>
+              <span>
+                {Array.isArray(contextMenu.msgObj.isStarredBy) && contextMenu.msgObj.isStarredBy.includes(user?._id)
+                  ? "Unstar Message"
+                  : "Star Message"}
+              </span>
+            </Box>
+          )}
+
+          {/* Pin Message Option */}
+          {contextMenu.msgObj && !contextMenu.msgObj.isDeleted && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                if (selectedChat.pinnedMessage?._id === contextMenu.msgObj._id) {
+                  unpinChatMessage(selectedChat._id);
+                } else {
+                  pinChatMessage(selectedChat._id, contextMenu.msgObj);
+                }
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>📌</span>
+              <span>
+                {selectedChat.pinnedMessage?._id === contextMenu.msgObj._id ? "Unpin from Top" : "Pin to Top"}
+              </span>
+            </Box>
+          )}
+
+          {/* Forward Message Option */}
+          {contextMenu.msgObj && !contextMenu.msgObj.isDeleted && (
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2.5}
+              px={3}
+              py={2}
+              borderRadius="10px"
+              cursor="pointer"
+              color="var(--text-primary)"
+              fontSize="13px"
+              fontWeight="500"
+              _hover={{ bg: "var(--bg-hover)" }}
+              onClick={() => {
+                setForwardModal({ isOpen: true, msg: contextMenu.msgObj });
+                setContextMenu((prev) => ({ ...prev, visible: false }));
+              }}
+            >
+              <span>↗️</span>
+              <span>Forward Message</span>
+            </Box>
+          )}
+
           {contextMenu.fileUrl && (
             <Box
               display="flex"
@@ -1554,7 +2023,7 @@ const SingleChat = () => {
               }}
             >
               <span>🔖</span>
-              <span>Save to Saved Messages</span>
+              <span>Save to Cloud</span>
             </Box>
           )}
 
@@ -1663,29 +2132,6 @@ const SingleChat = () => {
             <span>⚠️</span>
             <span>Report {header.userObj ? "User" : "Chat"}</span>
           </Box>
-
-          {contextMenu.fileUrl && (
-            <Box
-              display="flex"
-              alignItems="center"
-              gap={2.5}
-              px={3}
-              py={2}
-              borderRadius="10px"
-              cursor="pointer"
-              color="var(--text-primary)"
-              fontSize="13px"
-              fontWeight="500"
-              _hover={{ bg: "var(--bg-hover)" }}
-              onClick={() => {
-                navigator.clipboard.writeText(contextMenu.fileUrl);
-                setContextMenu((prev) => ({ ...prev, visible: false }));
-              }}
-            >
-              <span>🔗</span>
-              <span>Copy Link</span>
-            </Box>
-          )}
         </Box>
       )}
 
@@ -1696,7 +2142,8 @@ const SingleChat = () => {
         isGroupChat={Boolean(selectedChat?.isGroupChat)}
         onSendPoll={(pollData) => {
           if (selectedChat) {
-            sendMessage(selectedChat._id, `📊 ${pollData.question}`, "poll", pollData);
+            sendMessage(selectedChat._id, `📊 ${pollData.question}`, "poll", pollData, { replyTo: replyingTo });
+            setReplyingTo(null);
           }
         }}
       />
@@ -1711,8 +2158,10 @@ const SingleChat = () => {
               selectedChat._id,
               type === "live_location" ? "🛰️ Live Location" : `📍 ${locationData.name || "Location"}`,
               type,
-              locationData
+              locationData,
+              { replyTo: replyingTo }
             );
+            setReplyingTo(null);
           }
         }}
       />
@@ -1733,7 +2182,7 @@ const SingleChat = () => {
       >
         <ModalOverlay bg="rgba(0,0,0,0.65)" backdropFilter="blur(6px)" />
         <ModalContent
-          bg="var(--bg-modal)"
+          bg="var(--bg-card)"
           color="var(--text-primary)"
           borderRadius="18px"
           p={3}

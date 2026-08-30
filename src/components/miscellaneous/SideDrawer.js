@@ -57,6 +57,8 @@ function SideDrawer() {
     setActiveStatusUser,
     setIsFolderModalOpen,
     openSavedMessages,
+    isSoundEnabled,
+    toggleSound,
   } = ChatState();
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -279,6 +281,21 @@ function SideDrawer() {
               minW="auto"
             >
               {theme === "dark" ? <SunIcon color="#ffb74d" fontSize="18px" /> : <MoonIcon color="#ffffff" fontSize="18px" />}
+            </Button>
+          </Tooltip>
+
+          {/* Sound Effects Toggle */}
+          <Tooltip label={`Sound Effects: ${isSoundEnabled ? "On" : "Muted"}`} placement="bottom">
+            <Button
+              size="sm"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+              onClick={toggleSound}
+              px={{ base: 1.5, sm: 2 }}
+              minW="auto"
+            >
+              <span style={{ fontSize: "16px" }}>{isSoundEnabled ? "🔔" : "🔕"}</span>
             </Button>
           </Tooltip>
 

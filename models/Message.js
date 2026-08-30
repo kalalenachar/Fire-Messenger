@@ -32,6 +32,11 @@ const messageSchema = new mongoose.Schema(
     isForwarded: { type: Boolean, default: false },
     isBroadcast: { type: Boolean, default: false },
     replyTo: { type: mongoose.Schema.Types.Mixed },
+    isEdited: { type: Boolean, default: false },
+    editedAt: { type: Date },
+    isPinned: { type: Boolean, default: false },
+    isStarredBy: [{ type: String }],
+    expiresAt: { type: Date },
     createdAt: { type: Date, default: Date.now },
   },
   {

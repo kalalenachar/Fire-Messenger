@@ -26,6 +26,10 @@ const {
   addPollOptionDocument,
   updateLiveLocationDocument,
   stopLiveLocationDocument,
+  editMessageDocument,
+  toggleStarMessageDocument,
+  pinChatMessageDocument,
+  unpinChatMessageDocument,
 } = require("./controllers/messageController");
 
 // Load environment variables from .env if present
@@ -159,6 +163,53 @@ io.on("connection", (socket) => {
     const roomId = typeof chat === "string" ? chat : chat._id;
     if (roomId) {
       socket.in(roomId).emit("message received", newMessageReceived);
+    }
+  });
+
+  // Message Editing & Server DB Persistence
+  socket.on("edit message", async (data) => {
+    try {
+      const updated = await editMessageDocument(data);
+      if (updated && data.chatId) {
+        io.in(data.chatId).emit("message edited", { chatId: data.chatId, message: updated });
+      }
+    } catch (err) {
+      console.error("Error editing message in DB:", err);
+    }
+  });
+
+  // Message Starring & Server DB Persistence
+  socket.on("star message", async (data) => {
+    try {
+      const updated = await toggleStarMessageDocument(data);
+      if (updated && data.chatId) {
+        io.in(data.chatId).emit("message starred", { chatId: data.chatId, message: updated, userId: data.userId });
+      }
+    } catch (err) {
+      console.error("Error starring message in DB:", err);
+    }
+  });
+
+  // Chat Pinning Message & Server DB Persistence
+  socket.on("pin chat message", async (data) => {
+    try {
+      const chat = await pinChatMessageDocument(data);
+      if (chat && data.chatId) {
+        io.in(data.chatId).emit("message pinned", { chatId: data.chatId, pinnedMessage: data.message });
+      }
+    } catch (err) {
+      console.error("Error pinning chat message in DB:", err);
+    }
+  });
+
+  socket.on("unpin chat message", async (data) => {
+    try {
+      const chat = await unpinChatMessageDocument(data);
+      if (chat && data.chatId) {
+        io.in(data.chatId).emit("message unpinned", { chatId: data.chatId });
+      }
+    } catch (err) {
+      console.error("Error unpinning chat message in DB:", err);
     }
   });
 

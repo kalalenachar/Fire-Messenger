@@ -48,6 +48,10 @@ const saveMessageDocument = async (message) => {
       ? "📷 Photo"
       : savedMsg.type === "file"
       ? `📄 ${savedMsg.fileName || savedMsg.content || "File"}`
+      : savedMsg.type === "poll"
+      ? `📊 Poll: ${savedMsg.pollData?.question || "Question"}`
+      : savedMsg.type === "live_location"
+      ? "📍 Live Location"
       : savedMsg.content;
 
   await Chat.findByIdAndUpdate(chatId, {
@@ -60,6 +64,174 @@ const saveMessageDocument = async (message) => {
   });
 
   return savedMsg;
+};
+
+// @desc    Edit a message
+// @route   PUT /api/messages/edit
+const editMessage = async (req, res, io) => {
+  try {
+    const { messageId, chatId, newContent } = req.body;
+    const updatedMsg = await editMessageDocument({ messageId, chatId, newContent });
+    if (io && chatId) {
+      io.in(chatId).emit("message edited", { chatId, message: updatedMsg });
+    }
+    res.json({ success: true, message: updatedMsg });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const editMessageDocument = async ({ messageId, chatId, newContent }) => {
+  const msg = await Message.findById(messageId);
+  if (!msg) return null;
+
+  msg.content = newContent;
+  msg.isEdited = true;
+  msg.editedAt = new Date();
+  await msg.save();
+
+  // If this was the latest message in the chat, update chat preview as well
+  if (chatId) {
+    const chat = await Chat.findById(chatId);
+    if (chat && chat.latestMessage && chat.latestMessage._id === messageId) {
+      chat.latestMessage.content = newContent;
+      await chat.save();
+    }
+  }
+
+  return msg.toObject();
+};
+
+// @desc    Toggle Star/Bookmark on a message
+// @route   PUT /api/messages/star
+const toggleStarMessage = async (req, res, io) => {
+  try {
+    const { messageId, userId, chatId } = req.body;
+    const updatedMsg = await toggleStarMessageDocument({ messageId, userId, chatId });
+    if (io && chatId) {
+      io.in(chatId).emit("message starred", { chatId, message: updatedMsg, userId });
+    }
+    res.json({ success: true, message: updatedMsg });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const toggleStarMessageDocument = async ({ messageId, userId }) => {
+  const msg = await Message.findById(messageId);
+  if (!msg) return null;
+
+  let starList = Array.isArray(msg.isStarredBy) ? [...msg.isStarredBy] : [];
+  if (starList.includes(userId)) {
+    starList = starList.filter((id) => id !== userId);
+  } else {
+    starList.push(userId);
+  }
+
+  msg.isStarredBy = starList;
+  msg.markModified("isStarredBy");
+  await msg.save();
+  return msg.toObject();
+};
+
+// @desc    Pin a message in chat
+// @route   PUT /api/messages/pin
+const pinChatMessage = async (req, res, io) => {
+  try {
+    const { chatId, message } = req.body;
+    const chat = await pinChatMessageDocument({ chatId, message });
+    if (io && chatId) {
+      io.in(chatId).emit("message pinned", { chatId, pinnedMessage: message });
+    }
+    res.json({ success: true, chat });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const pinChatMessageDocument = async ({ chatId, message }) => {
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId,
+    { pinnedMessage: message },
+    { returnDocument: "after" }
+  ).lean();
+  return updatedChat;
+};
+
+// @desc    Unpin a message from chat
+// @route   PUT /api/messages/unpin
+const unpinChatMessage = async (req, res, io) => {
+  try {
+    const { chatId } = req.body;
+    const chat = await unpinChatMessageDocument({ chatId });
+    if (io && chatId) {
+      io.in(chatId).emit("message unpinned", { chatId });
+    }
+    res.json({ success: true, chat });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const unpinChatMessageDocument = async ({ chatId }) => {
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId,
+    { pinnedMessage: null },
+    { returnDocument: "after" }
+  ).lean();
+  return updatedChat;
+};
+
+// @desc    Forward message to multiple chats
+// @route   POST /api/messages/forward
+const forwardMessages = async (req, res, io) => {
+  try {
+    const { message, targetChatIds, senderUser } = req.body;
+    const forwardedResults = [];
+
+    for (const targetChatId of targetChatIds) {
+      const forwardedMsg = {
+        ...message,
+        _id: `msg_fwd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        chat: targetChatId,
+        sender: senderUser || message.sender,
+        isForwarded: true,
+        forwardedFrom: message.sender?.name || "Someone",
+        createdAt: new Date().toISOString(),
+      };
+      const saved = await saveMessageDocument(forwardedMsg);
+      forwardedResults.push(saved);
+
+      if (io) {
+        io.in(targetChatId).emit("message received", saved);
+      }
+    }
+
+    res.json({ success: true, messages: forwardedResults });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// @desc    Set Disappearing Messages Timer for Chat
+// @route   PUT /api/chats/disappearing-timer
+const setChatDisappearingTimer = async (req, res, io) => {
+  try {
+    const { chatId, seconds } = req.body;
+    const updated = await Chat.findByIdAndUpdate(
+      chatId,
+      { disappearingTimer: seconds || 0 },
+      { returnDocument: "after" }
+    ).lean();
+
+    if (io && chatId) {
+      io.in(chatId).emit("disappearing timer updated", { chatId, timerSeconds: seconds || 0 });
+    }
+
+    res.json({ success: true, chat: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 // @desc    Toggle emoji reaction
@@ -340,6 +512,16 @@ module.exports = {
   getChatMessages,
   addMessage,
   saveMessageDocument,
+  editMessage,
+  editMessageDocument,
+  toggleStarMessage,
+  toggleStarMessageDocument,
+  pinChatMessage,
+  pinChatMessageDocument,
+  unpinChatMessage,
+  unpinChatMessageDocument,
+  forwardMessages,
+  setChatDisappearingTimer,
   deleteMessage,
   deleteMessageDocument,
   toggleReaction,

@@ -9,6 +9,10 @@ const chatSchema = new mongoose.Schema(
     latestMessage: { type: mongoose.Schema.Types.Mixed, default: null },
     groupAdmin: { type: mongoose.Schema.Types.Mixed, default: null },
     pinned: { type: Boolean, default: false },
+    pinnedMessage: { type: mongoose.Schema.Types.Mixed, default: null },
+    disappearingTimer: { type: Number, default: 0 }, // 0 = off, seconds otherwise
+    isMuted: { type: Boolean, default: false },
+    wallpaper: { type: String, default: "" },
     isArchived: { type: Boolean, default: false },
     isHidden: { type: Boolean, default: false },
     unread: { type: Number, default: 0 },

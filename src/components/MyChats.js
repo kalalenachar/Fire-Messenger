@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Stack, Text, Badge } from "@chakra-ui/layout";
+import { Box, Stack, Text, Badge, Flex } from "@chakra-ui/layout";
 import {
   Avatar,
   Input,
@@ -26,6 +26,7 @@ const MyChats = () => {
     setSelectedChat,
     user,
     chats,
+    messagesMap,
     activeFilter,
     setActiveFilter,
     setIsStatusComposerOpen,
@@ -42,11 +43,12 @@ const MyChats = () => {
     blockUser,
     unblockUser,
     isUserBlocked,
+    draftsMap,
   } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
   const [reportTarget, setReportTarget] = useState(null);
 
-  const defaultCategories = ["All", "Status", "Personal", "Groups", "Channels", "Bots"];
+  const defaultCategories = ["All", "Status", "Personal", "Groups", "Starred", "Channels", "Bots"];
 
   // Filter chats by active category/folder & search term
   const filteredChats = (chats || []).filter((chat) => {
@@ -59,12 +61,17 @@ const MyChats = () => {
     let matchesCategory = false;
 
     if (!activeCustomFolder) {
-      matchesCategory =
-        activeFilter === "All" ||
-        (activeFilter === "Groups" && chat.isGroupChat && !chat.isChannel) ||
-        (activeFilter === "Channels" && chat.isChannel) ||
-        (activeFilter === "Bots" && chat.category === "Bots") ||
-        (activeFilter === "Personal" && (!chat.isGroupChat || chat.isSavedMessages) && chat.category !== "Bots");
+      if (activeFilter === "Starred") {
+        const msgs = messagesMap[chat._id] || [];
+        matchesCategory = msgs.some((m) => Array.isArray(m.isStarredBy) && m.isStarredBy.includes(user?._id));
+      } else {
+        matchesCategory =
+          activeFilter === "All" ||
+          (activeFilter === "Groups" && chat.isGroupChat && !chat.isChannel) ||
+          (activeFilter === "Channels" && chat.isChannel) ||
+          (activeFilter === "Bots" && chat.category === "Bots") ||
+          (activeFilter === "Personal" && (!chat.isGroupChat || chat.isSavedMessages) && chat.category !== "Bots");
+      }
     } else {
       const isIncludedById = activeCustomFolder.includedChatIds?.includes(chat._id);
       const rules = activeCustomFolder.rules || {};
@@ -128,6 +135,7 @@ const MyChats = () => {
           fontSize="22px"
           boxShadow="0 2px 8px rgba(42, 171, 238, 0.4)"
           color="white"
+          flexShrink={0}
         >
           🔖
         </Box>
@@ -135,7 +143,7 @@ const MyChats = () => {
     }
     const avatar = getChatAvatar(chat);
     return (
-      <Box position="relative">
+      <Box position="relative" flexShrink={0}>
         <Avatar size="md" name={title} src={avatar} />
         {!chat.isGroupChat && (
           <Box
@@ -212,7 +220,7 @@ const MyChats = () => {
               _hover={{ bg: activeFilter === cat ? "var(--color-primary-hover)" : "var(--bg-hover)" }}
               transition="all 0.15s ease"
             >
-              {cat}
+              {cat === "Starred" ? "⭐ Starred" : cat}
             </Box>
           ))}
 
@@ -277,6 +285,7 @@ const MyChats = () => {
                 const title = getChatTitle(chat);
                 const isPinned = isChatPinned?.(chat._id);
                 const otherUser = !chat.isGroupChat ? chat.users?.find((u) => u._id !== user?._id) : null;
+                const chatDraft = draftsMap?.[chat._id];
 
                 return (
                   <Box
@@ -313,6 +322,11 @@ const MyChats = () => {
                               📌
                             </Text>
                           )}
+                          {chat.disappearingTimer > 0 && (
+                            <Text fontSize="xs" title="Disappearing Messages" opacity={0.85}>
+                              ⏳
+                            </Text>
+                          )}
                           {isChatHidden?.(chat._id) && (
                             <Badge colorScheme="purple" fontSize="9px" px={1.5} borderRadius="4px">
                               👁️ Hidden
@@ -332,10 +346,17 @@ const MyChats = () => {
                       </Box>
 
                       <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Text fontSize="xs" color="var(--text-secondary)" isTruncated pr={2}>
-                          {chat.latestMessage?.sender?.name && !chat.isSavedMessages ? `${chat.latestMessage.sender.name}: ` : ""}
-                          {chat.latestMessage?.content || "No messages yet"}
-                        </Text>
+                        {chatDraft ? (
+                          <Text fontSize="xs" color="#38bdf8" isTruncated pr={2}>
+                            <span style={{ fontWeight: "700" }}>Draft: </span>
+                            {chatDraft}
+                          </Text>
+                        ) : (
+                          <Text fontSize="xs" color="var(--text-secondary)" isTruncated pr={2}>
+                            {chat.latestMessage?.sender?.name && !chat.isSavedMessages ? `${chat.latestMessage.sender.name}: ` : ""}
+                            {chat.latestMessage?.content || "No messages yet"}
+                          </Text>
+                        )}
 
                         <Box display="flex" alignItems="center" gap={1.5}>
                           {chat.unread > 0 && (
@@ -453,58 +474,39 @@ const MyChats = () => {
                               >
                                 ⚠️ Report Chat
                               </MenuItem>
-                              <MenuDivider borderColor="var(--color-border)" />
 
-                              <MenuItem
-                                bg="transparent"
-                                fontSize="xs"
-                                fontWeight="bold"
-                                color="var(--text-secondary)"
-                                _hover={{ bg: "transparent" }}
-                                cursor="default"
-                              >
-                                ADD / REMOVE FOLDERS:
-                              </MenuItem>
-                              <MenuDivider borderColor="var(--color-border)" />
-
-                              {(!folders || folders.length === 0) && (
-                                <MenuItem
-                                  bg="transparent"
-                                  fontSize="xs"
-                                  color="var(--text-muted)"
-                                  onClick={() => setIsFolderModalOpen(true)}
-                                >
-                                  + Create a Chat Folder first
-                                </MenuItem>
+                              {folders && folders.length > 0 && (
+                                <>
+                                  <MenuDivider borderColor="var(--color-border)" />
+                                  <Box px={3} py={1} fontSize="10px" fontWeight="bold" color="var(--text-secondary)" textTransform="uppercase">
+                                    Add to Folder
+                                  </Box>
+                                  {folders.map((f) => {
+                                    const isAdded = f.includedChatIds?.includes(chat._id);
+                                    return (
+                                      <MenuItem
+                                        key={f.id}
+                                        bg="transparent"
+                                        fontSize="xs"
+                                        color="var(--text-primary)"
+                                        _hover={{ bg: "var(--bg-hover)" }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleChatFolder?.(f.id, chat._id);
+                                        }}
+                                      >
+                                        <Flex align="center" justify="space-between" w="100%">
+                                          <Flex align="center" gap={1.5}>
+                                            <span>{f.icon || "📁"}</span>
+                                            <span>{f.name}</span>
+                                          </Flex>
+                                          {isAdded && <span style={{ color: "var(--color-primary)" }}>✓</span>}
+                                        </Flex>
+                                      </MenuItem>
+                                    );
+                                  })}
+                                </>
                               )}
-
-                              {folders?.map((folder) => {
-                                const isIncluded = folder.includedChatIds?.includes(chat._id);
-                                return (
-                                  <MenuItem
-                                    key={folder.id}
-                                    bg="transparent"
-                                    _hover={{ bg: "var(--bg-hover)" }}
-                                    fontSize="xs"
-                                    color="var(--text-primary)"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleChatFolder(folder.id, chat._id);
-                                    }}
-                                  >
-                                    <Box display="flex" alignItems="center" justifyContent="space-between" w="100%">
-                                      <span>
-                                        {folder.icon || "📁"} {folder.name}
-                                      </span>
-                                      {isIncluded && (
-                                        <Badge bg="var(--color-primary)" color="white" fontSize="9px" px={1.5}>
-                                          Included ✓
-                                        </Badge>
-                                      )}
-                                    </Box>
-                                  </MenuItem>
-                                );
-                              })}
                             </MenuList>
                           </Menu>
                         </Box>
@@ -515,17 +517,25 @@ const MyChats = () => {
               })}
             </Stack>
           ) : (
-            <Box p={6} textAlign="center" color="var(--text-secondary)">
-              <Text fontSize="sm">No conversations match this folder/filter</Text>
-            </Box>
+            <Flex direction="column" align="center" justify="center" h="200px" color="var(--text-muted)">
+              <Text fontSize="2xl" mb={1}>
+                {activeFilter === "Starred" ? "⭐" : "💬"}
+              </Text>
+              <Text fontSize="sm" fontWeight="600">
+                {activeFilter === "Starred" ? "No starred messages found" : "No chats in this folder"}
+              </Text>
+            </Flex>
           )}
         </Box>
       )}
 
-      {/* Global Folder Settings Modal */}
-      <FolderSettingsModal isOpen={isFolderModalOpen} onClose={() => setIsFolderModalOpen(false)} />
+      {/* Folder Settings Modal */}
+      <FolderSettingsModal
+        isOpen={isFolderModalOpen}
+        onClose={() => setIsFolderModalOpen(false)}
+      />
 
-      {/* Global Report Modal */}
+      {/* Report Modal */}
       <ReportModal
         isOpen={Boolean(reportTarget)}
         onClose={() => setReportTarget(null)}

@@ -29,7 +29,7 @@ import VerifiedBadge from "../common/VerifiedBadge";
 const EMOJI_REACTIONS = ["🔥", "❤️", "😂", "😮", "👏", "🎉"];
 
 const StatusViewerModal = ({ isOpen, onClose, userStatusStack }) => {
-  const { viewStatusSlide, deleteStatusSlide, sendMessage, chats, setSelectedChat } = ChatState();
+  const { viewStatusSlide, deleteStatusSlide, sendMessage, chats, setSelectedChat, addOrSelectChat, user } = ChatState();
   const toast = useToast();
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -121,7 +121,9 @@ const StatusViewerModal = ({ isOpen, onClose, userStatusStack }) => {
     if (!text.trim() || !userStatusStack?.user?._id) return;
 
     try {
-      const authorId = userStatusStack.user._id;
+      const authorUser = userStatusStack.user;
+      const authorId = authorUser._id;
+
       // Find or create chat with author
       let targetChat = (chats || []).find(
         (c) => !c.isGroupChat && c.users?.some((u) => u._id === authorId)
@@ -134,10 +136,25 @@ const StatusViewerModal = ({ isOpen, onClose, userStatusStack }) => {
 
       const fullMessage = `Replying to status: "${statusSnippet}"\n💬 ${text}`;
 
+      if (!targetChat && user) {
+        const newChat = {
+          _id: `chat_${user._id}_${authorId}`,
+          chatName: authorUser.name || "Chat",
+          isGroupChat: false,
+          users: [user, authorUser],
+          latestMessage: { content: fullMessage, createdAt: new Date().toISOString() },
+          unread: 0,
+          category: "Personal",
+        };
+        addOrSelectChat(newChat);
+        targetChat = newChat;
+      }
+
       if (targetChat) {
         setSelectedChat(targetChat);
-        await sendMessage(fullMessage, targetChat._id);
+        await sendMessage(targetChat._id, fullMessage, "text");
       }
+
       toast({ title: "Reply sent as message!", status: "success", duration: 2000 });
       setReplyText("");
     } catch (err) {

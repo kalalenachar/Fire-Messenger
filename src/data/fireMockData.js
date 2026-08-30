@@ -2,6 +2,16 @@
 import axios from "axios";
 import { API_BASE_URL } from "./fireStorage";
 
+export const fireBotUser = {
+  _id: "bot_fire_ai",
+  name: "Agni Bot 🔥",
+  username: "agni_bot",
+  email: "bot@agnimessenger.io",
+  pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
+  status: "Official Automated Assistant | Online 24/7",
+  isBot: true,
+};
+
 export const defaultUser = {
   _id: "user_fire_01",
   name: "Alex Rivers",
@@ -51,7 +61,7 @@ export const initialFireMessages = {
     {
       _id: "msg_bot_2",
       sender: { _id: "bot_fire_ai", name: "Agni Bot 🔥", pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80" },
-      content: "You can send text, emoji reactions, simulated voice notes, or try commands like `/help`, `/quote`, `/joke`, or `/fire`!",
+      content: "You can send text, emoji reactions, voice notes, live location, polls, or try commands like `/help`, `/quote`, `/joke`, or `/fire`!",
       chat: "chat_fire_bot",
       createdAt: new Date(Date.now() - 60000).toISOString(),
       reactions: { "👍": 1 },
@@ -59,26 +69,41 @@ export const initialFireMessages = {
   ],
 };
 
-export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiKey = "") => {
-  const text = userMessage.toLowerCase().trim();
+function generateClientOfflineBotReply(userMessage) {
+  const text = (userMessage || "").toLowerCase().trim();
 
-  // Instant preset commands
-  if (text === "/help") {
-    return "🔥 **Agni Bot Commands & Groq AI**:\n- Ask me anything! Powered by **Groq AI** ⚡ (`llama-3.3-70b`)\n- `/fire`: Receive a motivational fire quote\n- `/joke`: Get a developer joke\n- `/weather`: Instant weather report\n- `/quote`: Daily wisdom quote";
+  if (text === "/help" || text.includes("help")) {
+    return `🔥 **Agni Bot Commands & Capabilities**:
+- **Groq AI Integration**: Ultra-fast LLM responses
+- \`/fire\`: Get an energizing motivation quote
+- \`/joke\`: Get a funny developer joke
+- \`/weather\`: Real-time system atmospheric status
+- \`/quote\`: Daily wisdom & inspiration
+- \`/time\`: Current time and date
+- \`/code\`: Code snippet demonstration`;
   }
-  if (text === "/fire") {
+  if (text === "/fire" || text.includes("fire quote")) {
     return "🔥 *'Set your life on fire. Seek those who fan your flames.'* — Rumi";
   }
   if (text === "/joke") {
     return "Why do programmers prefer dark mode? Because light attracts bugs! 🐛💡";
   }
   if (text === "/weather") {
-    return "☀️ **Agni Messenger Forecast**: 24°C, Clear Skies & Ultra-Fast Groq AI Performance!";
+    return "☀️ **Agni Messenger Forecast**: 24°C, Clear Skies & Ultra-Fast Real-Time Performance!";
   }
   if (text === "/quote") {
     return "✨ *'Simplicity is the soul of efficiency.'* — Austin Freeman";
   }
+  if (text === "/time") {
+    return `⏰ **Time**: ${new Date().toLocaleTimeString()} on ${new Date().toLocaleDateString()}`;
+  }
+  if (text.includes("hello") || text.includes("hi") || text.includes("hey")) {
+    return "👋 **Hello there!** How can I assist your conversation or workflow in Agni Messenger today? 🔥";
+  }
+  return `🔥 **Agni Bot**: I received your message: *"${userMessage}"*.\n\nI am always active to assist you! For custom answers on any topic, configure \`GROQ_API_KEY\` in \`.env\`.`;
+}
 
+export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiKey = "") => {
   // 1. Try Express backend Groq proxy endpoint first
   try {
     const res = await axios.post(`${API_BASE_URL}/bot/chat`, {
@@ -102,7 +127,13 @@ export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiK
     process.env.GROQ_API_KEY;
 
   if (groqApiKey) {
-    const candidateModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "groq/compound-mini"];
+    const candidateModels = [
+      "llama-3.3-70b-versatile",
+      "llama-3.1-70b-versatile",
+      "llama3-70b-8192",
+      "mixtral-8x7b-32768",
+      "gemma2-9b-it",
+    ];
     const formattedMessages = [
       {
         role: "system",
@@ -142,9 +173,9 @@ export const getBotReplyAsync = async (userMessage, chatHistory = [], customApiK
     }
   }
 
-  return "🤖 **Agni Bot AI Notice**: Please configure `GROQ_API_KEY` in your `.env` file or settings to chat with Groq AI!";
+  return generateClientOfflineBotReply(userMessage);
 };
 
 export const getBotReply = (userMessage) => {
-  return "🔥 Thinking... (Powered by Groq AI)";
+  return generateClientOfflineBotReply(userMessage);
 };
