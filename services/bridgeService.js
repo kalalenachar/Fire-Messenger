@@ -255,11 +255,18 @@ class BridgeService {
         keys: makeCacheableSignalKeyStore(state.keys, logger),
       },
       browser: ["Agni Messenger", "Chrome", "120.0.0.0"],
-      syncFullHistory: false,
+      syncFullHistory: true,
+      shouldSyncHistoryMessage: () => true,
       generateHighQualityLinkPreview: true,
       defaultQueryTimeoutMs: 60000,
       connectTimeoutMs: 60000,
       keepAliveIntervalMs: 30000,
+      getMessage: async (key) => {
+        const chatId = `wa_${key.remoteJid}`;
+        const msgs = sessionRecord.messages.get(chatId) || [];
+        const found = msgs.find((m) => m._id === `wa_${key.id}`);
+        return found ? { conversation: found.content } : undefined;
+      },
     });
 
     const sessionRecord = {
@@ -814,14 +821,41 @@ class BridgeService {
               }
             : null;
 
-          if (latestMsg) {
+          // Fetch recent Telegram messages for this dialog
+          try {
+            const histMsgs = await tgSession.client.getMessages(d.inputEntity, { limit: 20 });
             if (!tgSession.messages) tgSession.messages = new Map();
             if (!tgSession.messages.has(chatId)) tgSession.messages.set(chatId, []);
             const tgMsgs = tgSession.messages.get(chatId);
-            if (!tgMsgs.some((m) => m._id === latestMsg._id)) {
-              tgMsgs.push(latestMsg);
+
+            for (const m of histMsgs) {
+              if (m && m.message) {
+                const isOut = Boolean(m.out);
+                const msgId = `tg_msg_${m.id}`;
+                const normalized = {
+                  _id: msgId,
+                  content: m.message,
+                  chat: chatId,
+                  platform: "telegram",
+                  platformChatId: String(d.id),
+                  sender: {
+                    _id: isOut ? user?._id : `tg_user_${d.id}`,
+                    name: isOut ? "You" : d.title || entity.firstName || "Telegram User",
+                    pic: photoUrl || null,
+                  },
+                  deliveryStatus: "delivered",
+                  createdAt: new Date(m.date * 1000).toISOString(),
+                };
+                if (!tgMsgs.some((em) => em._id === msgId)) {
+                  tgMsgs.push(normalized);
+                }
+                try {
+                  await Message.findByIdAndUpdate(msgId, normalized, { upsert: true });
+                } catch (e) {}
+              }
             }
-          }
+            tgMsgs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          } catch (e) {}
 
           chats.push({
             _id: chatId,
