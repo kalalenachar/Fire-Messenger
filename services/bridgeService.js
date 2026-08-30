@@ -631,6 +631,20 @@ class BridgeService {
               onTgQrReceived = null;
             }
           },
+          password: async (hint) => {
+            console.log(`🔐 Telegram 2FA Cloud Password requested for user: ${userId} (hint: ${hint || "none"})`);
+            sessionRecord.status = "password_needed";
+            sessionRecord.passwordHint = hint || "";
+            const io = BridgeService.getIo();
+            if (io) {
+              io.to(userId).emit("bridge_telegram_password_needed", {
+                hint: hint || "",
+              });
+            }
+            return new Promise((resolve) => {
+              sessionRecord.resolvePassword = resolve;
+            });
+          },
           onError: (err) => {
             console.warn("Telegram QR Error:", err.message);
           },
@@ -673,11 +687,22 @@ class BridgeService {
     });
 
     return {
-      status: "waiting_scan",
+      status: sessionRecord.status,
       qrCode: sessionRecord.qrCode,
       qrDataUrl: sessionRecord.qrDataUrl,
+      passwordHint: sessionRecord.passwordHint || null,
       expiresAt: sessionRecord.expiresAt,
     };
+  }
+
+  static submitTelegramPassword(userId, password) {
+    const session = liveSessions.telegram.get(userId);
+    if (session && session.resolvePassword) {
+      session.resolvePassword(password);
+      session.resolvePassword = null;
+      return { success: true };
+    }
+    throw new Error("No active Telegram 2FA session awaiting password");
   }
 
   static getTelegramStatus(userId) {
@@ -699,6 +724,7 @@ class BridgeService {
     return {
       connected: isConnected,
       status: session.status,
+      passwordHint: session.passwordHint || null,
       qrCode: isConnected ? null : session.qrCode,
       qrDataUrl: isConnected ? null : session.qrDataUrl,
       username: session.user?.username,
@@ -743,13 +769,28 @@ class BridgeService {
     // 1. Return all active WhatsApp chats with their real latestMessage
     if (waSession) {
       const chatsMap = waSession.chats || new Map();
-      chatsMap.forEach((c) => {
-        const msgs = waSession.messages.get(c._id) || [];
-        if (msgs.length > 0 && !c.latestMessage) {
+      for (const c of chatsMap.values()) {
+        let msgs =
+          (waSession.messages &&
+            (waSession.messages.get(c._id) ||
+              waSession.messages.get(c.id) ||
+              waSession.messages.get(c.platformChatId))) ||
+          [];
+        if (msgs.length === 0) {
+          try {
+            const dbMsgs = await Message.find({ chat: c._id }).sort({ createdAt: 1 }).lean();
+            if (dbMsgs && dbMsgs.length > 0) {
+              msgs = dbMsgs;
+              if (!waSession.messages) waSession.messages = new Map();
+              waSession.messages.set(c._id, dbMsgs);
+            }
+          } catch (e) {}
+        }
+        if (msgs.length > 0 && (!c.latestMessage || c.latestMessage.content === "No messages yet")) {
           c.latestMessage = msgs[msgs.length - 1];
         }
         chats.push(c);
-      });
+      }
     }
 
     // 2. Fetch Real Telegram Dialogs

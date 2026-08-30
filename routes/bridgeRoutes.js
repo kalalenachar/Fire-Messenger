@@ -9,6 +9,7 @@ const {
   startTelegramBridge,
   confirmTelegramBridge,
   disconnectTelegramBridge,
+  submitTelegramPassword,
   fetchSyncedBridgeChats,
   createDirectBridgeChat,
   sendBridgeMessage,
@@ -26,6 +27,7 @@ router.post("/whatsapp/disconnect", disconnectWhatsAppBridge);
 router.post("/telegram/start", startTelegramBridge);
 router.post("/telegram/confirm", confirmTelegramBridge);
 router.post("/telegram/disconnect", disconnectTelegramBridge);
+router.post("/telegram/password", submitTelegramPassword);
 
 // Chats & Messaging
 router.all("/chats/:userId", fetchSyncedBridgeChats);

@@ -87,6 +87,20 @@ const disconnectTelegramBridge = async (req, res) => {
   }
 };
 
+// Submit Telegram 2FA Cloud Password
+const submitTelegramPassword = async (req, res) => {
+  const { userId, password } = req.body;
+  try {
+    if (!userId || !password) {
+      return res.status(400).json({ success: false, message: "User ID and password are required" });
+    }
+    BridgeService.submitTelegramPassword(userId, password);
+    return res.json({ success: true, message: "Password submitted to Telegram" });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 // Fetch Synced Chats for User
 const fetchSyncedBridgeChats = async (req, res) => {
   const { userId } = req.params;
@@ -142,6 +156,7 @@ module.exports = {
   startTelegramBridge,
   confirmTelegramBridge,
   disconnectTelegramBridge,
+  submitTelegramPassword,
   fetchSyncedBridgeChats,
   createDirectBridgeChat,
   sendBridgeMessage,

@@ -12,6 +12,8 @@ import {
   MenuItem,
   MenuDivider,
   Tooltip,
+  Spinner,
+  useToast,
 } from "@chakra-ui/react";
 import { SearchIcon, SettingsIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { ChatState } from "../Context/ChatProvider";
@@ -21,6 +23,7 @@ import ReportModal from "./miscellaneous/ReportModal";
 import VerifiedBadge from "./common/VerifiedBadge";
 
 const MyChats = () => {
+  const toast = useToast();
   const {
     selectedChat,
     setSelectedChat,
@@ -51,6 +54,31 @@ const MyChats = () => {
   } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
   const [reportTarget, setReportTarget] = useState(null);
+  const [isSyncingBridge, setIsSyncingBridge] = useState(false);
+
+  const handleSyncBridgeChats = async () => {
+    setIsSyncingBridge(true);
+    try {
+      await syncBridgeChats();
+      toast({
+        title: "Messages Synced! 🔄",
+        description: "WhatsApp & Telegram chats updated with latest messages and media.",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: "Sync Failed",
+        description: err.message || "Could not sync chats.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsSyncingBridge(false);
+    }
+  };
 
   const handleStartNewWhatsAppChat = async () => {
     const phone = window.prompt("Enter recipient WhatsApp number with country code (e.g. +91 9876543210):");
@@ -659,9 +687,13 @@ const MyChats = () => {
                         fontWeight="700"
                         _hover={{ bg: "rgba(255, 255, 255, 0.2)" }}
                         transition="all 0.15s ease"
-                        onClick={syncBridgeChats}
+                        display="flex"
+                        alignItems="center"
+                        gap={2}
+                        onClick={handleSyncBridgeChats}
+                        opacity={isSyncingBridge ? 0.7 : 1}
                       >
-                        🔄 Sync Messages
+                        {isSyncingBridge ? <Spinner size="xs" color="white" /> : "🔄"} Sync Messages
                       </Box>
                     </>
                   ) : (
@@ -700,9 +732,13 @@ const MyChats = () => {
                       boxShadow="0 4px 14px rgba(34, 158, 217, 0.3)"
                       _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
                       transition="all 0.15s ease"
-                      onClick={syncBridgeChats}
+                      display="flex"
+                      alignItems="center"
+                      gap={2}
+                      onClick={handleSyncBridgeChats}
+                      opacity={isSyncingBridge ? 0.7 : 1}
                     >
-                      🔄 Sync Messages
+                      {isSyncingBridge ? <Spinner size="xs" color="white" /> : "🔄"} Sync Messages
                     </Box>
                   ) : (
                     <Box

@@ -21,6 +21,7 @@ import {
   HStack,
   Spinner,
   Image,
+  Input,
   useToast,
 } from "@chakra-ui/react";
 import { ChatState } from "../../Context/ChatProvider";
@@ -32,6 +33,7 @@ import {
   startTelegramBridgeAsync,
   confirmTelegramBridgeAsync,
   disconnectTelegramBridgeAsync,
+  submitTelegramPasswordAsync,
 } from "../../data/fireStorage";
 
 const LinkedPlatformsModal = ({ isOpen, onClose }) => {
@@ -43,6 +45,12 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
   const [waQrDataUrl, setWaQrDataUrl] = useState(null);
   const [tgQrDataUrl, setTgQrDataUrl] = useState(null);
   const [waPairingCode, setWaPairingCode] = useState(null);
+
+  // Telegram 2FA Password state
+  const [isTgPasswordNeeded, setIsTgPasswordNeeded] = useState(false);
+  const [tgPasswordHint, setTgPasswordHint] = useState("");
+  const [tgPassword, setTgPassword] = useState("");
+  const [tgPassLoading, setTgPassLoading] = useState(false);
 
   const handleStartWhatsApp = useCallback(async () => {
     if (!user?._id) return;
@@ -71,10 +79,16 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
   const handleStartTelegram = useCallback(async () => {
     if (!user?._id) return;
     setTgLoading(true);
+    setIsTgPasswordNeeded(false);
+    setTgPassword("");
     try {
       const res = await startTelegramBridgeAsync(user._id);
       if (res?.qrDataUrl) {
         setTgQrDataUrl(res.qrDataUrl);
+      }
+      if (res?.status === "password_needed") {
+        setIsTgPasswordNeeded(true);
+        setTgPasswordHint(res.passwordHint || "");
       }
       if (res?.connected) {
         setLinkedPlatforms((prev) => ({
@@ -101,11 +115,15 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
         if (platforms.telegram?.qrDataUrl) {
           setTgQrDataUrl(platforms.telegram.qrDataUrl);
         }
+        if (platforms.telegram?.status === "password_needed") {
+          setIsTgPasswordNeeded(true);
+          setTgPasswordHint(platforms.telegram.passwordHint || "");
+        }
       }
       if (!platforms?.whatsapp?.connected && !platforms?.whatsapp?.qrDataUrl) {
         handleStartWhatsApp();
       }
-      if (!platforms?.telegram?.connected && !platforms?.telegram?.qrDataUrl) {
+      if (!platforms?.telegram?.connected && !platforms?.telegram?.qrDataUrl && !platforms?.telegram?.passwordHint) {
         handleStartTelegram();
       }
     } catch (err) {
@@ -149,12 +167,26 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
       if (data?.qrDataUrl) setTgQrDataUrl(data.qrDataUrl);
     };
 
+    const onTgPasswordNeeded = (data) => {
+      setIsTgPasswordNeeded(true);
+      setTgPasswordHint(data?.hint || "");
+      toast({
+        title: "Telegram 2FA Password Required 🔐",
+        description: data?.hint ? `Hint: ${data.hint}` : "Please enter your Telegram Two-Step Verification password.",
+        status: "warning",
+        duration: 6000,
+        isClosable: true,
+      });
+    };
+
     const onTgConnected = (data) => {
       setLinkedPlatforms((prev) => ({
         ...prev,
         telegram: { connected: true, username: data.username, name: data.name },
       }));
       setTgQrDataUrl(null);
+      setIsTgPasswordNeeded(false);
+      setTgPassword("");
       syncBridgeChats();
       toast({
         title: "Telegram Connected! 🔵",
@@ -168,12 +200,14 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     socket.on("bridge_whatsapp_qr", onWaQr);
     socket.on("bridge_whatsapp_connected", onWaConnected);
     socket.on("bridge_telegram_qr", onTgQr);
+    socket.on("bridge_telegram_password_needed", onTgPasswordNeeded);
     socket.on("bridge_telegram_connected", onTgConnected);
 
     return () => {
       socket.off("bridge_whatsapp_qr", onWaQr);
       socket.off("bridge_whatsapp_connected", onWaConnected);
       socket.off("bridge_telegram_qr", onTgQr);
+      socket.off("bridge_telegram_password_needed", onTgPasswordNeeded);
       socket.off("bridge_telegram_connected", onTgConnected);
     };
   }, [socket, setLinkedPlatforms, syncBridgeChats, toast]);
@@ -247,6 +281,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
           ...prev,
           telegram: { connected: true, username: res.username || "@user", name: res.name || "Telegram Account" },
         }));
+        setIsTgPasswordNeeded(false);
         await syncBridgeChats();
         toast({
           title: "Telegram Connected! 🔵",
@@ -255,6 +290,9 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
           duration: 4000,
           isClosable: true,
         });
+      } else if (res?.status === "password_needed") {
+        setIsTgPasswordNeeded(true);
+        setTgPasswordHint(res.passwordHint || "");
       } else {
         toast({
           title: "Waiting for Telegram Scan 🟡",
@@ -271,6 +309,41 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleSubmitTelegramPassword = async () => {
+    if (!user?._id || !tgPassword.trim()) {
+      toast({
+        title: "Password Required",
+        description: "Please enter your Telegram 2FA cloud password.",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setTgPassLoading(true);
+    try {
+      await submitTelegramPasswordAsync(user._id, tgPassword.trim());
+      toast({
+        title: "Password Submitted 🔐",
+        description: "Verifying 2FA password with Telegram...",
+        status: "info",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: "Telegram 2FA Error",
+        description: err.message || "Invalid Telegram password. Please re-enter.",
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
+    } finally {
+      setTgPassLoading(false);
+    }
+  };
+
   const handleDisconnectTelegram = async () => {
     if (!user?._id) return;
     setTgLoading(true);
@@ -281,6 +354,8 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
         telegram: { connected: false },
       }));
       setTgQrDataUrl(null);
+      setIsTgPasswordNeeded(false);
+      setTgPassword("");
       handleStartTelegram();
       await syncBridgeChats();
       toast({
@@ -522,6 +597,62 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                     >
                       Unlink Telegram Account
                     </Button>
+                  </VStack>
+                ) : isTgPasswordNeeded ? (
+                  /* --- 2FA PASSWORD INPUT FORM --- */
+                  <VStack spacing={4} align="stretch" p={5} bg="rgba(34, 158, 217, 0.12)" borderRadius="16px" border="1px solid #229ED9">
+                    <HStack spacing={2} justify="center">
+                      <Text fontSize="24px">🔐</Text>
+                      <Text fontWeight="700" fontSize="md" color="white">
+                        Telegram Two-Step Verification (2FA)
+                      </Text>
+                    </HStack>
+                    <Text fontSize="xs" color="gray.300" textAlign="center">
+                      Your Telegram account is protected with a 2FA Cloud Password. Enter your password to complete linking.
+                    </Text>
+                    {tgPasswordHint && (
+                      <Flex justify="center">
+                        <Badge colorScheme="blue" fontSize="xs" px={2.5} py={0.5} borderRadius="full">
+                          Hint: {tgPasswordHint}
+                        </Badge>
+                      </Flex>
+                    )}
+                    <Input
+                      type="password"
+                      placeholder="Enter your Telegram 2FA Cloud Password"
+                      value={tgPassword}
+                      onChange={(e) => setTgPassword(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSubmitTelegramPassword();
+                      }}
+                      bg="rgba(0,0,0,0.5)"
+                      color="white"
+                      borderColor="rgba(34, 158, 217, 0.5)"
+                      _focus={{ borderColor: "#229ED9", boxShadow: "0 0 0 1px #229ED9" }}
+                    />
+                    <HStack spacing={3}>
+                      <Button
+                        flex={1}
+                        colorScheme="blue"
+                        bg="#229ED9"
+                        _hover={{ bg: "#1E8EC5" }}
+                        isLoading={tgPassLoading}
+                        onClick={handleSubmitTelegramPassword}
+                      >
+                        Submit 2FA Password 🔐
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        color="gray.400"
+                        size="sm"
+                        onClick={() => {
+                          setIsTgPasswordNeeded(false);
+                          handleStartTelegram();
+                        }}
+                      >
+                        Back to QR
+                      </Button>
+                    </HStack>
                   </VStack>
                 ) : (
                   <VStack spacing={4} align="center">

@@ -833,6 +833,15 @@ export const disconnectTelegramBridgeAsync = async (userId) => {
   }
 };
 
+export const submitTelegramPasswordAsync = async (userId, password) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/telegram/password`, { userId, password });
+    return res?.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || "Failed to submit Telegram 2FA password");
+  }
+};
+
 export const fetchSyncedBridgeChatsAsync = async (userId, user) => {
   try {
     const res = await axios.post(`${API_BASE_URL}/bridge/chats/${userId}`, { user });
