@@ -77,6 +77,11 @@ const Login = () => {
           color="var(--text-primary)"
           borderColor="var(--color-border)"
           _focus={{ borderColor: "var(--color-primary)", boxShadow: "0 0 0 1px var(--color-primary)" }}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          autoCapitalize="none"
+          data-lpignore="true"
         />
       </FormControl>
 
@@ -94,6 +99,11 @@ const Login = () => {
             color="var(--text-primary)"
             borderColor="var(--color-border)"
             _focus={{ borderColor: "var(--color-primary)", boxShadow: "0 0 0 1px var(--color-primary)" }}
+            autoComplete="new-password"
+            autoCorrect="off"
+            spellCheck={false}
+            autoCapitalize="none"
+            data-lpignore="true"
           />
           <InputRightElement width="4.5rem">
             <Button h="1.75rem" size="sm" onClick={handleClick} variant="ghost" color="var(--text-secondary)">

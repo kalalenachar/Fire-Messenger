@@ -24,64 +24,23 @@ const fireBotUser = {
   isBot: true,
 };
 
-const defaultUsersList = [
-  fireBotUser,
-  {
-    _id: "user_agni_01",
-    name: "Alex Rivers",
-    username: "alex",
-    email: "alex@agnimessenger.io",
-    password: "123",
-    isAdmin: true,
-    pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    status: "Available | 🔥 Burning with Passion",
-    token: "token_alex_12345",
-    isVerified: true,
-    verificationStatus: "verified",
-    verificationType: "individual",
-    verificationDetails: {
-      aadhaarMasked: "XXXX-XXXX-4812",
-      verifiedAt: "2026-08-20T10:00:00Z",
-      matchScore: 98.4,
-    },
-  },
-];
+const adminUser = {
+  _id: "user_admin_root",
+  name: "Administrator",
+  username: "admin",
+  email: "admin@agnimessenger.io",
+  password: "admin123",
+  isAdmin: true,
+  pic: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+  status: "🔥 Agni Administrator",
+  isVerified: true,
+  verificationStatus: "verified",
+  verificationType: "business",
+};
 
-const initialChats = [
-  {
-    _id: "chat_fire_bot",
-    chatName: "Agni Bot 🔥",
-    isGroupChat: false,
-    users: [defaultUsersList[0], fireBotUser],
-    latestMessage: {
-      content: "Welcome to Agni Messenger! Send a message or command like /help",
-      sender: fireBotUser,
-      createdAt: new Date(Date.now() - 60000).toISOString(),
-    },
-    unread: 1,
-    pinned: true,
-    category: "Bots",
-  },
-];
-
-const initialMessages = [
-  {
-    _id: "msg_bot_1",
-    sender: fireBotUser,
-    content: "Greetings! Welcome to **Agni Messenger 🔥**.",
-    chat: "chat_fire_bot",
-    createdAt: new Date(Date.now() - 360000),
-    reactions: { "🔥": 2 },
-  },
-  {
-    _id: "msg_bot_2",
-    sender: fireBotUser,
-    content: "I am your automated AI assistant. Try commands like `/help`, `/fire`, `/joke`, `/weather`, or `/time`!",
-    chat: "chat_fire_bot",
-    createdAt: new Date(Date.now() - 60000),
-    reactions: { "👍": 1 },
-  },
-];
+const defaultUsersList = [adminUser];
+const initialChats = [];
+const initialMessages = [];
 
 const net = require("net");
 const { seedInMemoryStore } = require("../services/memoryDb");
@@ -160,24 +119,42 @@ async function ensureAdminPrivileges() {
     if (!existingBot) {
       await User.create(fireBotUser);
     }
+    // Upsert or update official Admin user
+    const existingAdmin = await User.findOne({
+      $or: [{ username: "admin" }, { email: "admin@agnimessenger.io" }],
+    });
+    if (!existingAdmin) {
+      await User.create(adminUser);
+      console.log("👑 Admin user created (username: admin, password: admin123)");
+    } else {
+      existingAdmin.username = "admin";
+      existingAdmin.password = "admin123";
+      existingAdmin.isAdmin = true;
+      existingAdmin.isVerified = true;
+      existingAdmin.verificationStatus = "verified";
+      await existingAdmin.save();
+    }
+
     const adminEmails = [
+      "admin@agnimessenger.io",
       "kalalenachar@gmail.com",
-      "alex@agnimessenger.io",
-      "alex@agni.io",
     ];
     await User.updateMany(
       { email: { $in: adminEmails } },
       { $set: { isAdmin: true } }
     );
-    // Cleanup any legacy dummy users and chats from database
+
+    // Cleanup legacy dummy users and chats from database
     const dummyEmails = [
+      "alex@agnimessenger.io",
+      "alex@agni.io",
       "sarah@agnimessenger.io",
       "marcus@agnimessenger.io",
       "elena@agnimessenger.io",
     ];
     await User.deleteMany({ email: { $in: dummyEmails } });
-    await Chat.deleteMany({ _id: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge"] } });
-    await Message.deleteMany({ chat: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge"] } });
+    await Chat.deleteMany({ _id: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge", "chat_fire_bot"] } });
+    await Message.deleteMany({ chat: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge", "chat_fire_bot"] } });
   } catch (err) {
     console.error("Error ensuring admin privileges:", err);
   }

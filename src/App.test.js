@@ -78,7 +78,6 @@ describe("Agni Messenger Web Core Engine Test Suite", () => {
 
   test("initialFireChats and fireBotUser are structured properly", () => {
     expect(Array.isArray(initialFireChats)).toBe(true);
-    expect(initialFireChats.length).toBeGreaterThan(0);
     expect(fireBotUser).toBeDefined();
     expect(fireBotUser.isBot).toBe(true);
   });

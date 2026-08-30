@@ -186,6 +186,11 @@ const Signup = () => {
           bg="var(--bg-search)"
           color="var(--text-primary)"
           borderColor="var(--color-border)"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          autoCapitalize="words"
+          data-lpignore="true"
         />
       </FormControl>
 
@@ -206,6 +211,11 @@ const Signup = () => {
             onChange={(e) => setUsername(e.target.value)}
             bg="var(--bg-search)"
             color="var(--text-primary)"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            autoCapitalize="none"
+            data-lpignore="true"
             borderColor={
               username.trim() && usernameStatus.available === true
                 ? "green.400"
@@ -273,6 +283,11 @@ const Signup = () => {
           bg="var(--bg-search)"
           color="var(--text-primary)"
           borderColor="var(--color-border)"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          autoCapitalize="none"
+          data-lpignore="true"
         />
       </FormControl>
 
@@ -289,6 +304,11 @@ const Signup = () => {
             bg="var(--bg-search)"
             color="var(--text-primary)"
             borderColor="var(--color-border)"
+            autoComplete="new-password"
+            autoCorrect="off"
+            spellCheck={false}
+            autoCapitalize="none"
+            data-lpignore="true"
           />
           <InputRightElement width="4.5rem">
             <Button h="1.75rem" size="sm" onClick={handleClick} variant="ghost" color="var(--text-secondary)">
@@ -311,6 +331,11 @@ const Signup = () => {
             bg="var(--bg-search)"
             color="var(--text-primary)"
             borderColor="var(--color-border)"
+            autoComplete="new-password"
+            autoCorrect="off"
+            spellCheck={false}
+            autoCapitalize="none"
+            data-lpignore="true"
           />
           <InputRightElement width="4.5rem">
             <Button h="1.75rem" size="sm" onClick={handleClick} variant="ghost" color="var(--text-secondary)">

@@ -13,61 +13,20 @@ export const fireBotUser = {
 };
 
 export const defaultUser = {
-  _id: "user_fire_01",
-  name: "Alex Rivers",
-  username: "alex",
-  email: "alex@agnimessenger.io",
-  pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-  status: "Available | 🔥 Burning with Passion",
-  token: "fire_token_12345",
+  _id: "user_admin_root",
+  name: "Administrator",
+  username: "admin",
+  email: "admin@agnimessenger.io",
+  password: "admin123",
+  pic: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+  status: "🔥 Agni Administrator",
+  token: "admin_token_12345",
+  isAdmin: true,
 };
 
-export const initialFireChats = [
-  {
-    _id: "chat_fire_bot",
-    chatName: "Agni Bot 🔥",
-    isGroupChat: false,
-    users: [
-      defaultUser,
-      {
-        _id: "bot_fire_ai",
-        name: "Agni Bot 🔥",
-        username: "agni_bot",
-        email: "bot@agnimessenger.io",
-        pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
-        status: "Official Automated Assistant | Online 24/7",
-      },
-    ],
-    latestMessage: {
-      content: "Welcome to Agni Messenger! Type /help for available options.",
-      createdAt: new Date(Date.now() - 60000).toISOString(),
-    },
-    unread: 1,
-    pinned: true,
-    category: "Bots",
-  },
-];
+export const initialFireChats = [];
 
-export const initialFireMessages = {
-  chat_fire_bot: [
-    {
-      _id: "msg_bot_1",
-      sender: { _id: "bot_fire_ai", name: "Agni Bot 🔥", pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80" },
-      content: "Greetings! Welcome to **Agni Messenger 🔥**.",
-      chat: "chat_fire_bot",
-      createdAt: new Date(Date.now() - 360000).toISOString(),
-      reactions: { "🔥": 2 },
-    },
-    {
-      _id: "msg_bot_2",
-      sender: { _id: "bot_fire_ai", name: "Agni Bot 🔥", pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80" },
-      content: "You can send text, emoji reactions, voice notes, live location, polls, or try commands like `/help`, `/quote`, `/joke`, or `/fire`!",
-      chat: "chat_fire_bot",
-      createdAt: new Date(Date.now() - 60000).toISOString(),
-      reactions: { "👍": 1 },
-    },
-  ],
-};
+export const initialFireMessages = {};
 
 function generateClientOfflineBotReply(userMessage) {
   const text = (userMessage || "").toLowerCase().trim();
