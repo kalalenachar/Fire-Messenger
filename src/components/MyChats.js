@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Stack, Text, Badge, Flex } from "@chakra-ui/layout";
+import { Box, Stack, HStack, Text, Badge, Flex } from "@chakra-ui/layout";
 import {
   Avatar,
   Input,
