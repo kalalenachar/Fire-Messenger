@@ -51,6 +51,15 @@ class BridgeService {
         name: existing.user?.name,
       };
     }
+    if (existing && existing.qrDataUrl) {
+      return {
+        status: existing.status,
+        qrCode: existing.qrCode,
+        qrDataUrl: existing.qrDataUrl,
+        pairingCode: existing.pairingCode,
+        expiresAt: existing.expiresAt,
+      };
+    }
 
     const sessionPath = path.join(SESSIONS_DIR, `whatsapp_${userId}`);
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
@@ -81,6 +90,8 @@ class BridgeService {
 
     sock.ev.on("creds.update", saveCreds);
 
+    let onQrReceivedCallback = null;
+
     sock.ev.on("connection.update", async (update) => {
       const { connection, lastDisconnect, qr } = update;
       const io = BridgeService.getIo();
@@ -100,6 +111,11 @@ class BridgeService {
             qrDataUrl: sessionRecord.qrDataUrl,
             pairingCode: sessionRecord.pairingCode,
           });
+        }
+
+        if (onQrReceivedCallback) {
+          onQrReceivedCallback();
+          onQrReceivedCallback = null;
         }
       }
 
@@ -121,6 +137,11 @@ class BridgeService {
             name: sessionRecord.user.name,
           });
         }
+
+        if (onQrReceivedCallback) {
+          onQrReceivedCallback();
+          onQrReceivedCallback = null;
+        }
       }
 
       if (connection === "close") {
@@ -128,10 +149,8 @@ class BridgeService {
         sessionRecord.status = "disconnected";
 
         if (shouldReconnect) {
-          // Reconnect automatically if network glitch
           setTimeout(() => BridgeService.startWhatsAppBridge(userId, phone), 3000);
         } else {
-          // Clean up logged out session
           fs.rmSync(sessionPath, { recursive: true, force: true });
           liveSessions.whatsapp.delete(userId);
           if (io) {
@@ -180,16 +199,11 @@ class BridgeService {
       }
     });
 
-    // If pairing code requested with phone number
-    if (phone && !sock.authState.creds.registered) {
-      try {
-        const cleanNumber = phone.replace(/[^0-9]/g, "");
-        const code = await sock.requestPairingCode(cleanNumber);
-        sessionRecord.pairingCode = code;
-      } catch (err) {
-        console.warn("Could not request WA pairing code:", err.message);
-      }
-    }
+    // Wait up to 3.5 seconds for QR to generate before returning response
+    await new Promise((resolve) => {
+      onQrReceivedCallback = resolve;
+      setTimeout(resolve, 3500);
+    });
 
     return {
       status: sessionRecord.status,
@@ -203,7 +217,6 @@ class BridgeService {
   static getWhatsAppStatus(userId) {
     const session = liveSessions.whatsapp.get(userId);
     if (!session) {
-      // Check if saved session folder exists
       const sessionPath = path.join(SESSIONS_DIR, `whatsapp_${userId}`);
       if (fs.existsSync(sessionPath) && fs.existsSync(path.join(sessionPath, "creds.json"))) {
         return { connected: true, status: "connected", name: "WhatsApp Linked" };
@@ -242,6 +255,24 @@ class BridgeService {
   static async startTelegramBridge(userId) {
     if (!userId) throw new Error("User ID is required");
 
+    const existing = liveSessions.telegram.get(userId);
+    if (existing && existing.status === "connected") {
+      return {
+        status: "connected",
+        connected: true,
+        username: existing.user?.username,
+        name: existing.user?.name,
+      };
+    }
+    if (existing && existing.qrDataUrl) {
+      return {
+        status: existing.status,
+        qrCode: existing.qrCode,
+        qrDataUrl: existing.qrDataUrl,
+        expiresAt: existing.expiresAt,
+      };
+    }
+
     const sessionFilePath = path.join(SESSIONS_DIR, `telegram_${userId}.json`);
     let savedSessionString = "";
     if (fs.existsSync(sessionFilePath)) {
@@ -258,8 +289,7 @@ class BridgeService {
 
     await client.connect();
 
-    // Check if already authorized
-    const isAuthorized = await client.isUserAuthorized();
+    const isAuthorized = await client.isUserAuthorized().catch(() => false);
     if (isAuthorized) {
       const me = await client.getMe();
       const sessionRecord = {
@@ -289,6 +319,8 @@ class BridgeService {
     };
     liveSessions.telegram.set(userId, sessionRecord);
 
+    let onTgQrReceived = null;
+
     // Request QR Code Login stream from Telegram MTProto
     client
       .signInUserWithQrCode(
@@ -311,6 +343,11 @@ class BridgeService {
                 expires: qrToken.expires,
               });
             }
+
+            if (onTgQrReceived) {
+              onTgQrReceived();
+              onTgQrReceived = null;
+            }
           },
           onError: (err) => {
             console.warn("Telegram QR Error:", err.message);
@@ -324,7 +361,6 @@ class BridgeService {
           username: me.username ? `@${me.username}` : `@user_${me.id}`,
           name: `${me.firstName || ""} ${me.lastName || ""}`.trim() || "Telegram User",
         };
-        // Save session string
         fs.writeFileSync(
           sessionFilePath,
           JSON.stringify({ session: client.session.save(), userId, connectedAt: new Date().toISOString() })
@@ -342,6 +378,12 @@ class BridgeService {
       .catch((err) => {
         console.warn("Telegram QR login ended:", err.message);
       });
+
+    // Wait up to 3.5 seconds for Telegram QR token
+    await new Promise((resolve) => {
+      onTgQrReceived = resolve;
+      setTimeout(resolve, 3500);
+    });
 
     return {
       status: "waiting_scan",

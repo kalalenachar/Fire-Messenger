@@ -340,24 +340,34 @@ io.on("connection", (socket) => {
     }
   });
 
+global.io = io;
+
   // --- WHATSAPP & TELEGRAM REAL-TIME BRIDGE SOCKETS ---
-  socket.on("bridge_start_whatsapp", ({ userId, phone }) => {
-    const session = BridgeService.generateWhatsAppQR(userId, phone);
-    socket.emit("bridge_whatsapp_qr", session);
+  socket.on("bridge_start_whatsapp", async ({ userId, phone }) => {
+    try {
+      const session = await BridgeService.startWhatsAppBridge(userId, phone);
+      socket.emit("bridge_whatsapp_qr", session);
+    } catch (e) {
+      console.error("bridge_start_whatsapp socket error:", e);
+    }
   });
 
-  socket.on("bridge_confirm_whatsapp", ({ userId, phone, name }) => {
-    const session = BridgeService.completeWhatsAppConnection(userId, { phone, name });
+  socket.on("bridge_confirm_whatsapp", async ({ userId }) => {
+    const session = BridgeService.getWhatsAppStatus(userId);
     io.emit("bridge_whatsapp_connected", { userId, session });
   });
 
-  socket.on("bridge_start_telegram", ({ userId }) => {
-    const session = BridgeService.generateTelegramQR(userId);
-    socket.emit("bridge_telegram_qr", session);
+  socket.on("bridge_start_telegram", async ({ userId }) => {
+    try {
+      const session = await BridgeService.startTelegramBridge(userId);
+      socket.emit("bridge_telegram_qr", session);
+    } catch (e) {
+      console.error("bridge_start_telegram socket error:", e);
+    }
   });
 
-  socket.on("bridge_confirm_telegram", ({ userId, username, name }) => {
-    const session = BridgeService.completeTelegramConnection(userId, { username, name });
+  socket.on("bridge_confirm_telegram", async ({ userId }) => {
+    const session = BridgeService.getTelegramStatus(userId);
     io.emit("bridge_telegram_connected", { userId, session });
   });
 

@@ -1,7 +1,5 @@
 // Agni Messenger - WhatsApp & Telegram Bridge Controller
 const BridgeService = require("../services/bridgeService");
-const Chat = require("../models/Chat");
-const Message = require("../models/Message");
 
 // Get status of both platforms for a given user
 const getPlatformsStatus = async (req, res) => {
@@ -21,22 +19,23 @@ const getPlatformsStatus = async (req, res) => {
   }
 };
 
-// Start WhatsApp Bridge (Generate QR / Pairing Code)
+// Start WhatsApp Bridge (Generate Live QR / Pairing Code via Baileys)
 const startWhatsAppBridge = async (req, res) => {
   const { userId, phone } = req.body;
   try {
-    const session = BridgeService.generateWhatsAppQR(userId, phone);
+    const session = await BridgeService.startWhatsAppBridge(userId, phone);
     return res.json({ success: true, session });
   } catch (error) {
+    console.error("startWhatsAppBridge error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Confirm / Complete WhatsApp Connection (Simulate Scan or Authenticate)
+// Confirm / Check WhatsApp Connection Status
 const confirmWhatsAppBridge = async (req, res) => {
-  const { userId, phone, name } = req.body;
+  const { userId } = req.body;
   try {
-    const session = BridgeService.completeWhatsAppConnection(userId, { phone, name });
+    const session = BridgeService.getWhatsAppStatus(userId);
     return res.json({ success: true, session });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -47,29 +46,30 @@ const confirmWhatsAppBridge = async (req, res) => {
 const disconnectWhatsAppBridge = async (req, res) => {
   const { userId } = req.body;
   try {
-    const result = BridgeService.disconnectWhatsApp(userId);
+    const result = await BridgeService.disconnectWhatsApp(userId);
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Start Telegram Bridge (Generate QR Login Token)
+// Start Telegram Bridge (Generate Live MTProto QR Token via GramJS)
 const startTelegramBridge = async (req, res) => {
   const { userId } = req.body;
   try {
-    const session = BridgeService.generateTelegramQR(userId);
+    const session = await BridgeService.startTelegramBridge(userId);
     return res.json({ success: true, session });
   } catch (error) {
+    console.error("startTelegramBridge error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Confirm / Complete Telegram Connection
+// Confirm / Check Telegram Connection Status
 const confirmTelegramBridge = async (req, res) => {
-  const { userId, username, name } = req.body;
+  const { userId } = req.body;
   try {
-    const session = BridgeService.completeTelegramConnection(userId, { username, name });
+    const session = BridgeService.getTelegramStatus(userId);
     return res.json({ success: true, session });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -80,7 +80,7 @@ const confirmTelegramBridge = async (req, res) => {
 const disconnectTelegramBridge = async (req, res) => {
   const { userId } = req.body;
   try {
-    const result = BridgeService.disconnectTelegram(userId);
+    const result = await BridgeService.disconnectTelegram(userId);
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -92,7 +92,7 @@ const fetchSyncedBridgeChats = async (req, res) => {
   const { userId } = req.params;
   const user = req.body?.user || { _id: userId, name: "User" };
   try {
-    const chats = BridgeService.getSyncedChats(userId, user);
+    const chats = await BridgeService.getSyncedChats(userId, user);
     return res.json({ success: true, chats });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

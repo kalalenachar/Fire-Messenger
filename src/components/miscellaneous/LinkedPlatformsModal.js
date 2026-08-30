@@ -81,11 +81,19 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     if (!user?._id) return;
     try {
       const platforms = await fetchPlatformsStatusAsync(user._id);
-      setLinkedPlatforms(platforms);
-      if (!platforms.whatsapp?.connected) {
+      if (platforms) {
+        setLinkedPlatforms(platforms);
+        if (platforms.whatsapp?.qrDataUrl) {
+          setWaQrDataUrl(platforms.whatsapp.qrDataUrl);
+        }
+        if (platforms.telegram?.qrDataUrl) {
+          setTgQrDataUrl(platforms.telegram.qrDataUrl);
+        }
+      }
+      if (!platforms?.whatsapp?.connected && !platforms?.whatsapp?.qrDataUrl) {
         handleStartWhatsApp();
       }
-      if (!platforms.telegram?.connected) {
+      if (!platforms?.telegram?.connected && !platforms?.telegram?.qrDataUrl) {
         handleStartTelegram();
       }
     } catch (err) {
