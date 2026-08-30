@@ -76,7 +76,8 @@ fi
 
 # 3. Pull Latest Code & Install NPM Dependencies & Build React Bundle
 echo "🔨 Step 3: Pulling latest code & installing dependencies & building production bundle..."
-git pull origin main || true
+git fetch origin main || true
+git reset --hard origin/main || true
 npm install --legacy-peer-deps
 npm run build
 
