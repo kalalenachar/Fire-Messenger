@@ -44,6 +44,8 @@ const MyChats = () => {
     unblockUser,
     isUserBlocked,
     draftsMap,
+    linkedPlatforms,
+    syncBridgeChats,
     setIsLinkedPlatformsModalOpen,
   } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
@@ -581,41 +583,117 @@ const MyChats = () => {
           ) : (
             <Flex direction="column" align="center" justify="center" h="240px" p={4} textAlign="center" color="var(--text-muted)">
               <Text fontSize="3xl" mb={2}>
-                {activeFilter === "Starred" ? "⭐" : activeFilter === "🟢 WhatsApp" ? "🟢" : activeFilter === "🔵 Telegram" ? "🔵" : "💬"}
+                {activeFilter === "Starred"
+                  ? "⭐"
+                  : activeFilter === "🟢 WhatsApp"
+                  ? "🟢"
+                  : activeFilter === "🔵 Telegram"
+                  ? "🔵"
+                  : "💬"}
               </Text>
               <Text fontSize="sm" fontWeight="700" color="var(--text-primary)" mb={1}>
                 {activeFilter === "Starred"
                   ? "No Starred Messages"
                   : activeFilter === "🟢 WhatsApp"
-                  ? "No WhatsApp Chats Synced"
+                  ? linkedPlatforms?.whatsapp?.connected
+                    ? `WhatsApp Connected (${linkedPlatforms.whatsapp.phone || "Active"})`
+                    : "No WhatsApp Account Linked"
                   : activeFilter === "🔵 Telegram"
-                  ? "No Telegram Chats Synced"
+                  ? linkedPlatforms?.telegram?.connected
+                    ? `Telegram Connected (${linkedPlatforms.telegram.username || "Active"})`
+                    : "No Telegram Account Linked"
                   : "No chats in this folder"}
               </Text>
-              <Text fontSize="xs" color="var(--text-secondary)" mb={3} maxW="240px">
+              <Text fontSize="xs" color="var(--text-secondary)" mb={3} maxW="260px">
                 {activeFilter === "🟢 WhatsApp"
-                  ? "Link your WhatsApp account via QR Code or Pairing Code to chat with your contacts."
+                  ? linkedPlatforms?.whatsapp?.connected
+                    ? "Your WhatsApp session is live! Incoming messages will stream here automatically."
+                    : "Link your WhatsApp account via QR Code in Settings to chat with contacts."
                   : activeFilter === "🔵 Telegram"
-                  ? "Link your Telegram account via 1-Tap Connect to sync your channels and chats."
+                  ? linkedPlatforms?.telegram?.connected
+                    ? "Your Telegram MTProto session is live! Dialogs and channel updates stream here in real-time."
+                    : "Link your Telegram account via MTProto QR to sync channels and chats."
                   : "Start a conversation by searching for contacts above."}
               </Text>
-              {(activeFilter === "🟢 WhatsApp" || activeFilter === "🔵 Telegram") && (
-                <Box
-                  as="button"
-                  px={4}
-                  py={2}
-                  borderRadius="12px"
-                  bg={activeFilter === "🟢 WhatsApp" ? "#25D366" : "#229ED9"}
-                  color="white"
-                  fontSize="xs"
-                  fontWeight="700"
-                  boxShadow="0 4px 14px rgba(0,0,0,0.3)"
-                  _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
-                  transition="all 0.15s ease"
-                  onClick={() => setIsLinkedPlatformsModalOpen(true)}
-                >
-                  {activeFilter === "🟢 WhatsApp" ? "🔗 Link WhatsApp Account" : "⚡ Link Telegram Account"}
-                </Box>
+
+              {activeFilter === "🟢 WhatsApp" && (
+                <HStack spacing={2}>
+                  {linkedPlatforms?.whatsapp?.connected ? (
+                    <Box
+                      as="button"
+                      px={4}
+                      py={2}
+                      borderRadius="12px"
+                      bg="#25D366"
+                      color="white"
+                      fontSize="xs"
+                      fontWeight="700"
+                      boxShadow="0 4px 14px rgba(37, 211, 102, 0.3)"
+                      _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
+                      transition="all 0.15s ease"
+                      onClick={syncBridgeChats}
+                    >
+                      🔄 Sync Messages
+                    </Box>
+                  ) : (
+                    <Box
+                      as="button"
+                      px={4}
+                      py={2}
+                      borderRadius="12px"
+                      bg="#25D366"
+                      color="white"
+                      fontSize="xs"
+                      fontWeight="700"
+                      boxShadow="0 4px 14px rgba(0,0,0,0.3)"
+                      _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
+                      transition="all 0.15s ease"
+                      onClick={() => setIsLinkedPlatformsModalOpen(true)}
+                    >
+                      🔗 Link WhatsApp Account
+                    </Box>
+                  )}
+                </HStack>
+              )}
+
+              {activeFilter === "🔵 Telegram" && (
+                <HStack spacing={2}>
+                  {linkedPlatforms?.telegram?.connected ? (
+                    <Box
+                      as="button"
+                      px={4}
+                      py={2}
+                      borderRadius="12px"
+                      bg="#229ED9"
+                      color="white"
+                      fontSize="xs"
+                      fontWeight="700"
+                      boxShadow="0 4px 14px rgba(34, 158, 217, 0.3)"
+                      _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
+                      transition="all 0.15s ease"
+                      onClick={syncBridgeChats}
+                    >
+                      🔄 Sync Messages
+                    </Box>
+                  ) : (
+                    <Box
+                      as="button"
+                      px={4}
+                      py={2}
+                      borderRadius="12px"
+                      bg="#229ED9"
+                      color="white"
+                      fontSize="xs"
+                      fontWeight="700"
+                      boxShadow="0 4px 14px rgba(0,0,0,0.3)"
+                      _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
+                      transition="all 0.15s ease"
+                      onClick={() => setIsLinkedPlatformsModalOpen(true)}
+                    >
+                      ⚡ Link Telegram Account
+                    </Box>
+                  )}
+                </HStack>
               )}
             </Flex>
           )}
