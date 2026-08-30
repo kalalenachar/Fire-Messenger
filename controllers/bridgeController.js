@@ -94,8 +94,8 @@ const submitTelegramPassword = async (req, res) => {
     if (!userId || !password) {
       return res.status(400).json({ success: false, message: "User ID and password are required" });
     }
-    BridgeService.submitTelegramPassword(userId, password);
-    return res.json({ success: true, message: "Password submitted to Telegram" });
+    const result = await BridgeService.submitTelegramPassword(userId, password);
+    return res.json({ success: true, user: result.user, message: "Telegram connected successfully" });
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });
   }

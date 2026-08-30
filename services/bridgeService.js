@@ -654,6 +654,10 @@ class BridgeService {
           },
           onError: (err) => {
             console.warn("Telegram QR Error:", err.message);
+            if (sessionRecord.onAuthError) {
+              sessionRecord.onAuthError(err);
+              sessionRecord.onAuthError = null;
+            }
           },
         }
       )
@@ -673,6 +677,11 @@ class BridgeService {
 
         console.log(`🎉 🔵 Telegram linked for user: ${userId} (${sessionRecord.user.username})`);
 
+        if (sessionRecord.onAuthSuccess) {
+          sessionRecord.onAuthSuccess(sessionRecord.user);
+          sessionRecord.onAuthSuccess = null;
+        }
+
         const io = BridgeService.getIo();
         if (io) {
           io.to(userId).emit("bridge_telegram_connected", {
@@ -684,7 +693,11 @@ class BridgeService {
         }
       })
       .catch((err) => {
-        console.warn("Telegram QR login finished:", err.message);
+        console.warn("Telegram QR login finished with error:", err.message);
+        if (sessionRecord.onAuthError) {
+          sessionRecord.onAuthError(err);
+          sessionRecord.onAuthError = null;
+        }
       });
 
     // Wait up to 3.5 seconds for Telegram QR token
@@ -702,14 +715,42 @@ class BridgeService {
     };
   }
 
-  static submitTelegramPassword(userId, password) {
+  static async submitTelegramPassword(userId, password) {
     const session = liveSessions.telegram.get(userId);
-    if (session && session.resolvePassword) {
-      session.resolvePassword(password);
-      session.resolvePassword = null;
-      return { success: true };
+    if (!session) {
+      throw new Error("No active Telegram session found. Please refresh and scan QR code.");
     }
-    throw new Error("No active Telegram 2FA session awaiting password");
+    if (!session.resolvePassword) {
+      if (session.status === "connected") {
+        return { success: true, user: session.user };
+      }
+      throw new Error("Telegram is not currently awaiting a password. Please scan QR again.");
+    }
+
+    const authPromise = new Promise((resolve, reject) => {
+      session.onAuthSuccess = resolve;
+      session.onAuthError = reject;
+    });
+
+    // Submit password to GramJS
+    const resolver = session.resolvePassword;
+    session.resolvePassword = null;
+    resolver(password);
+
+    try {
+      const user = await Promise.race([
+        authPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Verification timed out. Check password and try again.")), 15000)),
+      ]);
+      return { success: true, user };
+    } catch (err) {
+      session.status = "password_needed";
+      const msg =
+        err.errorMessage === "PASSWORD_HASH_INVALID"
+          ? "Incorrect 2FA password. Please re-enter your Telegram Cloud Password."
+          : err.message || "2FA verification failed";
+      throw new Error(msg);
+    }
   }
 
   static getTelegramStatus(userId) {

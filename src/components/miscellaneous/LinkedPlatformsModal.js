@@ -323,20 +323,33 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
 
     setTgPassLoading(true);
     try {
-      await submitTelegramPasswordAsync(user._id, tgPassword.trim());
-      toast({
-        title: "Password Submitted 🔐",
-        description: "Verifying 2FA password with Telegram...",
-        status: "info",
-        duration: 3000,
-        isClosable: true,
-      });
+      const res = await submitTelegramPasswordAsync(user._id, tgPassword.trim());
+      if (res?.success) {
+        setLinkedPlatforms((prev) => ({
+          ...prev,
+          telegram: {
+            connected: true,
+            username: res.user?.username || "@user",
+            name: res.user?.name || "Telegram Account",
+          },
+        }));
+        setIsTgPasswordNeeded(false);
+        setTgPassword("");
+        await syncBridgeChats();
+        toast({
+          title: "Telegram Connected! 🔵",
+          description: `Logged in as ${res.user?.username || res.user?.name || "Telegram User"}`,
+          status: "success",
+          duration: 4000,
+          isClosable: true,
+        });
+      }
     } catch (err) {
       toast({
         title: "Telegram 2FA Error",
-        description: err.message || "Invalid Telegram password. Please re-enter.",
+        description: err.message || "Incorrect Telegram 2FA password. Please check and re-enter.",
         status: "error",
-        duration: 4000,
+        duration: 5000,
         isClosable: true,
       });
     } finally {
