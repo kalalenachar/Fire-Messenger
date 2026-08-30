@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     pic: {
       type: String,
-      default: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+      default: null,
     },
     status: { type: String, default: "Available | 🔥 Agni Messenger" },
     token: { type: String },

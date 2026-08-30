@@ -5,7 +5,6 @@ const {
   makeCacheableSignalKeyStore,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  Browsers,
 } = require("@whiskeysockets/baileys");
 const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
@@ -30,6 +29,9 @@ const liveSessions = {
   telegram: new Map(), // userId -> { client, sessionString, qrCode, qrDataUrl, status, user, chats, messages }
 };
 
+// Profile picture caches to avoid rate limits
+const profilePicCache = new Map();
+
 class BridgeService {
   static getIo() {
     return global.io || null;
@@ -42,6 +44,45 @@ class BridgeService {
     if (clean.includes("@")) return clean;
     const digits = clean.replace(/[^0-9]/g, "");
     return `${digits}@s.whatsapp.net`;
+  }
+
+  // Helper to fetch live WhatsApp profile picture
+  static async fetchWhatsAppProfilePic(sock, jid) {
+    if (!sock || !jid) return null;
+    const cleanJid = BridgeService.formatWhatsAppJid(jid);
+    if (profilePicCache.has(cleanJid)) {
+      return profilePicCache.get(cleanJid);
+    }
+    try {
+      const url = await sock.profilePictureUrl(cleanJid, "image");
+      if (url) {
+        profilePicCache.set(cleanJid, url);
+        return url;
+      }
+    } catch (e) {
+      // User has privacy enabled or no profile picture set
+    }
+    profilePicCache.set(cleanJid, null);
+    return null;
+  }
+
+  // Helper to fetch live Telegram profile picture
+  static async fetchTelegramProfilePic(client, peer) {
+    if (!client || !peer) return null;
+    const cacheKey = `tg_${peer}`;
+    if (profilePicCache.has(cacheKey)) {
+      return profilePicCache.get(cacheKey);
+    }
+    try {
+      const buffer = await client.downloadProfilePhoto(peer, { isBig: false });
+      if (buffer && buffer.length > 0) {
+        const dataUrl = `data:image/jpeg;base64,${Buffer.from(buffer).toString("base64")}`;
+        profilePicCache.set(cacheKey, dataUrl);
+        return dataUrl;
+      }
+    } catch (e) {}
+    profilePicCache.set(cacheKey, null);
+    return null;
   }
 
   // =========================================================================
@@ -58,6 +99,7 @@ class BridgeService {
         connected: true,
         phone: existing.user?.phone || "Active",
         name: existing.user?.name || "WhatsApp User",
+        pic: existing.user?.pic || null,
       };
     }
 
@@ -138,21 +180,29 @@ class BridgeService {
       if (connection === "open") {
         const waUser = sock.user || {};
         const formattedPhone = waUser.id ? waUser.id.split(":")[0].split("@")[0] : phone || "Connected";
+        
+        let myPic = null;
+        if (waUser.id) {
+          myPic = await BridgeService.fetchWhatsAppProfilePic(sock, waUser.id).catch(() => null);
+        }
+
         sessionRecord.status = "connected";
         sessionRecord.user = {
           phone: `+${formattedPhone}`,
           name: waUser.name || "WhatsApp User",
+          pic: myPic || null,
         };
         sessionRecord.qrCode = null;
         sessionRecord.qrDataUrl = null;
 
-        console.log(`🎉 🟢 WhatsApp successfully linked for user: ${userId} (${sessionRecord.user.phone})`);
+        console.log(`🎉 🟢 WhatsApp linked for user: ${userId} (${sessionRecord.user.phone}, pic: ${!!myPic})`);
 
         if (io) {
           io.to(userId).emit("bridge_whatsapp_connected", {
             connected: true,
             phone: sessionRecord.user.phone,
             name: sessionRecord.user.name,
+            pic: sessionRecord.user.pic,
           });
         }
 
@@ -182,7 +232,7 @@ class BridgeService {
     });
 
     // Handle incoming history sync
-    sock.ev.on("messaging-history.set", ({ chats }) => {
+    sock.ev.on("messaging-history.set", async ({ chats }) => {
       if (!chats) return;
       console.log(`📥 Syncing ${chats.length} WhatsApp chats from history...`);
       for (const c of chats) {
@@ -190,18 +240,25 @@ class BridgeService {
         const isGroup = c.id.endsWith("@g.us");
         const cleanPhone = c.id.split("@")[0];
         const chatName = c.name || (isGroup ? "WhatsApp Group" : `+${cleanPhone}`);
+        
+        let pic = null;
+        try {
+          pic = await BridgeService.fetchWhatsAppProfilePic(sock, c.id);
+        } catch (e) {}
+
         sessionRecord.chats.set(c.id, {
           _id: `wa_${c.id}`,
           chatName,
           isGroupChat: isGroup,
           platform: "whatsapp",
           platformChatId: c.id,
+          pic: pic || null,
           users: [
             { _id: userId, name: "You" },
             {
               _id: `wa_${c.id}`,
               name: chatName,
-              pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+              pic: pic || null,
             },
           ],
           unread: c.unreadCount || 0,
@@ -211,24 +268,31 @@ class BridgeService {
       }
     });
 
-    sock.ev.on("chats.upsert", (newChats) => {
+    sock.ev.on("chats.upsert", async (newChats) => {
       for (const c of newChats) {
         if (!c.id || c.id === "status@broadcast") continue;
         const isGroup = c.id.endsWith("@g.us");
         const cleanPhone = c.id.split("@")[0];
         const chatName = c.name || (isGroup ? "WhatsApp Group" : `+${cleanPhone}`);
+        
+        let pic = null;
+        try {
+          pic = await BridgeService.fetchWhatsAppProfilePic(sock, c.id);
+        } catch (e) {}
+
         sessionRecord.chats.set(c.id, {
           _id: `wa_${c.id}`,
           chatName,
           isGroupChat: isGroup,
           platform: "whatsapp",
           platformChatId: c.id,
+          pic: pic || null,
           users: [
             { _id: userId, name: "You" },
             {
               _id: `wa_${c.id}`,
               name: chatName,
-              pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+              pic: pic || null,
             },
           ],
           unread: c.unreadCount || 0,
@@ -261,6 +325,14 @@ class BridgeService {
         const cleanPhone = fromJid.split("@")[0];
         const contactName = msg.pushName || (isGroup ? "WhatsApp Group" : `+${cleanPhone}`);
 
+        // Fetch contact live WhatsApp profile picture
+        let senderPic = null;
+        if (!isFromMe) {
+          senderPic = await BridgeService.fetchWhatsAppProfilePic(sock, msg.key.participant || fromJid).catch(() => null);
+        } else {
+          senderPic = sessionRecord.user?.pic || null;
+        }
+
         const normalizedMsg = {
           _id: `wa_${msg.key.id}`,
           content: text || (msg.message.audioMessage ? "🎤 Voice Note" : "📷 Photo"),
@@ -270,7 +342,7 @@ class BridgeService {
           sender: {
             _id: isFromMe ? userId : `wa_${msg.key.participant || fromJid}`,
             name: isFromMe ? "You" : contactName,
-            pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+            pic: senderPic || null,
           },
           deliveryStatus: isFromMe ? "delivered" : "received",
           createdAt: new Date(Number(msg.messageTimestamp || Date.now() / 1000) * 1000).toISOString(),
@@ -284,12 +356,13 @@ class BridgeService {
             isGroupChat: isGroup,
             platform: "whatsapp",
             platformChatId: fromJid,
+            pic: senderPic || null,
             users: [
               { _id: userId, name: "You" },
               {
                 _id: `wa_${fromJid}`,
                 name: contactName,
-                pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+                pic: senderPic || null,
               },
             ],
             latestMessage: normalizedMsg,
@@ -300,10 +373,11 @@ class BridgeService {
           sessionRecord.chats.set(fromJid, chatObj);
         } else {
           chatObj.latestMessage = normalizedMsg;
+          if (senderPic) chatObj.pic = senderPic;
           if (!isFromMe) chatObj.unread = (chatObj.unread || 0) + 1;
         }
 
-        console.log(`💬 Live WhatsApp message from ${fromJid}: ${normalizedMsg.content}`);
+        console.log(`💬 Live WhatsApp message from ${fromJid}: ${normalizedMsg.content} (pic: ${!!senderPic})`);
 
         if (io) {
           io.to(userId).emit("bridge_message_received", {
@@ -341,7 +415,7 @@ class BridgeService {
             const creds = JSON.parse(fs.readFileSync(credsFile, "utf8"));
             if (creds.registered && creds.me) {
               const formatted = creds.me.id ? creds.me.id.split(":")[0].split("@")[0] : "Active";
-              return { connected: true, status: "connected", phone: `+${formatted}`, name: creds.me.name || "WhatsApp Account" };
+              return { connected: true, status: "connected", phone: `+${formatted}`, name: creds.me.name || "WhatsApp Account", pic: null };
             }
           }
         } catch (e) {}
@@ -358,6 +432,7 @@ class BridgeService {
       pairingCode: session.pairingCode,
       phone: session.user?.phone,
       name: session.user?.name,
+      pic: session.user?.pic || null,
       expiresAt: session.expiresAt,
     };
   }
@@ -390,6 +465,7 @@ class BridgeService {
         connected: true,
         username: existing.user?.username || "@user",
         name: existing.user?.name || "Telegram User",
+        pic: existing.user?.pic || null,
       };
     }
 
@@ -418,12 +494,14 @@ class BridgeService {
     const isAuthorized = await client.isUserAuthorized().catch(() => false);
     if (isAuthorized) {
       const me = await client.getMe();
+      let myPic = await BridgeService.fetchTelegramProfilePic(client, "me").catch(() => null);
       const sessionRecord = {
         client,
         status: "connected",
         user: {
           username: me.username ? `@${me.username}` : `@user_${me.id}`,
           name: `${me.firstName || ""} ${me.lastName || ""}`.trim() || "Telegram User",
+          pic: myPic || null,
         },
       };
       liveSessions.telegram.set(userId, sessionRecord);
@@ -432,6 +510,7 @@ class BridgeService {
         connected: true,
         username: sessionRecord.user.username,
         name: sessionRecord.user.name,
+        pic: sessionRecord.user.pic,
       };
     }
 
@@ -483,17 +562,19 @@ class BridgeService {
       )
       .then(async (user) => {
         const me = user || (await client.getMe());
+        const myPic = await BridgeService.fetchTelegramProfilePic(client, "me").catch(() => null);
         sessionRecord.status = "connected";
         sessionRecord.user = {
           username: me.username ? `@${me.username}` : `@user_${me.id}`,
           name: `${me.firstName || ""} ${me.lastName || ""}`.trim() || "Telegram User",
+          pic: myPic || null,
         };
         fs.writeFileSync(
           sessionFilePath,
           JSON.stringify({ session: client.session.save(), userId, connectedAt: new Date().toISOString() })
         );
 
-        console.log(`🎉 🔵 Telegram successfully linked for user: ${userId} (${sessionRecord.user.username})`);
+        console.log(`🎉 🔵 Telegram linked for user: ${userId} (${sessionRecord.user.username})`);
 
         const io = BridgeService.getIo();
         if (io) {
@@ -501,6 +582,7 @@ class BridgeService {
             connected: true,
             username: sessionRecord.user.username,
             name: sessionRecord.user.name,
+            pic: sessionRecord.user.pic,
           });
         }
       })
@@ -530,7 +612,7 @@ class BridgeService {
         try {
           const fileContent = JSON.parse(fs.readFileSync(sessionFilePath, "utf8"));
           if (fileContent.session) {
-            return { connected: true, status: "connected", username: "@telegram_user", name: "Telegram Linked" };
+            return { connected: true, status: "connected", username: "@telegram_user", name: "Telegram Linked", pic: null };
           }
         } catch (e) {}
       }
@@ -545,6 +627,7 @@ class BridgeService {
       qrDataUrl: isConnected ? null : session.qrDataUrl,
       username: session.user?.username,
       name: session.user?.name,
+      pic: session.user?.pic || null,
       expiresAt: session.expiresAt,
     };
   }
@@ -592,21 +675,24 @@ class BridgeService {
     if (tgSession && tgSession.status === "connected" && tgSession.client) {
       try {
         const dialogs = await tgSession.client.getDialogs({ limit: 20 });
-        dialogs.forEach((d) => {
+        for (const d of dialogs) {
           const entity = d.entity || {};
           const isGroup = d.isGroup || d.isChannel;
+          const photoUrl = await BridgeService.fetchTelegramProfilePic(tgSession.client, d.inputEntity).catch(() => null);
+
           chats.push({
             _id: `tg_${d.id}`,
             chatName: d.title || `${entity.firstName || ""} ${entity.lastName || ""}`.trim() || "Telegram Chat",
             isGroupChat: Boolean(isGroup),
             platform: "telegram",
             platformChatId: String(d.id),
+            pic: photoUrl || null,
             users: [
               user,
               {
                 _id: `tg_user_${d.id}`,
                 name: d.title || entity.firstName || "Telegram User",
-                pic: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+                pic: photoUrl || null,
               },
             ],
             latestMessage: d.message?.message
@@ -626,7 +712,7 @@ class BridgeService {
               id: d.id,
             },
           });
-        });
+        }
       } catch (e) {
         console.warn("Could not fetch Telegram dialogs:", e.message);
       }
@@ -636,23 +722,30 @@ class BridgeService {
   }
 
   // Create a brand new direct chat thread with a phone number / username
-  static createDirectChat(platform, userId, targetIdentifier, user) {
+  static async createDirectChat(platform, userId, targetIdentifier, user) {
     if (platform === "whatsapp") {
       const waSession = liveSessions.whatsapp.get(userId);
       const jid = BridgeService.formatWhatsAppJid(targetIdentifier);
       const cleanPhone = jid.split("@")[0];
+
+      let pic = null;
+      if (waSession?.socket) {
+        pic = await BridgeService.fetchWhatsAppProfilePic(waSession.socket, jid).catch(() => null);
+      }
+
       const chatObj = {
         _id: `wa_${jid}`,
         chatName: `+${cleanPhone}`,
         isGroupChat: false,
         platform: "whatsapp",
         platformChatId: jid,
+        pic: pic || null,
         users: [
           user || { _id: userId, name: "You" },
           {
             _id: `wa_${jid}`,
             name: `+${cleanPhone}`,
-            pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+            pic: pic || null,
           },
         ],
         unread: 0,

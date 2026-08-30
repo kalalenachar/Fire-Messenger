@@ -11,7 +11,7 @@ const fireBotUser = {
   username: "agni_bot",
   email: "bot@agnimessenger.io",
   password: "bot_system_protected_no_login",
-  pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
+  pic: "https://api.dicebear.com/7.x/bottts/svg?seed=AgniBot",
   status: "Official Automated Assistant | Online 24/7",
   isVerified: true,
   verificationStatus: "verified",
@@ -31,7 +31,7 @@ const adminUser = {
   email: "admin@agnimessenger.io",
   password: "admin123",
   isAdmin: true,
-  pic: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+  pic: null,
   status: "🔥 Agni Administrator",
   isVerified: true,
   verificationStatus: "verified",
@@ -132,6 +132,7 @@ async function ensureAdminPrivileges() {
       existingAdmin.isAdmin = true;
       existingAdmin.isVerified = true;
       existingAdmin.verificationStatus = "verified";
+      existingAdmin.pic = existingAdmin.pic && !existingAdmin.pic.includes("unsplash.com") ? existingAdmin.pic : null;
       await existingAdmin.save();
     }
 
@@ -155,6 +156,12 @@ async function ensureAdminPrivileges() {
     await User.deleteMany({ email: { $in: dummyEmails } });
     await Chat.deleteMany({ _id: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge", "chat_fire_bot"] } });
     await Message.deleteMany({ chat: { $in: ["chat_fire_squad", "chat_sarah", "chat_tech_lounge", "chat_fire_bot"] } });
+
+    // Clean up any remaining unsplash demo avatars from existing DB users
+    await User.updateMany(
+      { pic: { $regex: "unsplash.com" } },
+      { $set: { pic: null } }
+    );
   } catch (err) {
     console.error("Error ensuring admin privileges:", err);
   }

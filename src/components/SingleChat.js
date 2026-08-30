@@ -602,7 +602,7 @@ const SingleChat = () => {
 
       return {
         title: selectedChat.chatName,
-        avatar: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&auto=format&fit=crop&q=80",
+        avatar: selectedChat.groupPic || selectedChat.pic || null,
         status: groupStatus,
       };
     }
@@ -618,7 +618,7 @@ const SingleChat = () => {
 
     return {
       title: otherUser?.name || selectedChat.chatName,
-      avatar: otherUser?.pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+      avatar: otherUser?.pic || selectedChat.pic || null,
       status: directStatus,
       userObj: otherUser,
       isBlocked,

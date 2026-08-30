@@ -7,7 +7,7 @@ export const fireBotUser = {
   name: "Agni Bot 🔥",
   username: "agni_bot",
   email: "bot@agnimessenger.io",
-  pic: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
+  pic: "https://api.dicebear.com/7.x/bottts/svg?seed=AgniBot",
   status: "Official Automated Assistant | Online 24/7",
   isBot: true,
 };
@@ -18,7 +18,7 @@ export const defaultUser = {
   username: "admin",
   email: "admin@agnimessenger.io",
   password: "admin123",
-  pic: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+  pic: null,
   status: "🔥 Agni Administrator",
   token: "admin_token_12345",
   isAdmin: true,

@@ -140,8 +140,8 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
                   : chat.users?.find((u) => u._id !== user?._id)?.name || chat.chatName;
 
                 const avatar = chat.isGroupChat
-                  ? "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&auto=format&fit=crop&q=80"
-                  : chat.users?.find((u) => u._id !== user?._id)?.pic;
+                  ? chat.groupPic || chat.pic || null
+                  : chat.users?.find((u) => u._id !== user?._id)?.pic || chat.pic || null;
 
                 return (
                   <Flex

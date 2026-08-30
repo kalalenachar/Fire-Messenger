@@ -119,7 +119,7 @@ const registerUser = async (req, res) => {
       name: name.trim(),
       password,
       isAdmin: shouldBeAdmin,
-      pic: pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+      pic: pic || null,
       status: status || "Available | 🔥 Agni Messenger",
       token: `token_${Date.now()}`,
     };

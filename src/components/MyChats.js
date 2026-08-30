@@ -129,10 +129,10 @@ const MyChats = () => {
 
   const getChatAvatar = (chat) => {
     if (chat.isGroupChat) {
-      return "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&auto=format&fit=crop&q=80";
+      return chat.groupPic || chat.pic || null;
     }
     const otherUser = chat.users?.find((u) => u._id !== user?._id);
-    return otherUser?.pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80";
+    return otherUser?.pic || chat.pic || null;
   };
 
   const getChatTitle = (chat) => {

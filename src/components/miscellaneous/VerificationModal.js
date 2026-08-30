@@ -127,8 +127,8 @@ const VerificationModal = ({ isOpen, onClose }) => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       snapshotUrl = canvas.toDataURL("image/jpeg");
     } else {
-      // Simulation Fallback Snapshot
-      snapshotUrl = user?.pic || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+      // Fallback Snapshot
+      snapshotUrl = user?.pic || null;
     }
 
     setFaceImage(snapshotUrl);
