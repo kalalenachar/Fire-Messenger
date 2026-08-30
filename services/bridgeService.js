@@ -745,10 +745,14 @@ class BridgeService {
       return { success: true, user };
     } catch (err) {
       session.status = "password_needed";
-      const msg =
-        err.errorMessage === "PASSWORD_HASH_INVALID"
-          ? "Incorrect 2FA password. Please re-enter your Telegram Cloud Password."
-          : err.message || "2FA verification failed";
+      let msg = err.message || "2FA verification failed";
+      if (err.errorMessage === "PASSWORD_HASH_INVALID") {
+        msg = "Incorrect 2FA password. Please re-enter your Telegram Cloud Password.";
+      } else if (err.seconds || (err.message && (err.message.includes("wait of") || err.message.includes("FLOOD_WAIT")))) {
+        const seconds = err.seconds || parseInt(err.message.match(/\d+/)?.[0] || "60", 10);
+        const minutes = Math.ceil(seconds / 60);
+        msg = `Telegram Security Cooldown: Too many password attempts. Telegram has temporarily locked 2FA verification for ~${minutes} minutes (${seconds}s). Please wait for the cooldown to expire before re-entering.`;
+      }
       throw new Error(msg);
     }
   }
