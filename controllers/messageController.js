@@ -14,6 +14,9 @@ const getChatMessages = async (req, res) => {
         messages = bridgeMsgs;
       }
     }
+    if (Array.isArray(messages) && messages.length > 0) {
+      messages.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    }
     res.json({ success: true, messages: messages || [] });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

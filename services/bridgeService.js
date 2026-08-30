@@ -195,7 +195,7 @@ class BridgeService {
 
     // Persist to MongoDB if model is available
     try {
-      await Message.findByIdAndUpdate(msgId, normalizedMsg, { upsert: true });
+      await Message.findByIdAndUpdate(msgId, normalizedMsg, { upsert: true, timestamps: false });
     } catch (e) {}
 
     return { normalizedMsg, chatObj };
@@ -866,17 +866,19 @@ class BridgeService {
               }
             : null;
 
-          // Fetch recent Telegram messages for this dialog
+          // Fetch recent Telegram messages for this dialog (GramJS returns newest first, so reverse to process chronologically)
           try {
-            const histMsgs = await tgSession.client.getMessages(d.inputEntity, { limit: 20 });
+            const histMsgs = await tgSession.client.getMessages(d.inputEntity, { limit: 30 });
+            const chronologicalMsgs = Array.isArray(histMsgs) ? [...histMsgs].reverse() : [];
             if (!tgSession.messages) tgSession.messages = new Map();
             if (!tgSession.messages.has(chatId)) tgSession.messages.set(chatId, []);
             const tgMsgs = tgSession.messages.get(chatId);
 
-            for (const m of histMsgs) {
+            for (const m of chronologicalMsgs) {
               if (m && m.message) {
                 const isOut = Boolean(m.out);
                 const msgId = `tg_msg_${m.id}`;
+                const msgDate = new Date(m.date * 1000).toISOString();
                 const normalized = {
                   _id: msgId,
                   content: m.message,
@@ -889,13 +891,13 @@ class BridgeService {
                     pic: photoUrl || null,
                   },
                   deliveryStatus: "delivered",
-                  createdAt: new Date(m.date * 1000).toISOString(),
+                  createdAt: msgDate,
                 };
                 if (!tgMsgs.some((em) => em._id === msgId)) {
                   tgMsgs.push(normalized);
                 }
                 try {
-                  await Message.findByIdAndUpdate(msgId, normalized, { upsert: true });
+                  await Message.findByIdAndUpdate(msgId, normalized, { upsert: true, timestamps: false });
                 } catch (e) {}
               }
             }
@@ -999,7 +1001,7 @@ class BridgeService {
         }
         waSession.messages.get(targetChatKey).push(normalizedMsg);
         try {
-          await Message.findByIdAndUpdate(normalizedMsg._id, normalizedMsg, { upsert: true });
+          await Message.findByIdAndUpdate(normalizedMsg._id, normalizedMsg, { upsert: true, timestamps: false });
         } catch (e) {}
       }
     } else if (platform === "telegram") {
@@ -1007,7 +1009,31 @@ class BridgeService {
       if (tgSession?.client && tgSession.status === "connected") {
         const cleanPeer = chatId.startsWith("tg_") ? chatId.replace("tg_", "") : chatId;
         console.log(`📤 Dispatching live Telegram message to ${cleanPeer}: "${content}"`);
-        await tgSession.client.sendMessage(cleanPeer, { message: content });
+        const sent = await tgSession.client.sendMessage(cleanPeer, { message: content }).catch((err) => {
+          console.warn("Telegram sendMessage error:", err.message);
+          return null;
+        });
+
+        const targetChatKey = chatId.startsWith("tg_") ? chatId : `tg_${cleanPeer}`;
+        const normalizedMsg = {
+          _id: `tg_msg_${sent?.id || Date.now()}`,
+          content,
+          chat: targetChatKey,
+          platform: "telegram",
+          platformChatId: cleanPeer,
+          sender,
+          deliveryStatus: "delivered",
+          createdAt: new Date().toISOString(),
+        };
+
+        if (!tgSession.messages) tgSession.messages = new Map();
+        if (!tgSession.messages.has(targetChatKey)) {
+          tgSession.messages.set(targetChatKey, []);
+        }
+        tgSession.messages.get(targetChatKey).push(normalizedMsg);
+        try {
+          await Message.findByIdAndUpdate(normalizedMsg._id, normalizedMsg, { upsert: true, timestamps: false });
+        } catch (e) {}
       }
     }
 

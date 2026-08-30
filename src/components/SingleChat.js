@@ -202,7 +202,8 @@ const SingleChat = () => {
   const animFrameRef = useRef(null);
 
   const activeMessages = React.useMemo(() => {
-    return selectedChat && typeof selectedChat === "object" ? messagesMap[selectedChat._id] || [] : [];
+    const msgs = selectedChat && typeof selectedChat === "object" ? messagesMap[selectedChat._id] || [] : [];
+    return [...msgs].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
   }, [selectedChat, messagesMap]);
 
   const activeTypingText = selectedChat && typeof selectedChat === "object" ? isTypingMap[selectedChat._id] : null;
