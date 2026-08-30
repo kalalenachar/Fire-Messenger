@@ -16,6 +16,8 @@ const audienceRoutes = require("./routes/audienceRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const botRoutes = require("./routes/botRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const bridgeRoutes = require("./routes/bridgeRoutes");
+const BridgeService = require("./services/bridgeService");
 
 // Import Message Controller Helpers for WebSockets
 const {
@@ -92,6 +94,7 @@ app.use("/api/audience-profiles", audienceRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/bot", botRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/bridge", bridgeRoutes);
 
 // --- SERVE REACT FRONTEND STATIC ASSETS ---
 const buildPath = path.join(__dirname, "build");
@@ -334,6 +337,44 @@ io.on("connection", (socket) => {
     }
     if (targetUserId) {
       io.to(targetUserId).emit("call-ended");
+    }
+  });
+
+  // --- WHATSAPP & TELEGRAM REAL-TIME BRIDGE SOCKETS ---
+  socket.on("bridge_start_whatsapp", ({ userId, phone }) => {
+    const session = BridgeService.generateWhatsAppQR(userId, phone);
+    socket.emit("bridge_whatsapp_qr", session);
+  });
+
+  socket.on("bridge_confirm_whatsapp", ({ userId, phone, name }) => {
+    const session = BridgeService.completeWhatsAppConnection(userId, { phone, name });
+    io.emit("bridge_whatsapp_connected", { userId, session });
+  });
+
+  socket.on("bridge_start_telegram", ({ userId }) => {
+    const session = BridgeService.generateTelegramQR(userId);
+    socket.emit("bridge_telegram_qr", session);
+  });
+
+  socket.on("bridge_confirm_telegram", ({ userId, username, name }) => {
+    const session = BridgeService.completeTelegramConnection(userId, { username, name });
+    io.emit("bridge_telegram_connected", { userId, session });
+  });
+
+  socket.on("bridge_send_message", async (data) => {
+    const { platform, chatId, content, sender, mediaUrl, audioUrl, replyTo } = data;
+    try {
+      const message = await BridgeService.sendBridgeMessage(platform, {
+        chatId,
+        content,
+        sender,
+        mediaUrl,
+        audioUrl,
+        replyTo,
+      });
+      io.emit("bridge_message_received", { platform, chatId, message });
+    } catch (err) {
+      console.error("Error dispatching bridge message:", err);
     }
   });
 

@@ -18,6 +18,9 @@ const chatSchema = new mongoose.Schema(
     unread: { type: Number, default: 0 },
     category: { type: String, default: "Personal" },
     isSavedMessages: { type: Boolean, default: false },
+    platform: { type: String, enum: ["agni", "whatsapp", "telegram"], default: "agni" },
+    platformChatId: { type: String, default: "" },
+    platformMetadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   {
     timestamps: true,

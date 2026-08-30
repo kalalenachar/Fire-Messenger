@@ -35,10 +35,14 @@ import {
   unpinChatMessageAsync,
   forwardMessagesAsync,
   setChatDisappearingTimerAsync,
+  fetchPlatformsStatusAsync,
+  fetchSyncedBridgeChatsAsync,
+  sendBridgeMessageAsync,
 } from "../data/fireStorage";
 import { getBotReplyAsync } from "../data/fireMockData";
 import { useColorMode, useToast } from "@chakra-ui/react";
 import CallModal from "../components/miscellaneous/CallModal";
+import LinkedPlatformsModal from "../components/miscellaneous/LinkedPlatformsModal";
 import { soundEngine } from "../config/soundEngine";
 
 const ChatContext = createContext();
@@ -107,6 +111,82 @@ const ChatProvider = ({ children }) => {
       return updated;
     });
   }, []);
+
+  // Omnichannel WhatsApp & Telegram Bridge State
+  const [linkedPlatforms, setLinkedPlatforms] = useState({
+    whatsapp: { connected: false },
+    telegram: { connected: false },
+  });
+  const [platformFilter, setPlatformFilter] = useState("all");
+  const [isLinkedPlatformsModalOpen, setIsLinkedPlatformsModalOpen] = useState(false);
+
+  const syncBridgeChats = useCallback(async () => {
+    if (!user?._id) return;
+    try {
+      const bridgeChats = await fetchSyncedBridgeChatsAsync(user._id, user);
+      if (bridgeChats && bridgeChats.length > 0) {
+        setChats((prev) => {
+          const existingIds = new Set(prev.map((c) => c._id));
+          const toAdd = bridgeChats.filter((bc) => !existingIds.has(bc._id));
+          return [...toAdd, ...prev];
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to sync bridge chats:", err);
+    }
+  }, [user]);
+
+  const sendBridgeMessage = useCallback(
+    async (platform, { chatId, content, mediaUrl, audioUrl, replyTo }) => {
+      if (!user?._id || !chatId) return null;
+      try {
+        const msg = await sendBridgeMessageAsync(platform, {
+          chatId,
+          content,
+          sender: user,
+          mediaUrl,
+          audioUrl,
+          replyTo,
+        });
+        if (msg) {
+          soundEngine.playMessageSent();
+          setMessagesMap((prev) => {
+            const currentMsgs = prev[chatId] || [];
+            return {
+              ...prev,
+              [chatId]: [...currentMsgs, msg],
+            };
+          });
+          if (socket) {
+            socket.emit("bridge_send_message", {
+              platform,
+              chatId,
+              content,
+              sender: user,
+              mediaUrl,
+              audioUrl,
+              replyTo,
+            });
+          }
+        }
+        return msg;
+      } catch (err) {
+        console.error("Error sending bridge message:", err);
+        return null;
+      }
+    },
+    [user]
+  );
+
+  useEffect(() => {
+    if (user?._id) {
+      fetchPlatformsStatusAsync(user._id)
+        .then((status) => {
+          if (status) setLinkedPlatforms(status);
+        })
+        .catch(() => {});
+    }
+  }, [user?._id]);
 
   // Folder Settings State
   const [folders, setFolders] = useState([]);
@@ -1922,6 +2002,15 @@ const ChatProvider = ({ children }) => {
         addChatToFolder,
         removeChatFromFolder,
         toggleChatFolder,
+        // Omnichannel WhatsApp & Telegram Bridge
+        linkedPlatforms,
+        setLinkedPlatforms,
+        platformFilter,
+        setPlatformFilter,
+        isLinkedPlatformsModalOpen,
+        setIsLinkedPlatformsModalOpen,
+        syncBridgeChats,
+        sendBridgeMessage,
         // Pin Chat & Saved Messages Context Values
         pinnedChatIds,
         togglePinChat,
@@ -1941,6 +2030,11 @@ const ChatProvider = ({ children }) => {
       }}
     >
       {children}
+      {/* Global Linked Platforms (WhatsApp & Telegram) Modal */}
+      <LinkedPlatformsModal
+        isOpen={isLinkedPlatformsModalOpen}
+        onClose={() => setIsLinkedPlatformsModalOpen(false)}
+      />
       {/* Global WebRTC Audio / Video Call Overlay Modal */}
       <CallModal
         isOpen={isCallModalOpen}

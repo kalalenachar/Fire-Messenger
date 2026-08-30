@@ -37,6 +37,9 @@ const messageSchema = new mongoose.Schema(
     isPinned: { type: Boolean, default: false },
     isStarredBy: [{ type: String }],
     expiresAt: { type: Date },
+    platform: { type: String, enum: ["agni", "whatsapp", "telegram"], default: "agni" },
+    platformMessageId: { type: String, default: "" },
+    deliveryStatus: { type: String, enum: ["pending", "sent", "delivered", "read"], default: "read" },
     createdAt: { type: Date, default: Date.now },
   },
   {

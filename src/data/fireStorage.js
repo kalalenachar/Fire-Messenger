@@ -718,3 +718,95 @@ export const setChatDisappearingTimerAsync = async (chatId, seconds) => {
     return null;
   }
 };
+
+// --- WHATSAPP & TELEGRAM BRIDGE REST API CLIENTS ---
+
+export const fetchPlatformsStatusAsync = async (userId) => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/bridge/status/${userId}`);
+    return res?.data?.success ? res.data.platforms : { whatsapp: { connected: false }, telegram: { connected: false } };
+  } catch (error) {
+    console.warn("Error fetching platforms status:", error?.message || error);
+    return { whatsapp: { connected: false }, telegram: { connected: false } };
+  }
+};
+
+export const startWhatsAppBridgeAsync = async (userId, phone) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/whatsapp/start`, { userId, phone });
+    return res?.data?.success ? res.data.session : null;
+  } catch (error) {
+    console.error("Error starting WhatsApp bridge:", error?.message || error);
+    return null;
+  }
+};
+
+export const confirmWhatsAppBridgeAsync = async (userId, phone, name) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/whatsapp/confirm`, { userId, phone, name });
+    return res?.data?.success ? res.data.session : null;
+  } catch (error) {
+    console.error("Error confirming WhatsApp bridge:", error?.message || error);
+    return null;
+  }
+};
+
+export const disconnectWhatsAppBridgeAsync = async (userId) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/whatsapp/disconnect`, { userId });
+    return res?.data?.success;
+  } catch (error) {
+    console.error("Error disconnecting WhatsApp bridge:", error?.message || error);
+    return false;
+  }
+};
+
+export const startTelegramBridgeAsync = async (userId) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/telegram/start`, { userId });
+    return res?.data?.success ? res.data.session : null;
+  } catch (error) {
+    console.error("Error starting Telegram bridge:", error?.message || error);
+    return null;
+  }
+};
+
+export const confirmTelegramBridgeAsync = async (userId, username, name) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/telegram/confirm`, { userId, username, name });
+    return res?.data?.success ? res.data.session : null;
+  } catch (error) {
+    console.error("Error confirming Telegram bridge:", error?.message || error);
+    return null;
+  }
+};
+
+export const disconnectTelegramBridgeAsync = async (userId) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/telegram/disconnect`, { userId });
+    return res?.data?.success;
+  } catch (error) {
+    console.error("Error disconnecting Telegram bridge:", error?.message || error);
+    return false;
+  }
+};
+
+export const fetchSyncedBridgeChatsAsync = async (userId, user) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/chats/${userId}`, { user });
+    return res?.data?.success ? res.data.chats : [];
+  } catch (error) {
+    console.warn("Error fetching synced bridge chats:", error?.message || error);
+    return [];
+  }
+};
+
+export const sendBridgeMessageAsync = async (platform, messageData) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/send`, { platform, ...messageData });
+    return res?.data?.success ? res.data.message : null;
+  } catch (error) {
+    console.error("Error sending bridge message:", error?.message || error);
+    return null;
+  }
+};

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@chakra-ui/button";
 import { useDisclosure } from "@chakra-ui/hooks";
 import { Input } from "@chakra-ui/input";
-import { Box, Flex, Text } from "@chakra-ui/layout";
+import { Box, Flex, Text, Badge } from "@chakra-ui/layout";
 import {
   Menu,
   MenuButton,
@@ -59,6 +59,8 @@ function SideDrawer() {
     openSavedMessages,
     isSoundEnabled,
     toggleSound,
+    linkedPlatforms,
+    setIsLinkedPlatformsModalOpen,
   } = ChatState();
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -269,6 +271,27 @@ function SideDrawer() {
             </Button>
           </Tooltip>
 
+          {/* Linked Platforms Quick Shortcut */}
+          <Tooltip label="Linked Platforms (WhatsApp & Telegram)" placement="bottom">
+            <Button
+              size="sm"
+              variant="ghost"
+              color="var(--text-header)"
+              _hover={{ bg: "rgba(255,255,255,0.15)" }}
+              onClick={() => setIsLinkedPlatformsModalOpen(true)}
+              fontWeight="600"
+              px={{ base: 2, md: 3 }}
+              minW="auto"
+            >
+              <Box as="span" display={{ base: "none", md: "inline" }}>
+                Link WA/TG 🔗
+              </Box>
+              <Box as="span" display={{ base: "inline", md: "none" }}>
+                🔗
+              </Box>
+            </Button>
+          </Tooltip>
+
           {/* Dark / Light Theme Switcher */}
           <Tooltip label={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`} placement="bottom">
             <Button
@@ -363,6 +386,29 @@ function SideDrawer() {
               <MenuDivider borderColor="var(--color-border)" />
               <MenuItem bg="transparent" color="var(--text-primary)" _hover={{ bg: "var(--bg-hover)" }} onClick={() => setIsFolderModalOpen(true)}>
                 Folder Settings 📁
+              </MenuItem>
+              <MenuDivider borderColor="var(--color-border)" />
+              <MenuItem
+                bg="transparent"
+                color="var(--text-primary)"
+                _hover={{ bg: "var(--bg-hover)" }}
+                onClick={() => setIsLinkedPlatformsModalOpen(true)}
+              >
+                <Box display="flex" justifyContent="space-between" alignItems="center" w="100%">
+                  <Text>Linked Platforms 🔗</Text>
+                  <Box display="flex" gap={1}>
+                    {linkedPlatforms?.whatsapp?.connected && (
+                      <Badge colorScheme="green" fontSize="9px" px={1} borderRadius="4px">
+                        WA
+                      </Badge>
+                    )}
+                    {linkedPlatforms?.telegram?.connected && (
+                      <Badge colorScheme="blue" fontSize="9px" px={1} borderRadius="4px">
+                        TG
+                      </Badge>
+                    )}
+                  </Box>
+                </Box>
               </MenuItem>
               <MenuDivider borderColor="var(--color-border)" />
               <MenuItem bg="transparent" color="#f44336" fontWeight="bold" _hover={{ bg: "var(--bg-hover)" }} onClick={logoutHandler}>

@@ -44,11 +44,12 @@ const MyChats = () => {
     unblockUser,
     isUserBlocked,
     draftsMap,
+    setIsLinkedPlatformsModalOpen,
   } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
   const [reportTarget, setReportTarget] = useState(null);
 
-  const defaultCategories = ["All", "Status", "Personal", "Groups", "Starred", "Channels", "Bots"];
+  const defaultCategories = ["All", "🔥 Agni", "🟢 WhatsApp", "🔵 Telegram", "Personal", "Groups", "Starred", "Status", "Channels", "Bots"];
 
   // Filter chats by active category/folder & search term
   const filteredChats = (chats || []).filter((chat) => {
@@ -61,7 +62,13 @@ const MyChats = () => {
     let matchesCategory = false;
 
     if (!activeCustomFolder) {
-      if (activeFilter === "Starred") {
+      if (activeFilter === "🔥 Agni") {
+        matchesCategory = chat.platform === "agni" || !chat.platform;
+      } else if (activeFilter === "🟢 WhatsApp") {
+        matchesCategory = chat.platform === "whatsapp";
+      } else if (activeFilter === "🔵 Telegram") {
+        matchesCategory = chat.platform === "telegram";
+      } else if (activeFilter === "Starred") {
         const msgs = messagesMap[chat._id] || [];
         matchesCategory = msgs.some((m) => Array.isArray(m.isStarredBy) && m.isStarredBy.includes(user?._id));
       } else {
@@ -142,10 +149,51 @@ const MyChats = () => {
       );
     }
     const avatar = getChatAvatar(chat);
+    const isWhatsApp = chat.platform === "whatsapp";
+    const isTelegram = chat.platform === "telegram";
+
     return (
       <Box position="relative" flexShrink={0}>
         <Avatar size="md" name={title} src={avatar} />
-        {!chat.isGroupChat && (
+        {isWhatsApp && (
+          <Box
+            position="absolute"
+            bottom="-2px"
+            right="-2px"
+            w="16px"
+            h="16px"
+            borderRadius="50%"
+            bg="#25D366"
+            border="2px solid var(--bg-sidebar)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            fontSize="9px"
+            title="WhatsApp Contact"
+          >
+            🟢
+          </Box>
+        )}
+        {isTelegram && (
+          <Box
+            position="absolute"
+            bottom="-2px"
+            right="-2px"
+            w="16px"
+            h="16px"
+            borderRadius="50%"
+            bg="#229ED9"
+            border="2px solid var(--bg-sidebar)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            fontSize="9px"
+            title="Telegram Channel/Chat"
+          >
+            🔵
+          </Box>
+        )}
+        {!isWhatsApp && !isTelegram && !chat.isGroupChat && (
           <Box
             position="absolute"
             bottom="0"
@@ -252,6 +300,20 @@ const MyChats = () => {
             );
           })}
         </Box>
+
+        {/* Linked Platforms Launcher Button */}
+        <Tooltip label="Linked Platforms (WhatsApp & Telegram)" placement="bottom">
+          <IconButton
+            size="xs"
+            icon={<Text fontSize="xs">🔗</Text>}
+            aria-label="Linked Platforms"
+            variant="ghost"
+            color="var(--text-secondary)"
+            _hover={{ bg: "var(--bg-hover)", color: "var(--color-primary)" }}
+            onClick={() => setIsLinkedPlatformsModalOpen(true)}
+            ml={1}
+          />
+        </Tooltip>
 
         {/* Folder Settings Modal Launcher Button */}
         <Tooltip label="Folder Settings" placement="bottom">
@@ -517,13 +579,44 @@ const MyChats = () => {
               })}
             </Stack>
           ) : (
-            <Flex direction="column" align="center" justify="center" h="200px" color="var(--text-muted)">
-              <Text fontSize="2xl" mb={1}>
-                {activeFilter === "Starred" ? "⭐" : "💬"}
+            <Flex direction="column" align="center" justify="center" h="240px" p={4} textAlign="center" color="var(--text-muted)">
+              <Text fontSize="3xl" mb={2}>
+                {activeFilter === "Starred" ? "⭐" : activeFilter === "🟢 WhatsApp" ? "🟢" : activeFilter === "🔵 Telegram" ? "🔵" : "💬"}
               </Text>
-              <Text fontSize="sm" fontWeight="600">
-                {activeFilter === "Starred" ? "No starred messages found" : "No chats in this folder"}
+              <Text fontSize="sm" fontWeight="700" color="var(--text-primary)" mb={1}>
+                {activeFilter === "Starred"
+                  ? "No Starred Messages"
+                  : activeFilter === "🟢 WhatsApp"
+                  ? "No WhatsApp Chats Synced"
+                  : activeFilter === "🔵 Telegram"
+                  ? "No Telegram Chats Synced"
+                  : "No chats in this folder"}
               </Text>
+              <Text fontSize="xs" color="var(--text-secondary)" mb={3} maxW="240px">
+                {activeFilter === "🟢 WhatsApp"
+                  ? "Link your WhatsApp account via QR Code or Pairing Code to chat with your contacts."
+                  : activeFilter === "🔵 Telegram"
+                  ? "Link your Telegram account via 1-Tap Connect to sync your channels and chats."
+                  : "Start a conversation by searching for contacts above."}
+              </Text>
+              {(activeFilter === "🟢 WhatsApp" || activeFilter === "🔵 Telegram") && (
+                <Box
+                  as="button"
+                  px={4}
+                  py={2}
+                  borderRadius="12px"
+                  bg={activeFilter === "🟢 WhatsApp" ? "#25D366" : "#229ED9"}
+                  color="white"
+                  fontSize="xs"
+                  fontWeight="700"
+                  boxShadow="0 4px 14px rgba(0,0,0,0.3)"
+                  _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
+                  transition="all 0.15s ease"
+                  onClick={() => setIsLinkedPlatformsModalOpen(true)}
+                >
+                  {activeFilter === "🟢 WhatsApp" ? "🔗 Link WhatsApp Account" : "⚡ Link Telegram Account"}
+                </Box>
+              )}
             </Flex>
           )}
         </Box>

@@ -141,6 +141,7 @@ const SingleChat = () => {
     isUserBlocked,
     draftsMap,
     setDraftForChat,
+    sendBridgeMessage,
   } = ChatState();
 
   const [textInput, setTextInput] = useState("");
@@ -593,18 +594,32 @@ const SingleChat = () => {
       };
     }
     if (selectedChat.isGroupChat) {
+      const groupStatus = selectedChat.platform === "whatsapp"
+        ? "🟢 WhatsApp Group (E2EE Active)"
+        : selectedChat.platform === "telegram"
+        ? "🔵 Telegram Supergroup"
+        : activeTypingText || `${selectedChat.users?.length || 3} members`;
+
       return {
         title: selectedChat.chatName,
         avatar: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&auto=format&fit=crop&q=80",
-        status: activeTypingText || `${selectedChat.users?.length || 3} members`,
+        status: groupStatus,
       };
     }
     const otherUser = selectedChat.users?.find((u) => u._id !== user?._id) || selectedChat.users?.[0];
     const isBlocked = otherUser ? isUserBlocked?.(otherUser._id) : false;
+    const directStatus = isBlocked
+      ? "🚫 Blocked"
+      : selectedChat.platform === "whatsapp"
+      ? "🟢 Online via WhatsApp (Noise E2EE)"
+      : selectedChat.platform === "telegram"
+      ? "🔵 Synced via Telegram Client"
+      : activeTypingText || otherUser?.status || "Online";
+
     return {
       title: otherUser?.name || selectedChat.chatName,
       avatar: otherUser?.pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-      status: isBlocked ? "🚫 Blocked" : activeTypingText || otherUser?.status || "Online",
+      status: directStatus,
       userObj: otherUser,
       isBlocked,
     };
@@ -618,7 +633,15 @@ const SingleChat = () => {
       sendTypingStatus(selectedChat._id, false);
       setDraftForChat?.(selectedChat._id, "");
     }
-    sendMessage(selectedChat._id, textInput, "text", null, { replyTo: replyingTo });
+    if (selectedChat?.platform === "whatsapp" || selectedChat?.platform === "telegram") {
+      sendBridgeMessage(selectedChat.platform, {
+        chatId: selectedChat._id,
+        content: textInput,
+        replyTo: replyingTo,
+      });
+    } else {
+      sendMessage(selectedChat._id, textInput, "text", null, { replyTo: replyingTo });
+    }
     setTextInput("");
     setReplyingTo(null);
   };

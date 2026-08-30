@@ -7,6 +7,15 @@ import {
   unpinChatMessageAsync,
   forwardMessagesAsync,
   setChatDisappearingTimerAsync,
+  fetchPlatformsStatusAsync,
+  startWhatsAppBridgeAsync,
+  confirmWhatsAppBridgeAsync,
+  disconnectWhatsAppBridgeAsync,
+  startTelegramBridgeAsync,
+  confirmTelegramBridgeAsync,
+  disconnectTelegramBridgeAsync,
+  sendBridgeMessageAsync,
+  fetchSyncedBridgeChatsAsync,
 } from "./data/fireStorage";
 
 describe("Agni Messenger Web Core Engine Test Suite", () => {
@@ -52,6 +61,19 @@ describe("Agni Messenger Web Core Engine Test Suite", () => {
     await expect(unpinChatMessageAsync("chat_1")).resolves.not.toThrow();
     await expect(forwardMessagesAsync({ _id: "msg_1", content: "Fwd" }, ["chat_2", "chat_3"], { _id: "u1", name: "User" })).resolves.not.toThrow();
     await expect(setChatDisappearingTimerAsync("chat_1", 86400)).resolves.not.toThrow();
+  });
+
+  test("Omnichannel WhatsApp and Telegram bridge methods execute safely", async () => {
+    await expect(fetchPlatformsStatusAsync("user_1")).resolves.not.toThrow();
+    await expect(startWhatsAppBridgeAsync("user_1")).resolves.not.toThrow();
+    await expect(confirmWhatsAppBridgeAsync("user_1", "+15551234567", "Test WA")).resolves.not.toThrow();
+    await expect(startTelegramBridgeAsync("user_1")).resolves.not.toThrow();
+    await expect(confirmTelegramBridgeAsync("user_1", "@test_user", "Test TG")).resolves.not.toThrow();
+    await expect(fetchSyncedBridgeChatsAsync("user_1", { _id: "user_1" })).resolves.not.toThrow();
+    await expect(sendBridgeMessageAsync("whatsapp", { chatId: "wa_1", content: "Hello WA" })).resolves.not.toThrow();
+    await expect(sendBridgeMessageAsync("telegram", { chatId: "tg_1", content: "Hello TG" })).resolves.not.toThrow();
+    await expect(disconnectWhatsAppBridgeAsync("user_1")).resolves.not.toThrow();
+    await expect(disconnectTelegramBridgeAsync("user_1")).resolves.not.toThrow();
   });
 
   test("initialFireChats and fireBotUser are structured properly", () => {
