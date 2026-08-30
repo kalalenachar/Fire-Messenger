@@ -6,8 +6,15 @@ const Chat = require("../models/Chat");
 const getChatMessages = async (req, res) => {
   try {
     const { chatId } = req.params;
-    const messages = await Message.find({ chat: chatId }).sort({ createdAt: 1 }).lean();
-    res.json({ success: true, messages });
+    let messages = await Message.find({ chat: chatId }).sort({ createdAt: 1 }).lean();
+    if ((!messages || messages.length === 0) && (chatId.startsWith("wa_") || chatId.startsWith("tg_"))) {
+      const BridgeService = require("../services/bridgeService");
+      const bridgeMsgs = BridgeService.getBridgeChatMessages(chatId);
+      if (bridgeMsgs && bridgeMsgs.length > 0) {
+        messages = bridgeMsgs;
+      }
+    }
+    res.json({ success: true, messages: messages || [] });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -127,9 +127,33 @@ const ChatProvider = ({ children }) => {
       const bridgeChats = await fetchSyncedBridgeChatsAsync(user._id, user);
       if (bridgeChats && bridgeChats.length > 0) {
         setChats((prev) => {
-          const existingIds = new Set(prev.map((c) => c._id));
-          const toAdd = bridgeChats.filter((bc) => !existingIds.has(bc._id));
-          return [...toAdd, ...prev];
+          const bridgeMap = new Map(bridgeChats.map((bc) => [bc._id, bc]));
+          const updatedPrev = prev.map((c) => {
+            if (bridgeMap.has(c._id)) {
+              const fresh = bridgeMap.get(c._id);
+              bridgeMap.delete(c._id);
+              return {
+                ...c,
+                ...fresh,
+                latestMessage: fresh.latestMessage || c.latestMessage,
+                pic: fresh.pic || c.pic,
+                unread: fresh.unread !== undefined ? fresh.unread : c.unread,
+              };
+            }
+            return c;
+          });
+          return [...bridgeMap.values(), ...updatedPrev];
+        });
+
+        // Also populate messagesMap for synced chats with latest message
+        setMessagesMap((prevMap) => {
+          const updated = { ...prevMap };
+          for (const bc of bridgeChats) {
+            if (bc.latestMessage && (!updated[bc._id] || updated[bc._id].length === 0)) {
+              updated[bc._id] = [bc.latestMessage];
+            }
+          }
+          return updated;
         });
       }
     } catch (err) {
