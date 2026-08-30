@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@chakra-ui/button";
 import { FormControl, FormLabel } from "@chakra-ui/form-control";
 import { Input, InputGroup, InputLeftElement, InputRightElement } from "@chakra-ui/input";
-import { VStack, Text } from "@chakra-ui/layout";
-import { Spinner, useToast } from "@chakra-ui/react";
+import { VStack, Text, Flex } from "@chakra-ui/layout";
+import { Spinner, Avatar, useToast } from "@chakra-ui/react";
 import { CheckCircleIcon, WarningIcon } from "@chakra-ui/icons";
 import { useHistory } from "react-router-dom";
 import { registerUser, checkUsernameAvailabilityAsync, setCurrentSessionUser } from "../../data/fireStorage";
@@ -23,7 +23,45 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmpassword, setConfirmpassword] = useState("");
+  const [pic, setPic] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 250;
+        const MAX_HEIGHT = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const resizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
+        setPic(resizedBase64);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Debounced Username availability check
   useEffect(() => {
@@ -144,6 +182,7 @@ const Signup = () => {
         username: username.trim() ? username.trim().toLowerCase() : undefined,
         email: email.trim() ? email.trim().toLowerCase() : undefined,
         password,
+        pic,
       });
 
       setCurrentSessionUser(newUser);
@@ -175,21 +214,33 @@ const Signup = () => {
 
   return (
     <VStack spacing="12px" align="stretch">
+      <FormControl id="signup-pic">
+        <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)" display="flex" justifyContent="space-between" alignItems="center">
+          <span>Profile Picture</span>
+          <Text as="span" fontSize="xs" color="var(--text-secondary)" fontWeight="normal">
+            (Optional)
+          </Text>
+        </FormLabel>
+        <Flex align="center" gap={3}>
+          <Avatar size="md" name={name || "User"} src={pic} border="2px solid var(--color-primary)" />
+          <Input type="file" accept="image/*" size="xs" onChange={handleImageUpload} color="var(--text-secondary)" />
+        </Flex>
+      </FormControl>
+
       <FormControl id="signup-name" isRequired>
         <FormLabel fontSize="sm" fontWeight="600" color="var(--text-primary)">
           Full Name
         </FormLabel>
         <Input
-          placeholder="e.g. Alex Rivers"
+          placeholder="e.g. John Doe"
           value={name}
           onChange={(e) => setName(e.target.value)}
           bg="var(--bg-search)"
           color="var(--text-primary)"
           borderColor="var(--color-border)"
-          autoComplete="off"
+          autoComplete="name"
           autoCorrect="off"
           spellCheck={false}
-          autoCapitalize="words"
           data-lpignore="true"
         />
       </FormControl>

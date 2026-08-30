@@ -69,7 +69,8 @@ class BridgeService {
   // Helper to fetch live Telegram profile picture
   static async fetchTelegramProfilePic(client, peer) {
     if (!client || !peer) return null;
-    const cacheKey = `tg_${peer}`;
+    const peerId = typeof peer === "object" ? String(peer.id || peer.userId || peer.channelId || "peer") : String(peer);
+    const cacheKey = `tg_${peerId}`;
     if (profilePicCache.has(cacheKey)) {
       return profilePicCache.get(cacheKey);
     }
