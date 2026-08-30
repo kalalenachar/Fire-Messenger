@@ -19,6 +19,8 @@ import {
   Flex,
   VStack,
   HStack,
+  Spinner,
+  Image,
   useToast,
 } from "@chakra-ui/react";
 import { ChatState } from "../../Context/ChatProvider";
@@ -33,19 +35,28 @@ import {
 } from "../../data/fireStorage";
 
 const LinkedPlatformsModal = ({ isOpen, onClose }) => {
-  const { user, linkedPlatforms, setLinkedPlatforms, syncBridgeChats } = ChatState();
+  const { user, linkedPlatforms, setLinkedPlatforms, syncBridgeChats, socket } = ChatState();
   const toast = useToast();
 
   const [waLoading, setWaLoading] = useState(false);
   const [tgLoading, setTgLoading] = useState(false);
+  const [waQrDataUrl, setWaQrDataUrl] = useState(null);
+  const [tgQrDataUrl, setTgQrDataUrl] = useState(null);
+  const [waPairingCode, setWaPairingCode] = useState(null);
 
   const handleStartWhatsApp = useCallback(async () => {
     if (!user?._id) return;
     setWaLoading(true);
     try {
-      await startWhatsAppBridgeAsync(user._id, null);
+      const res = await startWhatsAppBridgeAsync(user._id, null);
+      if (res?.qrDataUrl) {
+        setWaQrDataUrl(res.qrDataUrl);
+      }
+      if (res?.pairingCode) {
+        setWaPairingCode(res.pairingCode);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("WhatsApp bridge start error:", err);
     } finally {
       setWaLoading(false);
     }
@@ -55,9 +66,12 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     if (!user?._id) return;
     setTgLoading(true);
     try {
-      await startTelegramBridgeAsync(user._id);
+      const res = await startTelegramBridgeAsync(user._id);
+      if (res?.qrDataUrl) {
+        setTgQrDataUrl(res.qrDataUrl);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Telegram bridge start error:", err);
     } finally {
       setTgLoading(false);
     }
@@ -86,16 +100,69 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     }
   }, [isOpen, user?._id, loadStatus]);
 
+  // Listen to live WebSocket Bridge events
+  useEffect(() => {
+    if (!socket) return;
+
+    const onWaQr = (data) => {
+      if (data?.qrDataUrl) setWaQrDataUrl(data.qrDataUrl);
+      if (data?.pairingCode) setWaPairingCode(data.pairingCode);
+    };
+
+    const onWaConnected = (data) => {
+      setLinkedPlatforms((prev) => ({
+        ...prev,
+        whatsapp: { connected: true, phone: data.phone, name: data.name },
+      }));
+      setWaQrDataUrl(null);
+      syncBridgeChats();
+      toast({
+        title: "WhatsApp Connected! 🟢",
+        description: `Linked ${data.phone || data.name}`,
+        status: "success",
+        duration: 4000,
+        isClosable: true,
+      });
+    };
+
+    const onTgQr = (data) => {
+      if (data?.qrDataUrl) setTgQrDataUrl(data.qrDataUrl);
+    };
+
+    const onTgConnected = (data) => {
+      setLinkedPlatforms((prev) => ({
+        ...prev,
+        telegram: { connected: true, username: data.username, name: data.name },
+      }));
+      setTgQrDataUrl(null);
+      syncBridgeChats();
+      toast({
+        title: "Telegram Connected! 🔵",
+        description: `Linked ${data.username || data.name}`,
+        status: "success",
+        duration: 4000,
+        isClosable: true,
+      });
+    };
+
+    socket.on("bridge_whatsapp_qr", onWaQr);
+    socket.on("bridge_whatsapp_connected", onWaConnected);
+    socket.on("bridge_telegram_qr", onTgQr);
+    socket.on("bridge_telegram_connected", onTgConnected);
+
+    return () => {
+      socket.off("bridge_whatsapp_qr", onWaQr);
+      socket.off("bridge_whatsapp_connected", onWaConnected);
+      socket.off("bridge_telegram_qr", onTgQr);
+      socket.off("bridge_telegram_connected", onTgConnected);
+    };
+  }, [socket, setLinkedPlatforms, syncBridgeChats, toast]);
 
   const handleConfirmWhatsApp = async () => {
     if (!user?._id) return;
     setWaLoading(true);
     try {
-      const session = await confirmWhatsAppBridgeAsync(
-        user._id,
-        "+1 (555) 789-0123",
-        "My WhatsApp Account"
-      );
+      const session = await confirmWhatsAppBridgeAsync(user._id);
       setLinkedPlatforms((prev) => ({
         ...prev,
         whatsapp: { connected: true, phone: session.phone, name: session.name },
@@ -109,7 +176,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
         isClosable: true,
       });
     } catch (err) {
-      toast({ title: "Connection failed", status: "error", duration: 3000 });
+      toast({ title: "Connection pending scan", description: "Scan the QR code with WhatsApp on your phone.", status: "info", duration: 3000 });
     } finally {
       setWaLoading(false);
     }
@@ -124,11 +191,12 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
         ...prev,
         whatsapp: { connected: false },
       }));
+      setWaQrDataUrl(null);
       handleStartWhatsApp();
       await syncBridgeChats();
       toast({
         title: "WhatsApp Disconnected",
-        description: "Synced WhatsApp chats removed from local feed.",
+        description: "WhatsApp session unlinked.",
         status: "info",
         duration: 3000,
       });
@@ -143,7 +211,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
     if (!user?._id) return;
     setTgLoading(true);
     try {
-      const session = await confirmTelegramBridgeAsync(user._id, "@agni_user", "My Telegram Account");
+      const session = await confirmTelegramBridgeAsync(user._id);
       setLinkedPlatforms((prev) => ({
         ...prev,
         telegram: { connected: true, username: session.username, name: session.name },
@@ -157,7 +225,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
         isClosable: true,
       });
     } catch (err) {
-      toast({ title: "Connection failed", status: "error", duration: 3000 });
+      toast({ title: "Connection pending scan", description: "Scan the QR code with Telegram on your phone.", status: "info", duration: 3000 });
     } finally {
       setTgLoading(false);
     }
@@ -172,11 +240,12 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
         ...prev,
         telegram: { connected: false },
       }));
+      setTgQrDataUrl(null);
       handleStartTelegram();
       await syncBridgeChats();
       toast({
         title: "Telegram Disconnected",
-        description: "Synced Telegram chats removed from local feed.",
+        description: "Telegram session unlinked.",
         status: "info",
         duration: 3000,
       });
@@ -211,7 +280,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
               🔗 Linked Platforms
             </Text>
             <Badge colorScheme="purple" variant="solid" borderRadius="full" px={2} fontSize="xs">
-              Omnichannel
+              Live Omnichannel
             </Badge>
           </HStack>
         </ModalHeader>
@@ -228,7 +297,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                 fontSize="sm"
               >
                 <HStack spacing={2}>
-                  <Text>🟢 WhatsApp</Text>
+                  <Text>🟢 WhatsApp (Live)</Text>
                   {linkedPlatforms?.whatsapp?.connected && (
                     <Badge colorScheme="green" fontSize="10px" borderRadius="full">
                       Linked
@@ -244,7 +313,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                 fontSize="sm"
               >
                 <HStack spacing={2}>
-                  <Text>🔵 Telegram</Text>
+                  <Text>🔵 Telegram (Live)</Text>
                   {linkedPlatforms?.telegram?.connected && (
                     <Badge colorScheme="blue" fontSize="10px" borderRadius="full">
                       Linked
@@ -273,7 +342,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                               {linkedPlatforms.whatsapp.name || "WhatsApp Account"}
                             </Text>
                             <Text fontSize="xs" color="green.300">
-                              Connected: {linkedPlatforms.whatsapp.phone || "+1 (555) 789-0123"}
+                              Connected: {linkedPlatforms.whatsapp.phone || "Active"}
                             </Text>
                           </VStack>
                         </HStack>
@@ -283,7 +352,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                       </Flex>
                       <Text fontSize="xs" color="gray.400" mt={3}>
                         ✓ Real-time 2-way message synchronization is active. Messages and voice notes from your WhatsApp
-                        contacts will appear in your Agni Inbox.
+                        contacts appear in your Agni Inbox.
                       </Text>
                     </Box>
 
@@ -300,37 +369,52 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                 ) : (
                   <VStack spacing={4} align="center">
                     <Text fontSize="sm" color="gray.300" textAlign="center">
-                      Scan the QR Code with WhatsApp on your phone or use 1-Tap Mobile Pairing:
+                      Scan the live QR Code with WhatsApp on your phone:
                     </Text>
 
-                    {/* QR Code Mock Canvas Visualizer */}
+                    {/* Live WhatsApp QR Code */}
                     <Box
-                      p={4}
+                      p={3}
                       bg="white"
                       borderRadius="16px"
                       boxShadow="0 8px 30px rgba(37, 211, 102, 0.3)"
-                      position="relative"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      minW="200px"
+                      minH="200px"
                     >
-                      <Box
-                        w="180px"
-                        h="180px"
-                        bg="linear-gradient(45deg, #000 25%, #fff 25%, #fff 50%, #000 50%, #000 75%, #fff 75%, #fff 100%)"
-                        backgroundSize="20px 20px"
-                        borderRadius="8px"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Box bg="white" p={2} borderRadius="8px" boxShadow="md">
-                          <Text fontSize="24px">🟢</Text>
-                        </Box>
-                      </Box>
+                      {waLoading && !waQrDataUrl ? (
+                        <VStack spacing={2}>
+                          <Spinner color="#25D366" size="lg" />
+                          <Text fontSize="xs" color="gray.600">
+                            Connecting to WhatsApp...
+                          </Text>
+                        </VStack>
+                      ) : waQrDataUrl ? (
+                        <Image src={waQrDataUrl} alt="WhatsApp QR Code" boxSize="190px" objectFit="contain" />
+                      ) : (
+                        <VStack spacing={2}>
+                          <Spinner color="#25D366" size="md" />
+                          <Text fontSize="xs" color="gray.600">
+                            Generating QR Code...
+                          </Text>
+                        </VStack>
+                      )}
                     </Box>
 
-                    <Text fontSize="xs" color="gray.400">
-                      1. Open WhatsApp ➔ <b>Settings ➔ Linked Devices ➔ Link a Device</b>
+                    {waPairingCode && (
+                      <Box bg="rgba(37, 211, 102, 0.15)" px={4} py={2} borderRadius="10px" border="1px solid #25D366">
+                        <Text fontSize="xs" color="green.300" fontWeight="bold">
+                          Pairing Code: <span style={{ fontSize: "16px", color: "white" }}>{waPairingCode}</span>
+                        </Text>
+                      </Box>
+                    )}
+
+                    <Text fontSize="xs" color="gray.400" textAlign="center">
+                      1. Open WhatsApp on your phone ➔ <b>Settings ➔ Linked Devices ➔ Link a Device</b>
                       <br />
-                      2. Point phone camera at the screen to scan.
+                      2. Point phone camera at this QR code to connect instantly.
                     </Text>
 
                     <HStack spacing={3} w="100%">
@@ -342,7 +426,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                         isLoading={waLoading}
                         onClick={handleConfirmWhatsApp}
                       >
-                        ⚡ Confirm / Link WhatsApp
+                        ⚡ Check Link Status
                       </Button>
                       <Button
                         variant="ghost"
@@ -376,7 +460,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                               {linkedPlatforms.telegram.name || "Telegram Account"}
                             </Text>
                             <Text fontSize="xs" color="blue.300">
-                              Connected: {linkedPlatforms.telegram.username || "@agni_user"}
+                              Connected: {linkedPlatforms.telegram.username || "Active"}
                             </Text>
                           </VStack>
                         </HStack>
@@ -385,7 +469,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                         </Badge>
                       </Flex>
                       <Text fontSize="xs" color="gray.400" mt={3}>
-                        ✓ Real-time Telegram DMs, channels, and supergroups synced into Agni Messenger with instant delivery.
+                        ✓ Real-time Telegram DMs, channels, and supergroups synced into Agni Messenger.
                       </Text>
                     </Box>
 
@@ -402,37 +486,44 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                 ) : (
                   <VStack spacing={4} align="center">
                     <Text fontSize="sm" color="gray.300" textAlign="center">
-                      Scan the QR Code with Telegram or use 1-Tap Mobile Link Auth:
+                      Scan the live MTProto QR Code with Telegram on your phone:
                     </Text>
 
-                    {/* QR Code Mock Canvas Visualizer */}
+                    {/* Live Telegram QR Code */}
                     <Box
-                      p={4}
+                      p={3}
                       bg="white"
                       borderRadius="16px"
                       boxShadow="0 8px 30px rgba(34, 158, 217, 0.3)"
-                      position="relative"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      minW="200px"
+                      minH="200px"
                     >
-                      <Box
-                        w="180px"
-                        h="180px"
-                        bg="linear-gradient(45deg, #0088cc 25%, #fff 25%, #fff 50%, #0088cc 50%, #0088cc 75%, #fff 75%, #fff 100%)"
-                        backgroundSize="20px 20px"
-                        borderRadius="8px"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Box bg="white" p={2} borderRadius="8px" boxShadow="md">
-                          <Text fontSize="24px">🔵</Text>
-                        </Box>
-                      </Box>
+                      {tgLoading && !tgQrDataUrl ? (
+                        <VStack spacing={2}>
+                          <Spinner color="#229ED9" size="lg" />
+                          <Text fontSize="xs" color="gray.600">
+                            Connecting to Telegram MTProto...
+                          </Text>
+                        </VStack>
+                      ) : tgQrDataUrl ? (
+                        <Image src={tgQrDataUrl} alt="Telegram QR Code" boxSize="190px" objectFit="contain" />
+                      ) : (
+                        <VStack spacing={2}>
+                          <Spinner color="#229ED9" size="md" />
+                          <Text fontSize="xs" color="gray.600">
+                            Generating MTProto QR...
+                          </Text>
+                        </VStack>
+                      )}
                     </Box>
 
-                    <Text fontSize="xs" color="gray.400">
+                    <Text fontSize="xs" color="gray.400" textAlign="center">
                       1. Open Telegram ➔ <b>Settings ➔ Devices ➔ Link Desktop Device</b>
                       <br />
-                      2. Scan the QR code or tap the 1-Tap authorization button.
+                      2. Point phone camera at this QR code to authorize your session.
                     </Text>
 
                     <HStack spacing={3} w="100%">
@@ -444,7 +535,7 @@ const LinkedPlatformsModal = ({ isOpen, onClose }) => {
                         isLoading={tgLoading}
                         onClick={handleConfirmTelegram}
                       >
-                        ⚡ 1-Tap Connect Telegram
+                        ⚡ Check Link Status
                       </Button>
                       <Button
                         variant="ghost"
