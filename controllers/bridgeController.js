@@ -99,6 +99,20 @@ const fetchSyncedBridgeChats = async (req, res) => {
   }
 };
 
+// Create a direct chat with a phone number or contact
+const createDirectBridgeChat = async (req, res) => {
+  const { platform, userId, targetIdentifier, user } = req.body;
+  try {
+    const chat = BridgeService.createDirectChat(platform, userId, targetIdentifier, user);
+    if (chat) {
+      return res.json({ success: true, chat });
+    }
+    return res.status(400).json({ success: false, message: "Could not create direct chat" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Send Message to External Bridge (WhatsApp / Telegram)
 const sendBridgeMessage = async (req, res) => {
   const { platform, chatId, content, sender, mediaUrl, audioUrl, replyTo } = req.body;
@@ -129,5 +143,6 @@ module.exports = {
   confirmTelegramBridge,
   disconnectTelegramBridge,
   fetchSyncedBridgeChats,
+  createDirectBridgeChat,
   sendBridgeMessage,
 };

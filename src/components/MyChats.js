@@ -46,10 +46,22 @@ const MyChats = () => {
     draftsMap,
     linkedPlatforms,
     syncBridgeChats,
+    createDirectBridgeChat,
     setIsLinkedPlatformsModalOpen,
   } = ChatState();
   const [searchTerm, setSearchTerm] = useState("");
   const [reportTarget, setReportTarget] = useState(null);
+
+  const handleStartNewWhatsAppChat = async () => {
+    const phone = window.prompt("Enter recipient WhatsApp number with country code (e.g. +91 9876543210):");
+    if (!phone || !phone.trim()) return;
+    const cleanDigits = phone.replace(/[^0-9]/g, "");
+    if (cleanDigits.length < 8) {
+      alert("Please enter a valid phone number with country code.");
+      return;
+    }
+    await createDirectBridgeChat("whatsapp", cleanDigits);
+  };
 
   const defaultCategories = ["All", "🔥 Agni", "🟢 WhatsApp", "🔵 Telegram", "Personal", "Groups", "Starred", "Status", "Channels", "Bots"];
 
@@ -617,24 +629,41 @@ const MyChats = () => {
               </Text>
 
               {activeFilter === "🟢 WhatsApp" && (
-                <HStack spacing={2}>
+                <HStack spacing={3}>
                   {linkedPlatforms?.whatsapp?.connected ? (
-                    <Box
-                      as="button"
-                      px={4}
-                      py={2}
-                      borderRadius="12px"
-                      bg="#25D366"
-                      color="white"
-                      fontSize="xs"
-                      fontWeight="700"
-                      boxShadow="0 4px 14px rgba(37, 211, 102, 0.3)"
-                      _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
-                      transition="all 0.15s ease"
-                      onClick={syncBridgeChats}
-                    >
-                      🔄 Sync Messages
-                    </Box>
+                    <>
+                      <Box
+                        as="button"
+                        px={4}
+                        py={2}
+                        borderRadius="12px"
+                        bg="#25D366"
+                        color="white"
+                        fontSize="xs"
+                        fontWeight="700"
+                        boxShadow="0 4px 14px rgba(37, 211, 102, 0.3)"
+                        _hover={{ opacity: 0.9, transform: "translateY(-1px)" }}
+                        transition="all 0.15s ease"
+                        onClick={handleStartNewWhatsAppChat}
+                      >
+                        💬 New WhatsApp Chat
+                      </Box>
+                      <Box
+                        as="button"
+                        px={4}
+                        py={2}
+                        borderRadius="12px"
+                        bg="rgba(255, 255, 255, 0.1)"
+                        color="white"
+                        fontSize="xs"
+                        fontWeight="700"
+                        _hover={{ bg: "rgba(255, 255, 255, 0.2)" }}
+                        transition="all 0.15s ease"
+                        onClick={syncBridgeChats}
+                      >
+                        🔄 Sync Messages
+                      </Box>
+                    </>
                   ) : (
                     <Box
                       as="button"

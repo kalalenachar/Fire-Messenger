@@ -10,6 +10,7 @@ const {
   confirmTelegramBridge,
   disconnectTelegramBridge,
   fetchSyncedBridgeChats,
+  createDirectBridgeChat,
   sendBridgeMessage,
 } = require("../controllers/bridgeController");
 
@@ -28,6 +29,7 @@ router.post("/telegram/disconnect", disconnectTelegramBridge);
 
 // Chats & Messaging
 router.all("/chats/:userId", fetchSyncedBridgeChats);
+router.post("/create-chat", createDirectBridgeChat);
 router.post("/send", sendBridgeMessage);
 
 module.exports = router;

@@ -37,6 +37,7 @@ import {
   setChatDisappearingTimerAsync,
   fetchPlatformsStatusAsync,
   fetchSyncedBridgeChatsAsync,
+  createDirectBridgeChatAsync,
   sendBridgeMessageAsync,
 } from "../data/fireStorage";
 import { getBotReplyAsync } from "../data/fireMockData";
@@ -135,6 +136,27 @@ const ChatProvider = ({ children }) => {
       console.warn("Failed to sync bridge chats:", err);
     }
   }, [user]);
+
+  const createDirectBridgeChat = useCallback(
+    async (platform, targetIdentifier) => {
+      if (!user?._id || !targetIdentifier) return null;
+      try {
+        const chat = await createDirectBridgeChatAsync(platform, user._id, targetIdentifier, user);
+        if (chat) {
+          setChats((prev) => {
+            if (prev.some((c) => c._id === chat._id)) return prev;
+            return [chat, ...prev];
+          });
+          setSelectedChat(chat);
+          return chat;
+        }
+      } catch (e) {
+        console.error("createDirectBridgeChat error:", e);
+      }
+      return null;
+    },
+    [user]
+  );
 
   const sendBridgeMessage = useCallback(
     async (platform, { chatId, content, mediaUrl, audioUrl, replyTo }) => {
@@ -766,6 +788,57 @@ const ChatProvider = ({ children }) => {
       }
     });
 
+    socket.on("bridge_message_received", ({ platform, chat, message }) => {
+      const chatId = chat?._id || message?.chat;
+      if (!chatId || !message) return;
+
+      if (message.sender?._id !== user._id) {
+        soundEngine.playMessageReceived();
+      }
+
+      setMessagesMap((prev) => {
+        const chatMsgs = prev[chatId] || [];
+        if (chatMsgs.some((m) => m._id === message._id)) return prev;
+        return { ...prev, [chatId]: [...chatMsgs, message] };
+      });
+
+      setChats((prevChats) => {
+        const activeChat = selectedChatRef.current;
+        const chatExists = prevChats.some((c) => c._id === chatId);
+        const isCurrentActive = activeChat && typeof activeChat === "object" && activeChat._id === chatId;
+        const latestMsgObj = {
+          content: message.content,
+          sender: message.sender,
+          createdAt: message.createdAt,
+        };
+
+        if (chatExists) {
+          return prevChats.map((c) => {
+            if (c._id === chatId) {
+              return {
+                ...c,
+                latestMessage: latestMsgObj,
+                unread: isCurrentActive ? 0 : (c.unread || 0) + 1,
+              };
+            }
+            return c;
+          });
+        } else {
+          const newChat = chat || {
+            _id: chatId,
+            chatName: message.sender?.name || "WhatsApp Contact",
+            isGroupChat: false,
+            platform: platform || "whatsapp",
+            users: [user, message.sender],
+            latestMessage: latestMsgObj,
+            unread: isCurrentActive ? 0 : 1,
+            category: "Personal",
+          };
+          return [{ ...newChat, latestMessage: latestMsgObj, unread: isCurrentActive ? 0 : 1 }, ...prevChats];
+        }
+      });
+    });
+
     socket.on("message edited", ({ chatId, message }) => {
       if (!chatId || !message) return;
       setMessagesMap((prev) => {
@@ -1130,6 +1203,34 @@ const ChatProvider = ({ children }) => {
 
     // Play crisp sent pop sound
     soundEngine.playMessageSent();
+
+    // Outbound WhatsApp / Telegram Live Bridge Dispatch
+    if (
+      currentChatObj?.platform === "whatsapp" ||
+      currentChatObj?.platform === "telegram" ||
+      chatId.startsWith("wa_") ||
+      chatId.startsWith("tg_")
+    ) {
+      const platform = currentChatObj?.platform || (chatId.startsWith("wa_") ? "whatsapp" : "telegram");
+      const cleanChatId = currentChatObj?.platformChatId || (chatId.startsWith("wa_") ? chatId.replace("wa_", "") : chatId.replace("tg_", ""));
+      sendBridgeMessageAsync(platform, {
+        chatId: cleanChatId,
+        content,
+        sender: user,
+        mediaUrl: newMessage.fileUrl,
+        audioUrl: newMessage.audioUrl,
+      });
+      if (socket) {
+        socket.emit("bridge_send_message", {
+          platform,
+          chatId: cleanChatId,
+          content,
+          sender: user,
+          mediaUrl: newMessage.fileUrl,
+          audioUrl: newMessage.audioUrl,
+        });
+      }
+    }
 
     if (socket) {
       socket.emit("new message", newMessage);
@@ -2018,6 +2119,7 @@ const ChatProvider = ({ children }) => {
         openSavedMessages,
         saveToSavedMessages,
         deleteMessage,
+        createDirectBridgeChat,
         // Hide Chat & Block Contact Context Values
         hiddenChatIds,
         hideChat,

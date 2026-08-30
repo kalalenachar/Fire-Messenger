@@ -843,6 +843,16 @@ export const fetchSyncedBridgeChatsAsync = async (userId, user) => {
   }
 };
 
+export const createDirectBridgeChatAsync = async (platform, userId, targetIdentifier, user) => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/bridge/create-chat`, { platform, userId, targetIdentifier, user });
+    return res?.data?.success ? res.data.chat : null;
+  } catch (error) {
+    console.error("Error creating direct bridge chat:", error?.message || error);
+    return null;
+  }
+};
+
 export const sendBridgeMessageAsync = async (platform, messageData) => {
   try {
     const res = await axios.post(`${API_BASE_URL}/bridge/send`, { platform, ...messageData });

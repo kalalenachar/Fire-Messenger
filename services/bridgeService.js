@@ -35,6 +35,15 @@ class BridgeService {
     return global.io || null;
   }
 
+  // Helper to format WhatsApp JID
+  static formatWhatsAppJid(target) {
+    if (!target) return "";
+    let clean = String(target).replace(/^wa_/, "").trim();
+    if (clean.includes("@")) return clean;
+    const digits = clean.replace(/[^0-9]/g, "");
+    return `${digits}@s.whatsapp.net`;
+  }
+
   // =========================================================================
   // 🟢 REAL WHATSAPP MULTI-DEVICE BRIDGE (BAILEYS)
   // =========================================================================
@@ -52,7 +61,6 @@ class BridgeService {
       };
     }
 
-    // Clean up any stale/unauthenticated socket
     if (existing?.socket) {
       try {
         existing.socket.ev.removeAllListeners();
@@ -173,6 +181,63 @@ class BridgeService {
       }
     });
 
+    // Handle incoming history sync
+    sock.ev.on("messaging-history.set", ({ chats }) => {
+      if (!chats) return;
+      console.log(`📥 Syncing ${chats.length} WhatsApp chats from history...`);
+      for (const c of chats) {
+        if (!c.id || c.id === "status@broadcast") continue;
+        const isGroup = c.id.endsWith("@g.us");
+        const cleanPhone = c.id.split("@")[0];
+        const chatName = c.name || (isGroup ? "WhatsApp Group" : `+${cleanPhone}`);
+        sessionRecord.chats.set(c.id, {
+          _id: `wa_${c.id}`,
+          chatName,
+          isGroupChat: isGroup,
+          platform: "whatsapp",
+          platformChatId: c.id,
+          users: [
+            { _id: userId, name: "You" },
+            {
+              _id: `wa_${c.id}`,
+              name: chatName,
+              pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+            },
+          ],
+          unread: c.unreadCount || 0,
+          category: isGroup ? "Groups" : "Personal",
+          platformMetadata: { phone: `+${cleanPhone}` },
+        });
+      }
+    });
+
+    sock.ev.on("chats.upsert", (newChats) => {
+      for (const c of newChats) {
+        if (!c.id || c.id === "status@broadcast") continue;
+        const isGroup = c.id.endsWith("@g.us");
+        const cleanPhone = c.id.split("@")[0];
+        const chatName = c.name || (isGroup ? "WhatsApp Group" : `+${cleanPhone}`);
+        sessionRecord.chats.set(c.id, {
+          _id: `wa_${c.id}`,
+          chatName,
+          isGroupChat: isGroup,
+          platform: "whatsapp",
+          platformChatId: c.id,
+          users: [
+            { _id: userId, name: "You" },
+            {
+              _id: `wa_${c.id}`,
+              name: chatName,
+              pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+            },
+          ],
+          unread: c.unreadCount || 0,
+          category: isGroup ? "Groups" : "Personal",
+          platformMetadata: { phone: `+${cleanPhone}` },
+        });
+      }
+    });
+
     // Listen for live incoming WhatsApp messages
     sock.ev.on("messages.upsert", async (m) => {
       if (m.type !== "notify") return;
@@ -181,6 +246,7 @@ class BridgeService {
       for (const msg of m.messages) {
         if (!msg.message) continue;
         const fromJid = msg.key.remoteJid;
+        if (!fromJid || fromJid === "status@broadcast") continue;
         const isFromMe = msg.key.fromMe;
         const text =
           msg.message.conversation ||
@@ -191,6 +257,10 @@ class BridgeService {
 
         if (!text && !msg.message.imageMessage && !msg.message.audioMessage) continue;
 
+        const isGroup = fromJid.endsWith("@g.us");
+        const cleanPhone = fromJid.split("@")[0];
+        const contactName = msg.pushName || (isGroup ? "WhatsApp Group" : `+${cleanPhone}`);
+
         const normalizedMsg = {
           _id: `wa_${msg.key.id}`,
           content: text || (msg.message.audioMessage ? "🎤 Voice Note" : "📷 Photo"),
@@ -199,15 +269,48 @@ class BridgeService {
           platformChatId: fromJid,
           sender: {
             _id: isFromMe ? userId : `wa_${msg.key.participant || fromJid}`,
-            name: msg.pushName || (isFromMe ? "You" : "WhatsApp Contact"),
+            name: isFromMe ? "You" : contactName,
             pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
           },
           deliveryStatus: isFromMe ? "delivered" : "received",
-          createdAt: new Date(Number(msg.messageTimestamp) * 1000).toISOString(),
+          createdAt: new Date(Number(msg.messageTimestamp || Date.now() / 1000) * 1000).toISOString(),
         };
 
+        let chatObj = sessionRecord.chats.get(fromJid);
+        if (!chatObj) {
+          chatObj = {
+            _id: `wa_${fromJid}`,
+            chatName: contactName,
+            isGroupChat: isGroup,
+            platform: "whatsapp",
+            platformChatId: fromJid,
+            users: [
+              { _id: userId, name: "You" },
+              {
+                _id: `wa_${fromJid}`,
+                name: contactName,
+                pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+              },
+            ],
+            latestMessage: normalizedMsg,
+            unread: isFromMe ? 0 : 1,
+            category: isGroup ? "Groups" : "Personal",
+            platformMetadata: { phone: `+${cleanPhone}` },
+          };
+          sessionRecord.chats.set(fromJid, chatObj);
+        } else {
+          chatObj.latestMessage = normalizedMsg;
+          if (!isFromMe) chatObj.unread = (chatObj.unread || 0) + 1;
+        }
+
+        console.log(`💬 Live WhatsApp message from ${fromJid}: ${normalizedMsg.content}`);
+
         if (io) {
-          io.to(userId).emit("bridge_message_received", normalizedMsg);
+          io.to(userId).emit("bridge_message_received", {
+            platform: "whatsapp",
+            chat: chatObj,
+            message: normalizedMsg,
+          });
         }
       }
     });
@@ -467,22 +570,28 @@ class BridgeService {
   // =========================================================================
 
   static async getSyncedChats(userId, user) {
+    // If WhatsApp has saved auth folder but no active in-memory socket, trigger connect
+    if (!liveSessions.whatsapp.has(userId)) {
+      const sessionPath = path.join(SESSIONS_DIR, `whatsapp_${userId}`);
+      if (fs.existsSync(path.join(sessionPath, "creds.json"))) {
+        BridgeService.startWhatsAppBridge(userId).catch(() => {});
+      }
+    }
+
     const waSession = liveSessions.whatsapp.get(userId);
     const tgSession = liveSessions.telegram.get(userId);
     const chats = [];
 
-    // 1. Fetch Real WhatsApp Chats
-    if (waSession && waSession.status === "connected" && waSession.socket) {
-      try {
-        const chatsMap = waSession.chats || new Map();
-        chatsMap.forEach((c) => chats.push(c));
-      } catch (e) {}
+    // 1. Return all active WhatsApp chats
+    if (waSession) {
+      const chatsMap = waSession.chats || new Map();
+      chatsMap.forEach((c) => chats.push(c));
     }
 
     // 2. Fetch Real Telegram Dialogs
     if (tgSession && tgSession.status === "connected" && tgSession.client) {
       try {
-        const dialogs = await tgSession.client.getDialogs({ limit: 15 });
+        const dialogs = await tgSession.client.getDialogs({ limit: 20 });
         dialogs.forEach((d) => {
           const entity = d.entity || {};
           const isGroup = d.isGroup || d.isChannel;
@@ -526,17 +635,51 @@ class BridgeService {
     return chats;
   }
 
+  // Create a brand new direct chat thread with a phone number / username
+  static createDirectChat(platform, userId, targetIdentifier, user) {
+    if (platform === "whatsapp") {
+      const waSession = liveSessions.whatsapp.get(userId);
+      const jid = BridgeService.formatWhatsAppJid(targetIdentifier);
+      const cleanPhone = jid.split("@")[0];
+      const chatObj = {
+        _id: `wa_${jid}`,
+        chatName: `+${cleanPhone}`,
+        isGroupChat: false,
+        platform: "whatsapp",
+        platformChatId: jid,
+        users: [
+          user || { _id: userId, name: "You" },
+          {
+            _id: `wa_${jid}`,
+            name: `+${cleanPhone}`,
+            pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+          },
+        ],
+        unread: 0,
+        category: "Personal",
+        platformMetadata: { phone: `+${cleanPhone}` },
+      };
+      if (waSession) {
+        waSession.chats.set(jid, chatObj);
+      }
+      return chatObj;
+    }
+    return null;
+  }
+
   static async sendBridgeMessage(platform, { chatId, content, sender, mediaUrl, audioUrl, replyTo }) {
     if (platform === "whatsapp") {
       const waSession = liveSessions.whatsapp.get(sender?._id);
       if (waSession?.socket && waSession.status === "connected") {
-        const cleanJid = chatId.startsWith("wa_") ? chatId.replace("wa_", "") : chatId;
-        await waSession.socket.sendMessage(cleanJid, { text: content });
+        const jid = BridgeService.formatWhatsAppJid(chatId);
+        console.log(`📤 Dispatching live WhatsApp message to JID ${jid}: "${content}"`);
+        await waSession.socket.sendMessage(jid, { text: content });
       }
     } else if (platform === "telegram") {
       const tgSession = liveSessions.telegram.get(sender?._id);
       if (tgSession?.client && tgSession.status === "connected") {
         const cleanPeer = chatId.startsWith("tg_") ? chatId.replace("tg_", "") : chatId;
+        console.log(`📤 Dispatching live Telegram message to ${cleanPeer}: "${content}"`);
         await tgSession.client.sendMessage(cleanPeer, { message: content });
       }
     }
